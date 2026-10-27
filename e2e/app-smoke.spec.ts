@@ -84,6 +84,9 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
 
+  await expect(page.getByRole('heading', { name: 'Company at a glance' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Needs my attention' })).toBeVisible();
+  await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
   await expect(page.getByRole('region', { name: /Company operations/ })).toBeVisible();
   await expect(page.getByText('Contracted monthly value', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Monthly deliverables' })).toBeVisible();
@@ -428,7 +431,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'Tasks Management' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Workflow' })).toHaveCount(0);
   await expect(page.getByText(/^Client: (Pending|Approved|Rejected)$/)).toHaveCount(0);
   const newTaskButton = page.getByRole('button', { name: 'New task' });
@@ -814,7 +817,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(mobileNav.getByText('Calendar', { exact: true })).toHaveCount(0);
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'Action Centre' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'All work', exact: true })).toBeVisible();
   await page.evaluate(() => {
     const raw = window.localStorage.getItem('market-task-storage');
     if (!raw) throw new Error('Expected local AiTask state');

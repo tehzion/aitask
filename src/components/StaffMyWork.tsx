@@ -27,7 +27,7 @@ const StaffMyWork: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const scope: HodWorkScope = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'delegated' ? 'delegated' : 'department';
   const { locale, t } = useI18n();
-  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans, taskStatuses, serviceCycles, deliverables, notificationUnreadCount, setCreateTaskModalOpen } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans, taskStatuses, serviceCycles, deliverables, setCreateTaskModalOpen } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
     clients: state.clients,
@@ -38,7 +38,6 @@ const StaffMyWork: React.FC = () => {
     taskStatuses: state.taskStatuses,
     serviceCycles: state.serviceCycles,
     deliverables: state.deliverables,
-    notificationUnreadCount: state.notificationUnreadCount,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
@@ -79,7 +78,8 @@ const StaffMyWork: React.FC = () => {
     [allTasks, clients, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
   );
   const focusTask = getStaffFocusTask(queue);
-  const defaultBucket = queue.needs_action.length > 0 ? 'needs_action' : queue.up_next.length > 0 ? 'up_next' : queue.waiting.length > 0 ? 'waiting' : 'done';
+  // Finished work never opens by default; Done stays one tab away as history.
+  const defaultBucket = queue.needs_action.length > 0 ? 'needs_action' : queue.up_next.length > 0 ? 'up_next' : queue.waiting.length > 0 ? 'waiting' : 'needs_action';
   const [activeBucket, setActiveBucket] = React.useState<StaffWorkBucketKey>(defaultBucket);
   const hasSelectedBucketRef = React.useRef(false);
 
@@ -101,7 +101,7 @@ const StaffMyWork: React.FC = () => {
     : unavailableDependencyTaskCount;
   const persona = getDashboardPersona(currentUser);
   const roleInsight = isDepartmentLead
-    ? { title: t('Department context'), description: t('Department workload, delegated tasks, and review risk.'), values: [[t('Active tasks'), departmentTasks.filter(isTaskOpen).length], [t('Waiting review'), departmentTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length], [t('Blocked steps'), departmentTasks.filter(task => getTaskBlockers(task, accessibleTasks).length > 0).length]] as const }
+    ? { title: t('Department context'), description: t('Department workload, delegated tasks, and review risk.'), values: [[t('Overdue'), departmentTasks.filter(task => isTaskOpen(task) && Boolean(task.dueDate && task.dueDate < today)).length], [t('Waiting review'), departmentTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length], [t('Blocked steps'), departmentTasks.filter(task => getTaskBlockers(task, accessibleTasks).length > 0).length]] as const }
     : persona === 'operation'
     ? { title: t('Operation context'), description: t('Your assigned delivery and review queue.'), values: [[t('Due today'), dueToday], [t('Waiting review'), waitingReview], [t('Blocked steps'), blockedCount]] as const }
     : persona === 'account'
@@ -118,9 +118,9 @@ const StaffMyWork: React.FC = () => {
     <div data-onboarding-target="dashboard-overview" className={`${pageShell} max-w-6xl space-y-6`}>
       <header className="flex items-start justify-between gap-4 border-b border-line/70 pb-4 sm:items-end">
         <div>
-          <p className="calm-eyebrow">{t('My work')} · {formatLocalizedWeekdayDate(todayDate, locale)}</p>
+          <p className="calm-eyebrow">{formatLocalizedWeekdayDate(todayDate, locale)}</p>
           <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">{isDepartmentLead ? t('Department work') : t('My work')}</h1>
-          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isDepartmentLead ? t('Personally assigned responsibilities stay in My Work; use the Action Centre for department decisions and next actions.') : t('Personally assigned responsibilities, ordered by what you need to do next.')}</p>
+          <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isDepartmentLead ? t('Assignments to delegate, team progress, and reviews waiting on you.') : t('What to work on next, ordered by revisions and deadlines.')}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
           {canCreateTask && <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
@@ -128,11 +128,19 @@ const StaffMyWork: React.FC = () => {
         </div>
       </header>
 
-      <div className="grid grid-cols-3 gap-3 text-xs text-muted sm:max-w-xl" aria-label={t('Assignment overview')}>
-        <div><strong className="calm-number block text-xl text-ink">{tasks.filter(isTaskOpen).length}</strong><span className="mt-1 block">{t('Active tasks')}</span></div>
-        <Link className="min-h-11 font-medium hover:text-accent hover:underline" to={`/tasks?help=1${isHod ? `&scope=${scope}` : ''}`}><strong className="calm-number block text-xl text-ink">{tasks.filter(task => isTaskOpen(task) && task.workState?.blocker).length}</strong><span className="mt-1 block">{t('Help requested')}</span></Link>
-        <Link className="min-h-11 font-medium hover:text-accent hover:underline" to={`/tasks?unaccepted=1${isHod ? `&scope=${scope}` : ''}`}><strong className="calm-number block text-xl text-ink">{tasks.filter(task => isTaskOpen(task) && task.assignedTo && task.workState?.acceptedBy !== task.assignedTo).length}</strong><span className="mt-1 block">{t('Awaiting acceptance')}</span></Link>
-      </div>
+      <nav className="grid grid-cols-2 gap-px overflow-hidden rounded-panel bg-line/70 ring-1 ring-line/70 sm:grid-cols-4" aria-label={t('Assignment overview')}>
+        {([
+          [t('Active tasks'), tasks.filter(isTaskOpen).length, `/tasks${isHod ? `?scope=${scope}` : ''}`],
+          [t('Needs action'), queue.needs_action.length, `/tasks?queue=needs_action${isHod ? `&scope=${scope}` : ''}`],
+          [t('Help requested'), tasks.filter(task => isTaskOpen(task) && task.workState?.blocker).length, `/tasks?help=1${isHod ? `&scope=${scope}` : ''}`],
+          [t('Awaiting acceptance'), tasks.filter(task => isTaskOpen(task) && task.assignedTo && task.workState?.acceptedBy !== task.assignedTo).length, `/tasks?unaccepted=1${isHod ? `&scope=${scope}` : ''}`],
+        ] as const).map(([label, value, to]) => (
+          <Link key={to} to={to} className="min-h-11 bg-surface px-4 py-3 transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
+            <strong className="calm-number block text-xl font-semibold text-ink">{value}</strong>
+            <span className="mt-1 block text-xs text-muted">{label}</span>
+          </Link>
+        ))}
+      </nav>
 
       {isHod && <SegmentedTabs<HodWorkScope>
         items={[
@@ -191,14 +199,14 @@ const StaffMyWork: React.FC = () => {
         <Surface variant="raised" className="p-6 sm:p-8">
           {queue.waiting.length > 0 ? <Clock3 aria-hidden="true" className="h-9 w-9 text-accent" /> : <CheckCircle2 aria-hidden="true" className="h-9 w-9 text-accent" />}
           <h2 className="mt-4 text-xl font-semibold text-ink">{queue.waiting.length > 0 ? t('Waiting for review') : isHod && scope === 'department' ? t('Your department queue is clear') : t('Your assigned queue is clear')}</h2>
-          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">{queue.waiting.length > 0 ? <>{queue.waiting.length} {t('Waiting review')}</> : isHod ? t('Delegated work in your departments will appear here. You can still review completed work or open the full workbench.') : t('New assignments will appear here. You can review completed work in All work.')}</p>
+          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">{queue.waiting.length > 0 ? <>{queue.waiting.length} {t('Waiting review')}</> : isHod ? t('New department work will appear here. Finished tasks stay under Done.') : t('New assignments will appear here. Finished tasks stay under Done.')}</p>
         </Surface>
       )}
 
       <section aria-labelledby="staff-queue-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div><h2 id="staff-queue-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{isHod && scope === 'department' ? t('Department queue') : isHod && scope === 'delegated' ? t('Delegated by me') : t('Assigned queue')}</h2><p className="mt-1 text-sm text-muted">{t('Work is ordered by revision, deadline, state, and priority.')}</p></div>
-          <Link to={isHod ? `/tasks?scope=${scope}` : "/tasks?period=all"} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-ink hover:text-accent hover:underline">{t('All work')} <ArrowRight className="h-4 w-4" /></Link>
+          <Link to={isHod ? `/tasks?scope=${scope}` : "/tasks?period=all"} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-ink hover:text-accent hover:underline">{t(isDepartmentLead ? 'Department tasks' : 'All work')} <ArrowRight className="h-4 w-4" /></Link>
         </div>
         <div className="mt-4">
           <SegmentedTabs<StaffWorkBucketKey>
@@ -221,30 +229,6 @@ const StaffMyWork: React.FC = () => {
       </section>
 
       </div>
-
-      <Surface variant="inset" className="overflow-hidden" aria-labelledby="action-centre-title">
-        <div className="flex flex-col gap-3 border-b border-line/70 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h2 id="action-centre-title" className="font-semibold text-ink">{t('Action Centre')}</h2>
-            <p className="mt-0.5 max-w-[60ch] text-sm leading-6 text-muted">{t('Decisions and next actions, drawn from your existing work queues.')}</p>
-          </div>
-          <Link to={`/tasks?queue=needs_action${isHod ? `&scope=${scope}` : ''}`} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">
-            {t('Open Action Centre')} <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </Link>
-        </div>
-        <div className="grid gap-px bg-line/70 sm:grid-cols-3">
-          <Link to={`/tasks?queue=needs_action${isHod ? `&scope=${scope}` : ''}`} className="bg-surface px-5 py-4 transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
-            <p className="calm-number text-xl font-semibold text-ink">{queue.needs_action.length}</p><p className="mt-1 text-xs leading-5 text-muted">{t('Needs action')}</p>
-          </Link>
-          <Link to={`/tasks?help=1${isHod ? `&scope=${scope}` : ''}`} className="bg-surface px-5 py-4 transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
-            <p className="calm-number text-xl font-semibold text-ink">{tasks.filter(task => isTaskOpen(task) && task.workState?.blocker).length}</p><p className="mt-1 text-xs leading-5 text-muted">{t('Help requested')}</p>
-          </Link>
-          <Link to="/notifications" className="bg-surface px-5 py-4 transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
-            <p className="calm-number text-xl font-semibold text-ink">{notificationUnreadCount}</p><p className="mt-1 text-xs leading-5 text-muted">{t('Unread updates')}</p>
-          </Link>
-        </div>
-        <p className="px-5 py-3 text-xs leading-5 text-muted">{t('Notifications are activity updates, not a separate task queue.')}</p>
-      </Surface>
 
       <Surface variant="inset" className="overflow-hidden" aria-labelledby="staff-role-context">
         <div className="px-5 py-4"><h2 id="staff-role-context" className="font-semibold text-ink">{roleInsight.title}</h2><p className="mt-0.5 text-sm text-muted">{roleInsight.description}</p></div>
@@ -272,7 +256,6 @@ const StaffMyWork: React.FC = () => {
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <Link to="/calendar" className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink hover:text-accent hover:underline"><CalendarDays className="h-4 w-4" aria-hidden="true" />{t('Open schedule')}</Link>
-        <Link to="/notifications" className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink hover:text-accent hover:underline"><Clock3 className="h-4 w-4" aria-hidden="true" />{t('Check inbox')}</Link>
         {revisions > 0 && <span className="inline-flex items-center gap-2 text-amber-700"><RotateCcw className="h-4 w-4" />{t(`${revisions} active revision${revisions === 1 ? '' : 's'}`)}</span>}
       </div>
     </div>

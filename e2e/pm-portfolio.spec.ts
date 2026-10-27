@@ -32,19 +32,22 @@ const seedPM = async (page: Page) => {
     stopBackendAutoSync();
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Portfolio delivery', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Requires your action', exact: true })).toBeVisible();
 };
 const queue = (page: Page, title: string) => page.getByRole('heading', { name: title, exact: true }).locator('../..');
 
 test('PM dashboard separates department, final completion, and customer review', async ({ page }) => {
   await seedPM(page);
-  await expect(queue(page, 'Awaiting internal review').getByRole('link', { name: 'Department submission', exact: true })).toBeVisible();
+  // The Designer HOD reviews this submission; the PM follows up but is not asked to decide.
+  await expect(queue(page, 'With department review').getByRole('link', { name: 'Department submission', exact: true })).toBeVisible();
+  await expect(queue(page, 'Awaiting your review').getByRole('link', { name: 'Department submission' })).toHaveCount(0);
   await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Department submission' })).toHaveCount(0);
   await expect(queue(page, 'Ready to finalize').getByRole('link', { name: 'Signed portfolio work' })).toBeVisible();
   await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Customer acceptance pending' })).toBeVisible();
   await expect(page.getByText('Hidden other portfolio', { exact: true })).toHaveCount(0);
-  const metric = page.getByText('Needs attention', { exact: true }).locator('..');
-  await expect(metric.getByText('3', { exact: true })).toBeVisible();
+  const summary = page.getByRole('definition').locator('..');
+  await expect(summary.filter({ hasText: 'Awaiting your review' }).getByRole('definition')).toHaveText('0');
+  await expect(summary.filter({ hasText: 'Ready to finalize' }).getByRole('definition')).toHaveText('1');
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   const a11y = await new AxeBuilder({ page }).include('main').analyze();

@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, CheckCircle2, CircleHelp, Clock3, Filter, GitBranch, LockKeyhole, MessageSquareText, RefreshCw, Route, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, CircleHelp, Clock3, Filter, GitBranch, LockKeyhole, MessageSquareText, RefreshCw, Route, Search, ShieldCheck, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
@@ -180,7 +180,7 @@ const Help: React.FC = () => {
       <section className="rounded-panel bg-surface p-5 ring-1 ring-line/80 sm:p-6" aria-labelledby="tutorial-centre-title">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-accent"><Sparkles className="h-4 w-4" aria-hidden="true" /><p className="calm-eyebrow">{t('Practical learning')}</p></div>
+            <p className="calm-eyebrow">{t('Practical learning')}</p>
             <h2 id="tutorial-centre-title" className="mt-1 text-2xl font-semibold tracking-[-0.035em] text-ink">{t('Tutorial centre')}</h2>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">{t('Find an action, read the exact steps, or let AiTask point out the safe place to begin.')}</p>
           </div>
@@ -290,7 +290,7 @@ const TutorialCard: React.FC<{ tutorial: Tutorial; locale: 'en' | 'zh'; progress
   const category = getTutorialCategory(tutorial.category);
   return (
     <button type="button" onClick={() => onOpen(tutorial)} aria-pressed={selected} className={`group w-full rounded-control border p-4 text-left transition focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${selected ? 'border-accent bg-accent-soft/50' : 'border-line/80 bg-surface hover:border-accent/50 hover:bg-inset/55'}`}>
-      <div className="flex items-start justify-between gap-3"><span className="calm-eyebrow text-[10px]">{category ? getLocalizedCopy(category.label, locale) : ''}</span>{progress?.completedAt ? <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" aria-label={t('Completed')} /> : tutorial.guide?.length ? <Sparkles className="h-4 w-4 shrink-0 text-accent/70" aria-label={t('Guide me available')} /> : null}</div>
+      <div className="flex items-start justify-between gap-3"><span className="calm-eyebrow text-[10px]">{category ? getLocalizedCopy(category.label, locale) : ''}</span>{progress?.completedAt ? <CheckCircle2 className="h-4 w-4 shrink-0 text-accent" aria-label={t('Completed')} /> : tutorial.guide?.length ? <Route className="h-4 w-4 shrink-0 text-accent/70" aria-label={t('Guide me available')} /> : null}</div>
       <h4 className={`${compact ? 'mt-2 text-sm' : 'mt-3 text-base'} font-semibold leading-5 text-ink`}>{getLocalizedCopy(tutorial.title, locale)}</h4>
       <p className="mt-2 line-clamp-3 text-sm leading-5 text-muted">{getLocalizedCopy(tutorial.summary, locale)}</p>
       <span className="mt-4 inline-flex min-h-9 items-center text-xs font-semibold text-accent group-hover:underline">{compact ? t('Open guide') : t('Read guide')} <span aria-hidden="true" className="ml-1">→</span></span>
@@ -314,7 +314,7 @@ const TutorialDetail: React.FC<{ tutorial: Tutorial | null; locale: 'en' | 'zh';
       <section className="mt-4 rounded-control border border-amber-200 bg-amber-50 p-4" aria-labelledby="tutorial-problems-title"><h4 id="tutorial-problems-title" className="text-sm font-semibold text-amber-950">{t('Common problems')}</h4><ul className="mt-2 space-y-2 text-sm leading-5 text-amber-950">{tutorial.problems.map(item => <li key={item.en}>• {copy(item)}</li>)}</ul></section>
       {tutorial.related.some(id => visibleTutorialIds.has(id)) && <section className="mt-6" aria-labelledby="tutorial-related-title"><h4 id="tutorial-related-title" className="text-sm font-semibold text-ink">{t('Related tutorials')}</h4><div className="mt-2 space-y-1">{tutorial.related.map(id => { const related = getTutorialById(id); return related && visibleTutorialIds.has(related.id) ? <button key={id} type="button" onClick={() => onOpen(related)} className="block min-h-10 w-full rounded-control px-2 text-left text-sm font-semibold text-accent transition hover:bg-surface hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{copy(related.title)}</button> : null; })}</div></section>}
       <TutorialFeedback tutorialId={tutorial.id} userId={userId} />
-      <div className="mt-6 flex flex-col gap-2 sm:flex-row"><Button variant="secondary" onClick={() => onStartGuide(tutorial)} disabled={!tutorial.guide?.length}>{tutorial.guide?.length ? <><Sparkles className="h-4 w-4" aria-hidden="true" />{t('Guide me')}</> : <><BookOpen className="h-4 w-4" aria-hidden="true" />{t('Read guide')}</>}</Button>{progress?.startedAt && !progress.completedAt && <span className="self-center text-xs text-muted">{t('In progress')}</span>}</div>
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row"><Button variant="secondary" onClick={() => onStartGuide(tutorial)} disabled={!tutorial.guide?.length}>{tutorial.guide?.length ? <><Route className="h-4 w-4" aria-hidden="true" />{t('Guide me')}</> : <><BookOpen className="h-4 w-4" aria-hidden="true" />{t('Read guide')}</>}</Button>{progress?.startedAt && !progress.completedAt && <span className="self-center text-xs text-muted">{t('In progress')}</span>}</div>
     </aside>
   );
 };

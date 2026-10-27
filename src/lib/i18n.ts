@@ -3463,10 +3463,60 @@ const zhCopyDeepDive: Record<string, string> = {
   'Unknown': '未知',
 };
 
+// UI/UX revamp: dashboard, task-list scope, and page-purpose copy.
+const zhCopyUiRevamp: Record<string, string> = {
+  'Active assignments, reviews, and deadlines across the agency.': '全公司进行中的任务分配、审核与截止日期。',
+  'Active work': '进行中的工作',
+  'All tasks': '全部任务',
+  'Assignment overview': '任务概览',
+  'Assignments to delegate, team progress, and reviews waiting on you.': '待分派的任务、团队进度以及等待您审核的工作。',
+  'Awaiting acceptance': '等待接受',
+  'Blocked work': '受阻的工作',
+  'Company at a glance': '公司概况',
+  'Contract value and current-cycle delivery for each active company.': '各活跃公司的合同金额与本周期交付情况。',
+  'Critical': '紧急',
+  'Information': '提示',
+  'Decisions and risks that need you today.': '今天需要您处理的决定与风险。',
+  'Deliveries': '交付内容',
+  'Department tasks': '部门任务',
+  'Exceptions, approvals, and renewals that need a decision today.': '今天需要决定的异常、审批与续约。',
+  'Follow up if these stall. No decision is needed from you yet.': '如进度停滞请跟进；目前无需您做决定。',
+  'Help requested': '已请求协助',
+  'Monthly deliverables in Delivery tracker': '在交付追踪中查看每月交付',
+  'New assignments will appear here. Finished tasks stay under Done.': '新的任务分配会显示在这里。已完成的任务保留在“已完成”中。',
+  'New department work will appear here. Finished tasks stay under Done.': '新的部门工作会显示在这里。已完成的任务保留在“已完成”中。',
+  'No active tasks. Completed work stays under Completed.': '暂无进行中的任务。已完成的工作保留在“已完成”中。',
+  'No active work. Finished tasks are under Done.': '暂无进行中的工作。已完成的任务在“已完成”中。',
+  'Open work, deadlines, and recent activity in your scope.': '您权限范围内的进行中工作、截止日期与最近动态。',
+  'Portfolio summary': '项目组合摘要',
+  'Projects and owners': '项目与负责人',
+  'Renewal due': '即将续约',
+  'Requires your action': '需要您处理',
+  'Riskiest first. Open a project to see its tasks.': '风险最高的排在最前。打开项目即可查看其任务。',
+  'Service cycle ended before delivery': '服务周期已结束但尚未交付',
+  'Task list scope': '任务列表范围',
+  'Monthly renewals in 30 days': '30 天内到期的月度续期',
+  'View all projects': '查看全部项目',
+  'View companies and projects': '查看公司与项目',
+  'Waiting on others': '等待他人处理',
+  'What needs your attention today across your projects.': '您负责的项目中今天需要关注的事项。',
+  'What to work on next, ordered by revisions and deadlines.': '按修改要求和截止日期排序的下一步工作。',
+  'With department review': '部门审核中',
+  'Your deliverables, their progress, and what needs your review.': '您的交付内容、进度以及需要您审核的项目。',
+  'Your live workspace is ready.': '您的工作区已就绪。',
+  'Your projects': '您的项目',
+  'active monthly plans': '个活跃月度方案',
+  'active projects': '个进行中项目',
+  'completed or closed': '个已完成或已关闭',
+  'Every task in your projects, ordered by risk and next action.': '您项目中的所有任务，按风险和下一步操作排序。',
+  'Department and delegated tasks, including work awaiting your review.': '部门及已委派的任务，包括等待您审核的工作。',
+  'Your assigned and created tasks, ordered by next action.': '分配给您或由您创建的任务，按下一步操作排序。',
+};
+
 export const translateUiText = (value: string, locale: AppLocale) => {
   if (locale !== 'zh' || !value) return value;
   const core = value.trim();
-  const translated = zhCopy[core] || zhCopyExtras[core] || zhCopyAdditions[core] || zhSystemCopy[core] || zhCopyFollowups[core] || zhCopyCoverage[core] || zhCopyDeepDive[core] || translatePattern(core);
+  const translated = zhCopy[core] || zhCopyExtras[core] || zhCopyAdditions[core] || zhSystemCopy[core] || zhCopyFollowups[core] || zhCopyCoverage[core] || zhCopyDeepDive[core] || zhCopyUiRevamp[core] || translatePattern(core);
   return translated === core ? value : preserveWhitespace(value, translated);
 };
 

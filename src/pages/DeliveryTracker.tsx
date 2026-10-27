@@ -191,8 +191,8 @@ const DeliveryTracker: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title={t('Delivery tracker')}
-        description={t('Track tasks, deliverables, deadlines, and completion by client.')}
+        title={t(isClientView ? 'Deliveries' : 'Delivery tracker')}
+        description={t(isClientView ? 'Your deliverables, their progress, and what needs your review.' : 'Track tasks, deliverables, deadlines, and completion by client.')}
         onboardingTarget="clients-overview"
         meta={<><span>{range.label}</span><span aria-hidden="true">·</span><span>{filteredSummaries.length} {t('clients shown')}</span></>}
         action={(

@@ -1,15 +1,5 @@
 import React from 'react';
-import {
-  AlertTriangle,
-  ArrowRight,
-  CheckCircle2,
-  ClipboardCheck,
-  Clock3,
-  FileWarning,
-  FolderKanban,
-  RefreshCw,
-  UsersRound,
-} from 'lucide-react';
+import { ArrowRight, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
@@ -20,43 +10,11 @@ import { cn } from '../lib/utils';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { cardBase } from './uiTokens';
+import { MetricStrip } from './ui';
 
-type MetricTone = 'neutral' | 'success' | 'warning' | 'danger';
+export type ManagementOverviewPart = 'summary' | 'portfolio' | 'capacity';
 
-const toneClasses: Record<MetricTone, string> = {
-  neutral: 'bg-slate-100 text-slate-700',
-  success: 'bg-emerald-50 text-emerald-700',
-  warning: 'bg-amber-50 text-amber-700',
-  danger: 'bg-red-50 text-red-700',
-};
-
-const Metric = ({
-  label,
-  value,
-  to,
-  icon: Icon,
-  tone = 'neutral',
-}: {
-  label: string;
-  value: number;
-  to: string;
-  icon: React.ComponentType<{ className?: string }>;
-  tone?: MetricTone;
-}) => (
-  <Link
-    to={to}
-    className="group min-h-28 rounded-panel border border-line/80 bg-surface p-4 transition hover:-translate-y-0.5 hover:border-accent/40 hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-  >
-    <div className="flex items-start justify-between gap-3">
-      <span className={cn('inline-flex rounded-control p-2', toneClasses[tone])}><Icon className="h-4 w-4" aria-hidden="true" /></span>
-      <ArrowRight className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-    </div>
-    <p className="calm-number mt-4 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p>
-    <p className="mt-1 text-xs font-medium text-muted">{label}</p>
-  </Link>
-);
-
-const ManagementOverview: React.FC = () => {
+const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }) => {
   const { t, locale } = useI18n();
   const now = useLocalToday();
   const {
@@ -109,29 +67,29 @@ const ManagementOverview: React.FC = () => {
     .sort((left, right) => right.health.overdueCount - left.health.overdueCount)
     .slice(0, 6);
 
-  return (
-    <section className="space-y-4" aria-labelledby="management-overview-title">
-      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-        <div>
-          <h2 id="management-overview-title" className="text-lg font-semibold text-ink">{t('Management overview')}</h2>
-          <p className="mt-1 text-sm text-muted">{t('Company-wide operational snapshot.')}</p>
+  if (part === 'capacity') return (
+      <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="management-capacity-title">
+        <div className="flex flex-col gap-1 border-b border-line/70 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h3 id="management-capacity-title" className="font-semibold text-ink">{t('Shared employee capacity')}</h3>
+            <p className="mt-1 text-sm text-muted">{t('Availability signals are workload indicators, not performance scores.')}</p>
+          </div>
         </div>
-        <Link to="/reports" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">
-          {t('Open monthly report')} <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </Link>
+        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
+          {workload.map(row => {
+            const tone = row.signal === 'overloaded' ? 'text-red-700 bg-red-50' : row.signal === 'busy' ? 'text-amber-700 bg-amber-50' : 'text-emerald-700 bg-emerald-50';
+            return <div key={row.member.id} className="rounded-control border border-line/70 bg-inset/30 p-3"><div className="flex items-start justify-between gap-3"><p className="truncate text-sm font-semibold text-ink" data-i18n-skip>{row.member.name}</p><span className={cn('shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold capitalize', tone)}>{t(row.signal)}</span></div><p className="mt-2 text-xs text-muted">{row.open} {t('open')} · {row.dueSoon} {t('due soon')} · {row.projects} {t('projects')}</p></div>;
+          })}
+          {workload.length === 0 && <p className="text-sm text-muted">{t('No internal capacity data yet.')}</p>}
+        </div>
+      </section>
+  );
+  if (part === 'portfolio') return (
+    <section className="space-y-4" aria-labelledby="management-portfolio-title">
+      <div>
+        <h2 id="management-portfolio-title" className="text-lg font-semibold text-ink">{t('Projects and owners')}</h2>
+        <p className="mt-1 text-sm text-muted">{snapshot.activeProjects} {t('active projects')} · {snapshot.completedProjects} {t('completed or closed')} · {snapshot.activeMonthlyPlans} {t('active monthly plans')}</p>
       </div>
-
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-        <Metric label={t('Active projects')} value={snapshot.activeProjects} to="/projects" icon={FolderKanban} />
-        <Metric label={t('Completed projects')} value={snapshot.completedProjects} to="/projects" icon={CheckCircle2} tone="success" />
-        <Metric label={t('At-risk projects')} value={snapshot.atRiskProjects} to="/projects?health=atRisk" icon={AlertTriangle} tone="danger" />
-        <Metric label={t('Overdue tasks')} value={snapshot.overdueTasks} to="/tasks?focus=overdue" icon={Clock3} tone="danger" />
-        <Metric label={t('Pending approvals')} value={snapshot.pendingApprovals} to="/tasks?focus=waiting" icon={ClipboardCheck} tone="warning" />
-        <Metric label={t('Active monthly plans')} value={snapshot.activeMonthlyPlans} to="/clients" icon={RefreshCw} />
-        <Metric label={t('Renewals in 30 days')} value={snapshot.upcomingRenewals} to="/clients" icon={RefreshCw} tone="warning" />
-        <Metric label={t('Overdue deliverables')} value={snapshot.overdueDeliverables} to="/clients" icon={FileWarning} tone="danger" />
-      </div>
-
       <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
         <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="management-health-title">
           <div className="flex items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
@@ -164,7 +122,6 @@ const ManagementOverview: React.FC = () => {
               <h3 id="management-pm-title" className="font-semibold text-ink">{t('Project Manager overview')}</h3>
               <p className="mt-1 text-sm text-muted">{t('Operational signals, not performance scores.')}</p>
             </div>
-            <UsersRound className="h-5 w-5 text-accent" aria-hidden="true" />
           </div>
           <div className="divide-y divide-line/60">
             {snapshot.projectManagers.slice(0, 6).map(row => (
@@ -180,23 +137,25 @@ const ManagementOverview: React.FC = () => {
         </section>
       </div>
 
-      <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="management-capacity-title">
-        <div className="flex flex-col gap-1 border-b border-line/70 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 id="management-capacity-title" className="font-semibold text-ink">{t('Shared employee capacity')}</h3>
-            <p className="mt-1 text-sm text-muted">{t('Availability signals are workload indicators, not performance scores.')}</p>
-          </div>
-          <span className="text-sm font-semibold text-muted">{t('Team workload')}</span>
-        </div>
-        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
-          {workload.map(row => {
-            const tone = row.signal === 'overloaded' ? 'text-red-700 bg-red-50' : row.signal === 'busy' ? 'text-amber-700 bg-amber-50' : 'text-emerald-700 bg-emerald-50';
-            return <div key={row.member.id} className="rounded-control border border-line/70 bg-inset/30 p-3"><div className="flex items-start justify-between gap-3"><p className="truncate text-sm font-semibold text-ink" data-i18n-skip>{row.member.name}</p><span className={cn('shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold capitalize', tone)}>{t(row.signal)}</span></div><p className="mt-2 text-xs text-muted">{row.open} {t('open')} · {row.dueSoon} {t('due soon')} · {row.projects} {t('projects')}</p></div>;
-          })}
-          {workload.length === 0 && <p className="text-sm text-muted">{t('No internal capacity data yet.')}</p>}
-        </div>
-      </section>
+    </section>
+  );
 
+  return (
+    <section className="space-y-3" aria-labelledby="management-overview-title">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <h2 id="management-overview-title" className="text-lg font-semibold text-ink">{t('Company at a glance')}</h2>
+        <Link to="/reports" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">
+          {t('Open monthly report')} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </Link>
+      </div>
+      <MetricStrip label={t('Company at a glance')} items={[
+        { label: t('Active projects'), value: snapshot.activeProjects, to: '/projects' },
+        { label: t('At-risk projects'), value: snapshot.atRiskProjects, to: '/projects?health=atRisk', tone: 'danger' },
+        { label: t('Overdue tasks'), value: snapshot.overdueTasks, to: '/tasks?focus=overdue', tone: 'danger' },
+        { label: t('Pending approvals'), value: snapshot.pendingApprovals, to: '/tasks?focus=waiting', tone: 'warning' },
+        { label: t('Monthly renewals in 30 days'), value: snapshot.upcomingRenewals, to: '/clients', tone: 'warning' },
+        { label: t('Overdue deliverables'), value: snapshot.overdueDeliverables, to: '/clients', tone: 'danger' },
+      ]} />
       <p className="text-xs leading-5 text-muted">{t('Metrics are calculated from permission-visible projects, tasks, plans, cycles, and deliverables as of')} {formatLocalizedDate(now, locale)}.</p>
     </section>
   );

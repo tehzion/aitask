@@ -377,3 +377,17 @@ describe('Chinese translation coverage guards', () => {
     expect([...missing].sort()).toEqual([]);
   });
 });
+
+describe('UI revamp copy', () => {
+  it.each([
+    'Active work', 'All tasks', 'Requires your action', 'Waiting on others', 'With department review',
+    'Company at a glance', 'Department tasks', 'Deliveries', 'No active tasks. Completed work stays under Completed.',
+    'What needs your attention today across your projects.', 'Assignments to delegate, team progress, and reviews waiting on you.',
+  ])('translates "%s" into Simplified Chinese', key => {
+    expect(translateUiText(key, 'zh')).not.toBe(key);
+  });
+
+  it('keeps the task-scope label distinct from the plan status "Active"', () => {
+    expect(translateUiText('Active work', 'zh')).not.toBe(translateUiText('Active', 'zh'));
+  });
+});

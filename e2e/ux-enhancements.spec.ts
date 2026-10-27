@@ -134,15 +134,17 @@ test('Boss table and board preference stays URL-backed and persists per user', a
   await expect(page.locator('main').getByRole('button', { name: 'Table', exact: true })).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('My Work and Action Centre explain distinct responsibilities and reuse existing queues', async ({ page }) => {
+test('My work and All work explain distinct responsibilities and reuse existing queues', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   await login(page, 'Staff Demo');
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
-  await expect(page.getByText('Personally assigned responsibilities, ordered by what you need to do next.')).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Action Centre' })).toBeVisible();
-  await expect(page.getByText('Decisions and next actions, drawn from your existing work queues.')).toBeVisible();
-  await page.getByRole('link', { name: /Open Action Centre/ }).click();
+  await expect(page.getByText('What to work on next, ordered by revisions and deadlines.')).toBeVisible();
+  // One summary row replaces the duplicated Action Centre panel; its counts still link into the queues.
+  const overview = page.getByRole('navigation', { name: 'Assignment overview' });
+  await expect(overview.getByRole('link')).toHaveCount(4);
+  await overview.getByRole('link', { name: /Needs action/ }).click();
   await expect(page).toHaveURL(/\/tasks\?queue=needs_action/);
-  await expect(page.getByRole('heading', { name: 'Action Centre' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'All work', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: /Needs action/, selected: true })).toBeVisible();
 });

@@ -10,12 +10,14 @@ import { formatMoney } from '../lib/serviceManagement';
 import { parseOptionalDate } from '../lib/utils';
 import { isTaskCompleted } from '../lib/taskCompletion';
 import { isTaskOpen } from '../lib/taskReporting';
-import { CountLabel, DataRow, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
+import { CountLabel, DataRow, MetricStrip, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getPlanDeliverySummary, getCompanyTaskActivity } from '../lib/dashboardData';
-import { assessProjectHealth, getPortfolioReviewQueues } from '../lib/pmDashboard';
+import { assessProjectHealth, getPersonalReviewQueues, getPortfolioReviewQueues } from '../lib/pmDashboard';
+import { projectStatus } from '../lib/projectManagement';
+import NeedsMyAttention from './NeedsMyAttention';
 
 type WorkspaceTask = ReturnType<typeof useStore.getState>['tasks'][number];
 
@@ -195,94 +197,93 @@ const ServiceRoleDashboard = () => {
     <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
   </section>;
 
-  if (persona === 'projectManager') return <section className="space-y-5" aria-labelledby="portfolio-workbench-title">
-    <WorkbenchHeader id="portfolio-workbench-title" title={t('Portfolio delivery')} description={t('Companies, deadlines, review work, and output in your portfolio.')} />
-    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label={t('Open delivery tasks')} value={scopeTasks.filter(isTaskOpen).length} icon={Clock3} detail={<>{dueToday.length} {t('Due today')} · {overdue.length} {t('overdue in your portfolio.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label={t('Overdue delivery')} value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label={t('Needs attention')} value={portfolioReviews.waitingCount} icon={FileCheck2} tone="warning" /><CompactStat label={t('Active companies')} value={activePlans.length} icon={UsersRound} /></StatGroup></div>
-    <div className="grid gap-4 xl:grid-cols-2">
-      <TaskQueue title={t('Due today / overdue')} tasks={[...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'))} empty={t('No urgent portfolio delivery work.')} />
-      <TaskQueue title={t('Awaiting internal review')} tasks={portfolioReviews.internal} empty={t('No submitted work is waiting for internal review.')} />
-      <TaskQueue title={t('Ready to finalize')} tasks={portfolioReviews.completion} empty={t('No tasks awaiting final completion.')} />
-      <TaskQueue title={t('Client review (optional)')} tasks={portfolioReviews.client} empty={t('No client review is pending.')} />
-      <TaskQueue title={t('Awaiting HOD Assignment')} tasks={awaitingHod} empty={t('No tasks are waiting for HOD assignment.')} />
-      <TaskQueue title={t('Awaiting Staff Assignment')} tasks={awaitingStaffAssignment} empty={t('No tasks are waiting for Staff assignment.')} />
-    </div>
-    <Surface className="overflow-hidden" aria-labelledby="project-health-title">
-      <div className="flex items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
-        <div><h3 id="project-health-title" className="font-semibold text-ink">{t('Project health')}</h3><p className="mt-1 text-sm text-muted">{t('Health uses project and task deadlines, open work, and pending internal reviews.')}</p></div>
-        <CountLabel>{visibleProjects.length}</CountLabel>
-      </div>
-      <div className="divide-y divide-line/60">
-        {visibleProjects.map(project => {
-          const health = assessProjectHealth(project, visibleTasks, now);
-          const tone = health.health === 'atRisk' ? 'red' : health.health === 'attentionRequired' ? 'amber' : 'emerald';
-          const label = health.health === 'atRisk' ? 'At risk' : health.health === 'attentionRequired' ? 'Attention required' : 'On track';
-          const teamNames = health.assignedMemberIds
-            .map(id => store.users.find(user => user.id === id)?.name)
-            .filter((name): name is string => Boolean(name));
-          return <div key={project.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(230px,0.9fr)] sm:items-center sm:px-5">
-            <div className="min-w-0">
-              <Link to={`/tasks?projectId=${encodeURIComponent(project.id)}`} className="truncate text-sm font-semibold text-ink hover:text-accent"><span data-i18n-skip>{project.projectName}</span></Link>
-              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{project.clientName}</span> · {t('Next deadline')}: {health.nextDueDate ? formatLocalizedDate(parseOptionalDate(health.nextDueDate)!, locale) : t('No deadline')}</p>
-              <p className="mt-1 truncate text-xs text-muted">{t('Assigned team')}: {teamNames.length ? <span data-i18n-skip>{teamNames.join(', ')}</span> : t('No staff assigned')}</p>
-            </div>
-            <div className="min-w-0">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <StatusChip tone={tone}>{t(label)}</StatusChip>
-                <span className="text-xs text-muted">{health.completedCount}/{health.taskCount} {t('tasks complete')}</span>
+  if (persona === 'projectManager') {
+    // Decisions for this PM only: reviews in their lane and work they can finalize.
+    const personal = getPersonalReviewQueues(scopeTasks, { user: store.currentUser, users: store.users, roles: store.rolePermissions, scope: { clients: store.clients, projects: store.projects, users: store.users } });
+    const urgent = [...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
+    const waitingOnOthers = [
+      { title: t('With department review'), tasks: personal.department },
+      { title: t('Awaiting HOD Assignment'), tasks: awaitingHod },
+      { title: t('Awaiting Staff Assignment'), tasks: awaitingStaffAssignment },
+      { title: t('Client review (optional)'), tasks: personal.client },
+    ].filter(item => item.tasks.length > 0);
+    const projectRows = visibleProjects
+      .filter(project => projectStatus(project) !== 'Closed')
+      .map(project => ({ project, health: assessProjectHealth(project, visibleTasks, now) }))
+      .sort((left, right) => {
+        const rank = { atRisk: 0, attentionRequired: 1, onTrack: 2 } as const;
+        return rank[left.health.health] - rank[right.health.health] || right.health.overdueCount - left.health.overdueCount;
+      });
+    return <section className="space-y-6" aria-labelledby="portfolio-workbench-title">
+      <h2 id="portfolio-workbench-title" className="sr-only">{t('Portfolio delivery')}</h2>
+      <MetricStrip label={t('Portfolio summary')} items={[
+        { label: t('Open tasks'), value: scopeTasks.filter(isTaskOpen).length, to: '/tasks' },
+        { label: t('Overdue'), value: overdue.length, to: '/tasks?queue=needs_action', tone: 'danger' },
+        { label: t('Awaiting your review'), value: personal.mine.length, to: '/tasks?queue=needs_action', tone: 'warning' },
+        { label: t('Ready to finalize'), value: personal.completion.length, to: '/tasks?queue=needs_action', tone: 'warning' },
+      ]} />
+      <section aria-labelledby="pm-action-title" className="space-y-3">
+        <h2 id="pm-action-title" className="text-lg font-semibold text-ink">{t('Requires your action')}</h2>
+        <div className="grid gap-4 xl:grid-cols-3">
+          <TaskQueue title={t('Awaiting your review')} tasks={personal.mine} empty={t('Nothing is waiting for your review.')} />
+          <TaskQueue title={t('Ready to finalize')} tasks={personal.completion} empty={t('No tasks awaiting final completion.')} />
+          <TaskQueue title={t('Due today / overdue')} tasks={urgent} empty={t('No urgent portfolio delivery work.')} />
+        </div>
+      </section>
+      <NeedsMyAttention excludeProjectRisks taskDecisions={false} hideWhenEmpty />
+      {waitingOnOthers.length > 0 && <section aria-labelledby="pm-waiting-title" className="space-y-3">
+        <div><h2 id="pm-waiting-title" className="text-lg font-semibold text-ink">{t('Waiting on others')}</h2><p className="mt-1 text-sm text-muted">{t('Follow up if these stall. No decision is needed from you yet.')}</p></div>
+        <div className="grid gap-4 xl:grid-cols-2">
+          {waitingOnOthers.map(item => <TaskQueue key={item.title} title={item.title} tasks={item.tasks} empty="" />)}
+        </div>
+      </section>}
+      <Surface className="overflow-hidden" aria-labelledby="project-health-title">
+        <div className="flex items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
+          <div><h3 id="project-health-title" className="font-semibold text-ink">{t('Your projects')}</h3><p className="mt-1 text-sm text-muted">{t('Riskiest first. Open a project to see its tasks.')}</p></div>
+          <CountLabel>{projectRows.length}</CountLabel>
+        </div>
+        <div className="divide-y divide-line/60">
+          {projectRows.slice(0, 6).map(({ project, health }) => {
+            const tone = health.health === 'atRisk' ? 'red' : health.health === 'attentionRequired' ? 'amber' : 'emerald';
+            const label = health.health === 'atRisk' ? 'At risk' : health.health === 'attentionRequired' ? 'Attention required' : 'On track';
+            return <div key={project.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(230px,0.9fr)] sm:items-center sm:px-5">
+              <div className="min-w-0">
+                <Link to={`/tasks?project=${encodeURIComponent(project.projectName)}`} className="truncate text-sm font-semibold text-ink hover:text-accent"><span data-i18n-skip>{project.projectName}</span></Link>
+                <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{project.clientName}</span> · {t('Next deadline')}: {health.nextDueDate ? formatLocalizedDate(parseOptionalDate(health.nextDueDate)!, locale) : t('No deadline')}</p>
               </div>
-              <ProgressBar label={`${t('Task progress')} ${health.progressPercent}%`} value={health.progressPercent} max={100} />
-              <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
-                <span>{health.openCount} {t('open tasks')}</span>
-                {health.overdueCount > 0 && <span className="text-red-700">{health.overdueCount} {t('overdue')}</span>}
-                {health.pendingApprovalCount > 0 && <span>{health.pendingApprovalCount} {t('pending reviews')}</span>}
+              <div className="min-w-0">
+                <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                  <StatusChip tone={tone}>{t(label)}</StatusChip>
+                  <span className="text-xs text-muted">{health.completedCount}/{health.taskCount} {t('tasks complete')}</span>
+                </div>
+                <ProgressBar label={`${t('Task progress')} ${health.progressPercent ?? 0}%`} value={health.progressPercent ?? 0} max={100} />
+                <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-muted">
+                  <span>{health.openCount} {t('open tasks')}</span>
+                  {health.overdueCount > 0 && <span className="text-red-700">{health.overdueCount} {t('overdue')}</span>}
+                  {health.pendingApprovalCount > 0 && <span>{health.pendingApprovalCount} {t('pending reviews')}</span>}
+                </div>
               </div>
-            </div>
-          </div>;
-        })}
-        {visibleProjects.length === 0 && <p className="px-5 py-8 text-center text-sm text-muted">{t('No projects are assigned to you yet.')}</p>}
-      </div>
-    </Surface>
-    <Surface className="overflow-hidden">
-      <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
-        <div><h3 className="font-semibold text-ink">{t('Monthly deliverables')}</h3><p className="mt-1 text-sm text-muted">{t('Current cycle delivery progress for each active company.')}</p></div>
-        <CountLabel>{activeCompanies.length}</CountLabel>
-      </div>
-      <div className="divide-y divide-line/60">
-        {activeCompanies.map(item => (
-          <div key={item.plan.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
-            <div className="min-w-0">
-              <Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="truncate text-sm font-semibold text-ink hover:text-accent">{item.clientName}</Link>
-              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t(item.draftCycle ? 'Current cycle not published' : 'No published cycle covering today')}</>}</p>
-            </div>
-            <div className="min-w-0">
-              {item.currentCycle && item.total > 0 ? <>
-              <ProgressBar className="mb-1.5" label={`${t('Deliverables')} ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
-              <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
-                <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>
-                <StatusChip tone="blue">{item.ready} {t('Ready')}</StatusChip>
-                <StatusChip tone="indigo">{item.inProgress} {t('In Progress')}</StatusChip>
-                <StatusChip tone="slate">{item.planned} {t('Planned')}</StatusChip>
-              </div>
-              </> : <StatusChip tone="slate">{t(item.draftCycle
-                ? 'Awaiting publication'
-                : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
-              <CompanyTaskActivity activity={item.taskActivity} />
-              {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
-                {t('Progress counts confirmed deliveries, not completed tasks.')}
-              </p>}
-            </div>
-          </div>
-        ))}
-        {activeCompanies.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">{t('No active companies yet.')}</p>}
-      </div>
-    </Surface>
-    <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 p-5"><div><p className="calm-eyebrow">{t('Commercial summary')}</p><p className="mt-1 text-sm text-muted">{t('Active plan value in your owned portfolio.')}</p></div><p className="calm-number text-2xl font-semibold text-ink">{canSeePrices ? formatMoney(contractedMonthly, 'MYR', locale) : t('Restricted')}</p></Surface>
-    <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
-  </section>;
+            </div>;
+          })}
+          {projectRows.length === 0 && <p className="px-5 py-8 text-center text-sm text-muted">{t('No projects are assigned to you yet.')}</p>}
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line/70 px-5 py-3 text-sm">
+          <Link to="/projects" className="font-semibold text-accent hover:underline">{projectRows.length > 6 ? `${t('View all projects')} (${projectRows.length})` : t('View companies and projects')}</Link>
+          <Link to="/clients" className="font-semibold text-accent hover:underline">{t('Monthly deliverables in Delivery tracker')}</Link>
+        </div>
+      </Surface>
+      <Surface variant="inset" className="flex flex-wrap items-center justify-between gap-3 px-5 py-4"><div><p className="text-sm font-semibold text-ink">{t('Commercial summary')}</p><p className="mt-0.5 text-xs text-muted">{activePlans.length} {t(activePlans.length === 1 ? 'active client package.' : 'active client packages.')}</p></div><p className="calm-number text-xl font-semibold text-ink">{canSeePrices ? formatMoney(contractedMonthly, 'MYR', locale) : t('Restricted')}</p></Surface>
+      <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
+    </section>;
+  }
 
-  return <section className="space-y-5" aria-labelledby="management-workbench-title">
-    <WorkbenchHeader id="management-workbench-title" title={t('Company operations')} description={t('Client delivery, team workload, output, and commercial records across the company.')} />
-    <div className="grid gap-4 xl:grid-cols-[1.5fr_1fr]"><SpotlightMetric label="Contracted monthly value" value={formatMoney(contractedMonthly, 'MYR', locale)} icon={WalletCards} detail={<>{activePlans.length} {t(activePlans.length === 1 ? 'active client under management.' : 'active clients under management.')}</>} /><StatGroup className="grid-cols-3"><CompactStat label="Active clients" value={activePlans.length} icon={UsersRound} /><CompactStat label="Overdue production" value={overdue.length} icon={AlertTriangle} tone="danger" /><CompactStat label="Delivered outputs" value={delivered.length} icon={CheckCircle2} tone="success" /></StatGroup></div>
+  return <section className="space-y-4" aria-labelledby="management-workbench-title">
+    <WorkbenchHeader id="management-workbench-title" title={t('Company operations')} description={t('Contract value and current-cycle delivery for each active company.')} />
+    <MetricStrip label={t('Company operations')} items={[
+      { label: t('Contracted monthly value'), value: formatMoney(contractedMonthly, 'MYR', locale) },
+      { label: t('Active clients'), value: activePlans.length, to: '/clients' },
+      { label: t('Delivered outputs'), value: delivered.length, to: '/clients' },
+    ]} />
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
         <div><h3 className="font-semibold text-ink">{t('Monthly deliverables')}</h3><p className="mt-1 text-sm text-muted">{t('Current cycle delivery progress for each active company.')}</p></div>
@@ -317,7 +318,6 @@ const ServiceRoleDashboard = () => {
         {activeCompanies.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">{t('No active companies yet.')}</p>}
       </div>
     </Surface>
-    <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
   </section>;
 };
 

@@ -166,7 +166,7 @@ test.describe('responsive role and route audit', () => {
 
     await signInAs(page, 'HOD Demo');
     await page.goto('/tasks', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'Department work' }).first()).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Department tasks', exact: true })).toBeVisible();
     await expect(page.getByLabel('Search visible work')).toBeVisible();
   });
 

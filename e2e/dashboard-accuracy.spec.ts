@@ -61,11 +61,13 @@ for (const mobile of [false, true]) {
     });
     const overview = page.getByRole('tabpanel');
     await expectMetric(overview, 'Overdue tasks', 1);
-    await expectMetric(overview, 'Overdue production', 1);
-    await expectMetric(overview, 'Renewals in 30 days', 0);
-    await expect(overview.getByText(/No published cycle covering today/)).toBeVisible();
-    await expect(overview.getByText('No current published cycle', { exact: true })).toBeVisible();
-    await expect(overview.getByText('0 Delivered', { exact: true })).toHaveCount(0);
+    // Per-company delivery progress and contract renewals live on the Portfolio tab.
+    await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
+    const portfolio = page.getByRole('tabpanel');
+    await expect(portfolio.getByRole('heading', { name: 'Contract renewals' })).toHaveCount(0);
+    await expect(portfolio.getByText(/No published cycle covering today/)).toBeVisible();
+    await expect(portfolio.getByText('No current published cycle', { exact: true })).toBeVisible();
+    await expect(portfolio.getByText('0 Delivered', { exact: true })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Agency pulse', exact: true }).click();
     await expectMetric(page.getByRole('tabpanel'), 'Overdue now', 1);
   });
@@ -73,17 +75,19 @@ for (const mobile of [false, true]) {
 
 test('overview updates renewals, overdue totals and the current billing cycle at midnight', async ({ page }) => {
   await seedDashboard(page, '2026-10-07T16:59:50Z');
-  const overview = page.getByRole('tabpanel');
-  await expectMetric(overview, 'Overdue tasks', 0);
-  await expectMetric(overview, 'Renewals in 30 days', 0);
-  await expect(overview.getByText('2 Delivered', { exact: true })).toBeVisible();
+  const panel = page.getByRole('tabpanel');
+  const portfolioTab = page.getByRole('tab', { name: 'Portfolio', exact: true });
+  const overviewTab = page.getByRole('tab', { name: 'Overview', exact: true });
+  await expectMetric(panel, 'Overdue tasks', 0);
+  await portfolioTab.click();
+  await expect(panel.getByRole('heading', { name: 'Contract renewals' })).toHaveCount(0);
+  await expect(panel.getByText('2 Delivered', { exact: true })).toBeVisible();
   await page.clock.fastForward(11_000);
-  await expectMetric(overview, 'Overdue tasks', 1);
-  await expectMetric(overview, 'Overdue production', 1);
-  await expectMetric(overview, 'Renewals in 30 days', 1);
-  await expect(overview.getByText('30 days left', { exact: true })).toBeVisible();
-  await expect(overview.getByText('4 Planned', { exact: true })).toBeVisible();
-  await expect(overview.getByText('2 Delivered', { exact: true })).toHaveCount(0);
+  await expect(panel.getByText('30 days left', { exact: true })).toBeVisible();
+  await expect(panel.getByText('4 Planned', { exact: true })).toBeVisible();
+  await expect(panel.getByText('2 Delivered', { exact: true })).toHaveCount(0);
+  await overviewTab.click();
+  await expectMetric(panel, 'Overdue tasks', 1);
 });
 
 test('agency pulse updates at midnight without a task mutation', async ({ page }) => {
@@ -125,7 +129,9 @@ test('a resumed tab catches up after its clock changes without running timers', 
   await page.clock.setSystemTime(new Date('2026-10-08T07:00:00Z'));
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expectMetric(page.getByRole('tabpanel'), 'Overdue tasks', 1);
-  await expectMetric(page.getByRole('tabpanel'), 'Renewals in 30 days', 1);
+  await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
+  await expect(page.getByRole('tabpanel').getByText('30 days left', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
   await page.clock.setSystemTime(new Date('2026-10-09T07:00:00Z'));
   await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
   await expectMetric(page.getByRole('tabpanel'), 'Overdue tasks', 2);

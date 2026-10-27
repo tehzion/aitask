@@ -2,12 +2,14 @@ import { addDays } from 'date-fns/addDays';
 import { isBefore } from 'date-fns/isBefore';
 import { isWithinInterval } from 'date-fns/isWithinInterval';
 import { startOfDay } from 'date-fns/startOfDay';
-import type { Project, Task } from '../types';
+import type { CustomRole, Project, Task, User } from '../types';
+import type { VisibilityScope } from './access';
 import { isAwaitingClientReview, isAwaitingInternalReview } from './clientPortal';
 import { isTaskCompleted } from './taskCompletion';
 import { isTaskOpen } from './taskReporting';
 import { parseOptionalDate } from './utils';
 import { effectiveMilestoneStatus, milestoneTaskProgress, projectStatus } from './projectManagement';
+import { getInternalReviewLane, isAwaitingMyInternalReview, isReadyForMyCompletion } from './taskWorkflowAccess';
 
 // Internal submission, PM completion, and customer acceptance are distinct
 // stages. Visibility alone does not tell us who is waiting to review.
@@ -17,6 +19,25 @@ export const getPortfolioReviewQueues = (tasks: readonly Task[]) => {
   const client = tasks.filter(isAwaitingClientReview);
   const waitingCount = new Set([...internal, ...completion, ...client].map(task => task.id)).size;
   return { internal, completion, client, waitingCount };
+};
+
+// The same stages, split by who must act next. `mine` and `completion` are
+// decisions this user can take now; `department` is submitted work waiting on
+// an HOD or review cover, shown for follow-up only.
+export const getPersonalReviewQueues = (
+  tasks: readonly Task[],
+  context: { user: User | null | undefined; users: readonly User[]; roles?: CustomRole[]; scope?: VisibilityScope },
+) => {
+  const { user, users, roles = [], scope = {} } = context;
+  const mine = tasks.filter(task => isAwaitingMyInternalReview(user, task, users, roles, scope));
+  const mineIds = new Set(mine.map(task => task.id));
+  const completion = tasks.filter(task => isReadyForMyCompletion(user, task, roles, scope));
+  const completionIds = new Set(completion.map(task => task.id));
+  const department = tasks.filter(task => isAwaitingInternalReview(task) && !task.isCompleted
+    && !mineIds.has(task.id) && !completionIds.has(task.id)
+    && getInternalReviewLane(task, users, roles, scope) !== 'none');
+  const client = tasks.filter(isAwaitingClientReview);
+  return { mine, completion, department, client, actionableCount: new Set([...mineIds, ...completionIds]).size };
 };
 
 export type ProjectHealth = 'onTrack' | 'attentionRequired' | 'atRisk';

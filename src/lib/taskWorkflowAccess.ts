@@ -242,3 +242,68 @@ export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 
     && canManageTaskReview(user, task as Task, roles, scope));
   return [...new Map([...fallback, ...responsiblePms].map(user => [user.id, user])).values()];
 };
+
+export type InternalReviewLane = 'none' | 'department' | 'projectManager';
+
+const activeReviewCoverId = (task: Partial<Task>) => (
+  task.reviewCover && Date.parse(task.reviewCover.expiresAt) > Date.now() ? task.reviewCover.reviewerId : undefined
+);
+
+/**
+ * Which lane is expected to decide a submitted task. A responsible PM may still
+ * approve work in the department lane (they sit above it), but that work is
+ * not "waiting for the PM" until no department reviewer is available.
+ */
+export const getInternalReviewLane = (
+  task: Task,
+  users: readonly User[],
+  roles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+): InternalReviewLane => {
+  const mode = getTaskApprovalMode(task, scope);
+  if (mode === 'none') return 'none';
+  if (mode === 'pm') return 'projectManager';
+  const coverId = activeReviewCoverId(task);
+  if (coverId && users.some(user => user.id === coverId && canBeTaskReviewLead(user, task, roles, scope) && isIndependentTaskReviewer(user, task))) {
+    return 'department';
+  }
+  const hasDepartmentReviewer = users.some(user => user.hasLogin !== false
+    && isHodUser(user, roles)
+    && isMemberInDepartment(user, task.department)
+    && isIndependentTaskReviewer(user, task));
+  return hasDepartmentReviewer ? 'department' : 'projectManager';
+};
+
+/**
+ * True only when a submitted task is waiting for this user's own decision:
+ * they are authorized to approve it and it sits in their review lane. Role
+ * names alone never decide this; the same permission checks guard the store
+ * and database transitions.
+ */
+export const isAwaitingMyInternalReview = (
+  user: User | null | undefined,
+  task: Task,
+  users: readonly User[],
+  roles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+) => {
+  if (!user || task.isCompleted || task.status !== 'Waiting Approval') return false;
+  if (!canApproveTaskInternally(user, task, roles, scope)) return false;
+  if (isBossKoo(user) || user.role !== 'Project Manager') return true;
+  const coverId = activeReviewCoverId(task);
+  if (coverId) return coverId === user.id;
+  return getInternalReviewLane(task, users, roles, scope) === 'projectManager';
+};
+
+/**
+ * Submitted or approved work that the responsible PM can now complete: either
+ * approved by a reviewer, or waiting on a task that does not require approval.
+ */
+export const isReadyForMyCompletion = (
+  user: User | null | undefined,
+  task: Task,
+  roles: CustomRole[] = [],
+  scope: VisibilityScope = {},
+) => Boolean(user && !task.isCompleted
+  && (task.status === 'Approved' || canCompleteWithoutInternalApproval(task, scope))
+  && (isBossKoo(user) || (user.role === 'Project Manager' && canManageTaskReview(user, task, roles, scope))));

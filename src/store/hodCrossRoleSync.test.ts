@@ -12,6 +12,7 @@ vi.mock('../lib/supabaseClient', () => ({
   subscribeToCurrentMemberAccessChanges: mocks.subscribe,
   subscribeToWorkspaceRevisionChanges: mocks.subscribeWorkspace,
   subscribeToWorkspaceTaskChanges: mocks.subscribeTask,
+  subscribeToWorkspaceNotificationChanges: () => () => undefined,
 }));
 vi.mock('../lib/secureWorkspace', async importOriginal => ({
   ...await importOriginal<typeof import('../lib/secureWorkspace')>(),

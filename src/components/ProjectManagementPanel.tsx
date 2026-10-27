@@ -15,6 +15,7 @@ import { useSaveAction } from '../hooks/useSaveAction';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { sameSavedValue } from '../lib/saveConfirmation';
 import BackendFreshness from './BackendFreshness';
+import { isTaskInListScope, type TaskListScope } from '../lib/taskListScope';
 
 const tabs = ['overview', 'tasks', 'team', 'milestones', 'settings'] as const;
 type Tab = typeof tabs[number];
@@ -53,11 +54,13 @@ export default function ProjectManagementPanel({ projectId, onClose, onEdit }: {
     const blank = { name: '', description: '', targetDate: '', responsiblePersonId: '', status: 'Not Started' as const };
     baseline.current = blank; setMilestone(blank);
   }, [projectId, state.currentUser?.id]);
+  const [taskScope, setTaskScope] = React.useState<TaskListScope>('active');
   const requestClose = () => { if (!busy && !hasPending && (!dirty || window.confirm(t('Discard unsaved changes?')))) onClose(); };
 
   if (!state.project) return null;
   const project = state.project;
   const projectTasks = state.tasks.filter(task => task.projectId === project.id);
+  const scopedProjectTasks = projectTasks.filter(task => isTaskInListScope(task, taskScope));
   const health = assessProjectHealth(project, state.tasks);
   const warnings = getProjectClosureWarnings(project, state.tasks);
   const canManage = canManageProjectLifecycle(state.currentUser, project);
@@ -176,8 +179,15 @@ export default function ProjectManagementPanel({ projectId, onClose, onEdit }: {
         </div>}
 
         {tab === 'tasks' && <div className="space-y-3">
-          {projectTasks.map(task => <article key={task.id} className="flex items-center justify-between gap-3 rounded-panel border border-line p-4"><div className="min-w-0"><p data-i18n-skip className="truncate font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{t(task.status)} · {task.dueDate ? formatLocalizedDate(new Date(`${task.dueDate}T00:00:00`), locale) : t('No due date')}</p></div><Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} aria-disabled={busy || hasPending} onClick={event => { if (busy || hasPending || dirty) { event.preventDefault(); requestClose(); } else onClose(); }} className="rounded-control p-2 text-accent hover:bg-accent-soft"><ArrowRight className="h-4 w-4" /></Link></article>)}
-          {!projectTasks.length && <p className="rounded-panel bg-inset px-5 py-10 text-center text-sm text-muted">{t('No tasks recorded')}</p>}
+          <div className="flex flex-wrap gap-2" role="group" aria-label={t('Task list scope')}>
+            {([['active', t('Active work')], ['completed', t('Completed')], ['all', t('All tasks')]] as const).map(([value, label]) => (
+              <button key={value} type="button" aria-pressed={taskScope === value} onClick={() => setTaskScope(value)} className={`min-h-9 rounded-full border px-3 text-xs font-semibold transition-colors ${taskScope === value ? 'border-accent bg-accent text-white' : 'border-line bg-surface text-muted hover:bg-inset'}`}>
+                {label} <span className="calm-number">{projectTasks.filter(task => isTaskInListScope(task, value)).length}</span>
+              </button>
+            ))}
+          </div>
+          {scopedProjectTasks.map(task => <article key={task.id} className="flex items-center justify-between gap-3 rounded-panel border border-line p-4"><div className="min-w-0"><p data-i18n-skip className="truncate font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{t(task.status)} · {task.dueDate ? formatLocalizedDate(new Date(`${task.dueDate}T00:00:00`), locale) : t('No due date')}</p></div><Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} aria-disabled={busy || hasPending} onClick={event => { if (busy || hasPending || dirty) { event.preventDefault(); requestClose(); } else onClose(); }} className="rounded-control p-2 text-accent hover:bg-accent-soft"><ArrowRight className="h-4 w-4" /></Link></article>)}
+          {!scopedProjectTasks.length && <p className="rounded-panel bg-inset px-5 py-10 text-center text-sm text-muted">{t(projectTasks.length && taskScope === 'active' ? 'No active tasks. Completed work stays under Completed.' : 'No tasks recorded')}</p>}
         </div>}
 
         {tab === 'team' && <div className="space-y-3">

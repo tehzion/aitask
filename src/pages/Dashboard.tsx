@@ -9,17 +9,15 @@ import {
 import { isSameDay } from 'date-fns/isSameDay';
 import { isWithinInterval } from 'date-fns/isWithinInterval';
 import { isBefore } from 'date-fns/isBefore';
-import { AlertCircle, LayoutList, Calendar, ArrowRight, Plus, FolderKanban, UserPlus, Users, FileCheck2, CalendarClock } from 'lucide-react';
+import { AlertCircle, LayoutList, ArrowRight, Plus, FolderKanban, Users } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
-import { canCreateTasks, getClientKey, getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
-import { getClientTaskStage } from '../lib/clientPortal';
+import { canCreateTasks, getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
 import type { User } from '../types';
-import { getMemberDepartments } from '../lib/departments';
 import OperationsGlance from '../components/OperationsGlance';
 import { getTrackedMonthlyCompletions, isTaskOpen } from '../lib/taskReporting';
 import { isTaskCompleted } from '../lib/taskCompletion';
@@ -29,6 +27,8 @@ import { projectStatus } from '../lib/projectManagement';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
 import StaffMyWork from '../components/StaffMyWork';
 import ManagementOverview from '../components/ManagementOverview';
+
+const DeliveryReviewPanel = React.lazy(() => import('../components/DeliveryReviewPanel'));
 import NeedsMyAttention from '../components/NeedsMyAttention';
 import { useI18n } from '../components/I18nProvider';
 import { isLocalServiceDemoEnabled, LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID } from '../mock/localServiceDemo';
@@ -36,7 +36,7 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import { getContractDaysRemaining } from '../lib/dashboardData';
 import { getWorkWeekRange } from '../lib/workWeek';
 
-type BossTab = 'overview' | 'pulse' | 'workload';
+type BossTab = 'overview' | 'portfolio' | 'pulse' | 'workload';
 
 interface StatCardProps {
   title: string;
@@ -232,19 +232,12 @@ const Dashboard: React.FC = () => {
     useStore.setState({ createTaskInitialAssignee: member.id });
     setCreateTaskModalOpen(true);
   }, [setCreateTaskModalOpen]);
-  const staffAssignedTasks = useMemo(
-    () => showStaffOperations && currentUser
-      ? tasks.filter(task => task.assignedTo === currentUser.id)
-      : [],
-    [currentUser, showStaffOperations, tasks]
-  );
-  const dashboardDescription = currentUser?.role === 'Staff' || currentUser?.role === 'HOD'
-    ? staffAssignedTasks.length > 0
-      ? <>{t('Welcome back,')} <span data-i18n-skip>{currentUser.name}</span>{t('. Here is what needs your attention and what you have completed.')}</>
-      : <>{t('Welcome back,')} <span data-i18n-skip>{currentUser.name}</span>{t('. Your assigned and department-scoped work will appear here.')}</>
+
+  const dashboardDescription = showBossOperations
+    ? t('Exceptions, approvals, and renewals that need a decision today.')
     : hasTaskData
-      ? <>{t('Welcome back,')} <span data-i18n-skip>{currentUser?.name}</span>{t("! Here's your task overview.")}</>
-      : <>{t('Welcome back,')} <span data-i18n-skip>{currentUser?.name}</span>{t('! Your live workspace is ready.')}</>;
+      ? t('Open work, deadlines, and recent activity in your scope.')
+      : t('Your live workspace is ready.');
 
   const stats = useMemo(() => {
     const weekRange = getWorkWeekRange(today);
@@ -304,97 +297,8 @@ const Dashboard: React.FC = () => {
     [tasks]
   );
 
-  const myTasks = useMemo(() => {
-    if (!currentUser) return { dueToday: [], overdue: [], actionRequired: [] };
-    const isPersonalTask = (task: (typeof tasks)[number]) => currentUser.role === 'Client'
-      ? getClientKey(task.clientName) === getClientKey(currentUser.companyName)
-      : task.assignedTo === currentUser.id;
 
-    const dueToday = tasks.filter(t => {
-      const dueDate = parseOptionalDate(t.dueDate);
-      return Boolean(
-        dueDate &&
-        isTaskOpen(t) &&
-        isPersonalTask(t) &&
-        isSameDay(dueDate, today)
-      );
-    });
 
-    const overdue = tasks.filter(t =>
-      {
-        const dueDate = parseOptionalDate(t.dueDate);
-        return Boolean(
-          dueDate &&
-          isTaskOpen(t) &&
-          isPersonalTask(t) &&
-          isBefore(dueDate, today)
-        );
-      }
-    );
-
-    const actionRequired = tasks.filter(t => {
-      if (currentUser.role === 'Client') {
-        return getClientKey(t.clientName) === getClientKey(currentUser.companyName)
-          && getClientTaskStage(t) === 'awaiting_review';
-      } else {
-        return isTaskOpen(t)
-          && t.assignedTo === currentUser.id && t.status === 'Waiting Approval';
-      }
-    });
-
-    return { dueToday, overdue, actionRequired };
-  }, [tasks, currentUser, today]);
-  const staffBriefing = useMemo(() => {
-    if (!showStaffOperations || !currentUser) return null;
-    const dueSoon = staffAssignedTasks
-      .filter(task => isTaskOpen(task) && task.dueDate)
-      .sort((a, b) => (a.dueDate || '').localeCompare(b.dueDate || ''))
-      .slice(0, 6);
-    const waitingCount = staffAssignedTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length;
-    return {
-      dueTodayCount: myTasks.dueToday.length,
-      overdueCount: myTasks.overdue.length,
-      waitingCount,
-      dueSoon,
-    };
-  }, [currentUser, myTasks.dueToday.length, myTasks.overdue.length, showStaffOperations, staffAssignedTasks]);
-
-  const departmentContext = useMemo(() => {
-    if (!showStaffOperations || !currentUser) return null;
-    const myDepartments = getMemberDepartments(currentUser);
-    if (myDepartments.length === 0) return null;
-    const primaryDepartment = myDepartments[0];
-    const teammates = users.filter(user => (
-      user.id !== currentUser.id
-      && user.role !== 'Client'
-      && !user.directoryOnly
-      && getMemberDepartments(user).includes(primaryDepartment)
-    ));
-    const departmentTasks = allTasks.filter(task => task.department === primaryDepartment);
-    const openCount = departmentTasks.filter(isTaskOpen).length;
-    const overdueCount = departmentTasks.filter(task => {
-      const dueDate = parseOptionalDate(task.dueDate);
-      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, today));
-    }).length;
-    const waitingCount = departmentTasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length;
-    return { primaryDepartment, teammates, openCount, overdueCount, waitingCount };
-  }, [allTasks, currentUser, showStaffOperations, users, today]);
-
-  const staffOnboardingSteps = useMemo(() => {
-    if (!showStaffOperations || !currentUser) return [];
-    const passwordDone = !currentUser?.mustResetPassword;
-    const profileDone = Boolean(currentUser.avatar || currentUser.email);
-    const taskAssigned = staffAssignedTasks.length > 0;
-    const updatedSomething = tasks.some(task => (
-      task.assignedTo === currentUser.id && (task.isCompleted || (task.comments?.length || 0) > 0)
-    ));
-    return [
-      { key: 'password', label: t('Set your own password'), done: passwordDone, to: '/settings' },
-      { key: 'profile', label: t('Complete your profile'), done: profileDone, to: '/settings' },
-      { key: 'first-task', label: t('Review your first assigned task'), done: taskAssigned, to: '/tasks' },
-      { key: 'first-update', label: t('Complete a task or leave an update'), done: updatedSomething, to: '/tasks' },
-    ].filter(step => !step.done);
-  }, [currentUser, showStaffOperations, staffAssignedTasks.length, t, tasks]);
 
 
 
@@ -431,14 +335,14 @@ const Dashboard: React.FC = () => {
   if (currentUser?.role === 'Project Manager' && !isBossKoo(currentUser)) return (
     <div className={pageShell}>
       <PageHeader
-        title={t('Portfolio work')}
-        description={t('Deadlines, review risk, active companies, and commercial records in your portfolio.')}
+        title={t('Dashboard')}
+        description={t('What needs your attention today across your projects.')}
         onboardingTarget="dashboard-overview"
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2.5">
             <BackendFreshness />
             <Link to="/tasks" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-              {t('Open work')}
+              {t('Portfolio work')}
               <ArrowRight className="h-4 w-4" />
             </Link>
             {canCreateTask && (
@@ -450,8 +354,126 @@ const Dashboard: React.FC = () => {
           </div>
         )}
       />
-      <div className="mt-6 space-y-6"><NeedsMyAttention /><ServiceRoleDashboard /></div>
+      <div className="mt-6"><ServiceRoleDashboard /></div>
     </div>
+  );
+
+  const analyticsSection = hasTaskData ? (
+<section className="space-y-6" aria-labelledby="workspace-analytics-title">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 id="workspace-analytics-title" className="text-lg font-semibold text-slate-950">{t('Workspace analytics')}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t('Current workload distribution and completion trend.')}</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
+            <ChartCard title={t('Tasks by Department')}>
+              {tasksByTeamData.length === 0 ? (
+                <ChartEmptyState>{t('No task data yet')}</ChartEmptyState>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 256 }}>
+                  <BarChart data={tasksByTeamData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
+                    <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
+                    <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
+                    <Bar dataKey="value" fill={chartColors.accent} radius={[4, 4, 0, 0]} barSize={36} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+
+            <ChartCard title={t('Tasks by Status')}>
+              {tasksByStatusData.length === 0 ? (
+                <ChartEmptyState>{t('No status data yet')}</ChartEmptyState>
+              ) : (
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 256 }}>
+                  <PieChart>
+                    <Pie data={tasksByStatusData} cx="50%" cy="50%" innerRadius={56} outerRadius={82} paddingAngle={4} dataKey="value">
+                      {tasksByStatusData.map((entry, index) => (
+                        <Cell key={`cell-${entry.name}`} fill={chartColors.series[index % chartColors.series.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
+                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+            </ChartCard>
+          </div>
+
+          <ChartCard
+            title={t('Tracked Monthly Completions')}
+            description={t('Uses the actual completion timestamp. Historical completed tasks without one remain in all-time totals.')}
+          >
+            {hasTrackedCompletionData ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 960, height: 256 }}>
+                <LineChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
+                  <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
+                  <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
+                  <Line type="monotone" dataKey="completed" stroke={chartColors.accent} strokeWidth={2.5} activeDot={{ r: 5 }} />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <ChartEmptyState>{t('No timestamped completions yet')}</ChartEmptyState>
+            )}
+          </ChartCard>
+        </section>
+  ) : null;
+
+  const recentActivitySection = (
+<section className={cn(cardBase, 'p-4 sm:p-5')} aria-labelledby="recent-activity-title">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 id="recent-activity-title" className="text-base font-semibold text-slate-950">{t('Recent workspace activity')}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t('Latest tasks across the work you can access.')}</p>
+            </div>
+            <Link to="/clients?period=all" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
+              {t('View tasks')} <ArrowRight className="ml-1 h-4 w-4" />
+            </Link>
+          </div>
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            {recentTasks.map(task => {
+              const dueDateParsed = parseOptionalDate(task.dueDate);
+              const isOverdue = Boolean(dueDateParsed && isTaskOpen(task) && isBefore(dueDateParsed, today));
+
+              return (
+                <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-control bg-inset/70 p-3 transition-colors hover:bg-inset">
+                  <p data-i18n-skip className={cn('truncate text-sm font-semibold text-slate-900', isOverdue && 'text-red-700')}>{task.title}</p>
+                  <p data-i18n-skip className="mt-1 truncate text-xs text-slate-500">{task.clientName} - {task.projectName || 'Independent'}</p>
+                  <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">
+                    <span className={cn('truncate text-slate-500', isOverdue && 'font-semibold text-red-600')}>
+                      {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
+                    </span>
+                    <span className={cn(
+                      'shrink-0 rounded-md bg-slate-100 px-2 py-1 font-semibold text-slate-700',
+                      task.status === 'Completed' && 'bg-emerald-50 text-emerald-700',
+                      task.status === 'In Progress' && 'bg-blue-50 text-blue-700',
+                      (task.status === 'Pending' || task.status === 'Waiting Approval') && 'bg-amber-50 text-amber-700',
+                      task.status === 'Cancelled' && 'bg-red-50 text-red-700'
+                    )}>
+                      {task.status}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+            {recentTasks.length === 0 && (
+              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center md:col-span-2 xl:col-span-5">
+                <p className="text-sm font-semibold text-slate-600">{t('No recent tasks yet')}</p>
+                <p className="mt-1 text-xs text-slate-500">{t('Newly created work will appear here first.')}</p>
+                {canCreateTask && (
+                  <Button onClick={() => setCreateTaskModalOpen(true)} variant="secondary" className="mt-3 min-h-9 px-3 py-1.5 text-xs">
+                    <Plus className="h-3.5 w-3.5" />
+                    {t('Create task')}
+                  </Button>
+                )}
+              </div>
+            )}
+          </div>
+        </section>
   );
 
   return (
@@ -568,6 +590,7 @@ const Dashboard: React.FC = () => {
             <SegmentedTabs<BossTab>
               items={[
                 { id: 'overview' as const, label: t('Overview'), icon: LayoutList },
+                { id: 'portfolio' as const, label: t('Portfolio'), icon: FolderKanban },
                 { id: 'pulse' as const, label: t('Agency pulse'), icon: AlertCircle },
                 { id: 'workload' as const, label: t('Team workload'), icon: Users },
               ]}
@@ -581,8 +604,7 @@ const Dashboard: React.FC = () => {
             {bossTab === 'overview' && (
               <div id="boss-panel-overview" role="tabpanel" aria-labelledby="boss-tab-overview" tabIndex={0} className="space-y-6">
                 {bossBriefing && bossBriefing.pendingRegs.length > 0 && (
-                  <Link to="/approvals" className={cn(cardBase, 'flex flex-wrap items-center gap-4 p-5 transition-colors hover:bg-inset/50')}>
-                    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"><UserPlus className="h-5 w-5" /></span>
+                  <Link to="/approvals" className={cn(cardBase, 'flex flex-wrap items-center gap-4 border-l-2 border-accent p-5 transition-colors hover:bg-inset/50')}>
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold text-ink">{t('Registrations waiting for approval')}</span>
                       <span className="mt-0.5 block text-sm text-muted">
@@ -593,35 +615,16 @@ const Dashboard: React.FC = () => {
                   </Link>
                 )}
 
-                {bossBriefing && (
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <Link to="/tasks?focus=overdue" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
-                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.overdueCount > 0 ? 'bg-red-50 text-red-700' : 'bg-inset text-muted')}><AlertCircle className="h-4 w-4" /></span>
-                      <span className="min-w-0">
-                        <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.overdueCount}</span>
-                        <span className="block truncate text-xs text-muted">{t('Overdue tasks')}</span>
-                      </span>
-                    </Link>
-                    <Link to="/tasks?focus=waiting" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
-                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.waitingCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-inset text-muted')}><FileCheck2 className="h-4 w-4" /></span>
-                      <span className="min-w-0">
-                        <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.waitingCount}</span>
-                        <span className="block truncate text-xs text-muted">{t('Waiting approval')}</span>
-                      </span>
-                    </Link>
-                    <Link to="/clients" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
-                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', bossBriefing.renewals.length > 0 ? 'bg-blue-50 text-blue-700' : 'bg-inset text-muted')}><CalendarClock className="h-4 w-4" /></span>
-                      <span className="min-w-0">
-                        <span className="calm-number block text-xl font-semibold text-ink">{bossBriefing.renewals.length}</span>
-                        <span className="block truncate text-xs text-muted">{t('Renewals in 30 days')}</span>
-                      </span>
-                    </Link>
-                  </div>
-                )}
-
-                <ManagementOverview />
+                <ManagementOverview part="summary" />
                 <NeedsMyAttention />
+                <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
+                {recentActivitySection}
+              </div>
+            )}
 
+            {bossTab === 'portfolio' && (
+              <div id="boss-panel-portfolio" role="tabpanel" aria-labelledby="boss-tab-portfolio" tabIndex={0} className="space-y-6">
+                <ManagementOverview part="portfolio" />
                 <ServiceRoleDashboard />
 
                 <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="portfolio-monitor-title">
@@ -734,246 +737,34 @@ const Dashboard: React.FC = () => {
             {bossTab === 'pulse' && (
               <div id="boss-panel-pulse" role="tabpanel" aria-labelledby="boss-tab-pulse" tabIndex={0} className="space-y-6">
                 <OperationsGlance tasks={activeWorkloadTasks} users={users} scope="agency" />
+                {analyticsSection}
               </div>
             )}
 
             {bossTab === 'workload' && (
-              <div id="boss-panel-workload" role="tabpanel" aria-labelledby="boss-tab-workload" tabIndex={0}>
+              <div id="boss-panel-workload" role="tabpanel" aria-labelledby="boss-tab-workload" tabIndex={0} className="space-y-6">
+                <ManagementOverview part="capacity" />
                 <TeamWorkload tasks={activeWorkloadTasks} users={users} onCreateTaskFor={openCreateTaskFor} />
               </div>
             )}
           </>
         ) : (
           <>
-            <div className="order-1">
-              <ServiceRoleDashboard />
-            </div>
-            {showStaffOperations ? (
-              <div className="order-2">
-                <OperationsGlance tasks={staffAssignedTasks} users={users} scope="staff" />
-              </div>
-            ) : (
-              <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 order-1" aria-label={t('Workspace metrics')}>
-                <StatCard title={t('Active Companies')} value={stats.activeProjects} to="/projects" />
-                <StatCard title={t('Pending Tasks')} value={stats.pendingTasks} to="/clients?period=all" />
-                <StatCard title={t('Completed Tasks')} value={stats.completedTasks} to="/clients?period=all" />
-                <StatCard title={t('Overdue Tasks')} value={stats.overdueTasks} to="/clients?period=all" />
-                <StatCard title={t('Due Today')} value={stats.dueTodayTasks} to="/calendar" />
-                <StatCard title={t('Due This Week')} value={stats.dueThisWeekTasks} to="/calendar" />
-              </section>
-            )}
-
-            {showStaffOperations && (
-              <div className="order-2 space-y-6">
-                {staffOnboardingSteps.length > 0 && (
-                  <section className={cn(cardBase, 'p-5')} aria-labelledby="staff-onboarding-title">
-                    <h2 id="staff-onboarding-title" className="text-base font-semibold text-ink">{t('Start here')}</h2>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                      {staffOnboardingSteps.map(step => (
-                        <Link key={step.key} to={step.to} className="group flex min-h-11 items-center justify-between gap-3 rounded-control border border-line bg-surface px-3 text-sm font-medium text-ink transition-colors hover:bg-inset">
-                          {step.label}
-                          <ArrowRight className="h-4 w-4 text-muted transition-transform group-hover:translate-x-0.5" />
-                        </Link>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {staffBriefing && (
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    <Link to="/tasks?period=today" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
-                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', staffBriefing.dueTodayCount > 0 ? 'bg-blue-50 text-blue-700' : 'bg-inset text-muted')}><Calendar className="h-4 w-4" /></span>
-                      <span className="min-w-0">
-                        <span className="calm-number block text-xl font-semibold text-ink">{staffBriefing.dueTodayCount}</span>
-                        <span className="block truncate text-xs text-muted">{t('Due today')}</span>
-                      </span>
-                    </Link>
-                    <Link to="/clients?period=all" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
-                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', staffBriefing.overdueCount > 0 ? 'bg-red-50 text-red-700' : 'bg-inset text-muted')}><AlertCircle className="h-4 w-4" /></span>
-                      <span className="min-w-0">
-                        <span className="calm-number block text-xl font-semibold text-ink">{staffBriefing.overdueCount}</span>
-                        <span className="block truncate text-xs text-muted">{t('Overdue')}</span>
-                      </span>
-                    </Link>
-                    <Link to="/clients?period=all" className={cn(cardBase, 'flex items-center gap-3 p-4 transition-colors hover:bg-inset/50')}>
-                      <span className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', staffBriefing.waitingCount > 0 ? 'bg-amber-50 text-amber-700' : 'bg-inset text-muted')}><FileCheck2 className="h-4 w-4" /></span>
-                      <span className="min-w-0">
-                        <span className="calm-number block text-xl font-semibold text-ink">{staffBriefing.waitingCount}</span>
-                        <span className="block truncate text-xs text-muted">{t('Waiting approval')}</span>
-                      </span>
-                    </Link>
-                  </div>
-                )}
-
-                {staffBriefing && staffBriefing.dueSoon.length > 0 && (
-                  <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="due-soon-title">
-                    <div className="border-b border-line/70 px-5 py-4">
-                      <h2 id="due-soon-title" className="text-base font-semibold text-ink">{t('Due soon')}</h2>
-                      <p className="mt-1 text-sm text-muted">{t('Your upcoming deadlines in order.')}</p>
-                    </div>
-                    <div className="divide-y divide-line/60">
-                      {staffBriefing.dueSoon.map(task => (
-                        <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="flex items-center justify-between gap-3 px-5 py-3 transition-colors hover:bg-inset/50">
-                          <span className="min-w-0 truncate text-sm font-medium text-ink">
-                            <span data-i18n-skip>{task.title}</span>
-                            <span className="ml-2 text-xs text-muted">{task.clientName}</span>
-                          </span>
-                          <span className="shrink-0 text-xs font-semibold text-muted">{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}</span>
-                        </Link>
-                      ))}
-                    </div>
-                  </section>
-                )}
-
-                {departmentContext && (
-                  <section className={cn(cardBase, 'p-5')} aria-labelledby="department-context-title">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <div>
-                        <h2 id="department-context-title" className="text-base font-semibold text-ink">
-                          {t('My department')} · <span data-i18n-skip>{departmentContext.primaryDepartment}</span>
-                        </h2>
-                        <p className="mt-1 text-sm text-muted">
-                          {departmentContext.teammates.length + 1} {t('members')} · {departmentContext.openCount} {t('open tasks')} · {departmentContext.overdueCount} {t('overdue')} · {departmentContext.waitingCount} {t('in review')}
-                        </p>
-                      </div>
-                      <Link to="/clients?period=all" className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
-                        {t('My tasks')} <ArrowRight className="h-4 w-4" />
-                      </Link>
-                    </div>
-                    {departmentContext.teammates.length > 0 && (
-                      <div className="mt-4 flex flex-wrap gap-2">
-                        {departmentContext.teammates.map(member => (
-                          <span key={member.id} className="inline-flex items-center gap-2 rounded-full border border-line bg-inset px-3 py-1 text-xs font-medium text-ink">
-                            <span className="flex h-5 w-5 items-center justify-center rounded-full bg-accent-soft text-[10px] font-semibold text-accent">
-                              {member.avatar ? <img src={member.avatar} alt="" className="h-full w-full rounded-full object-cover" /> : member.name.charAt(0)}
-                            </span>
-                            <span data-i18n-skip>{member.name}</span>
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </section>
-                )}
-              </div>
-            )}
+            <ServiceRoleDashboard />
+            <section className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3" aria-label={t('Workspace metrics')}>
+              <StatCard title={t('Active Companies')} value={stats.activeProjects} to="/projects" />
+              <StatCard title={t('Pending Tasks')} value={stats.pendingTasks} to="/tasks" />
+              <StatCard title={t('Completed Tasks')} value={stats.completedTasks} to="/tasks?show=completed" />
+              <StatCard title={t('Overdue Tasks')} value={stats.overdueTasks} to="/tasks?focus=overdue" />
+              <StatCard title={t('Due Today')} value={stats.dueTodayTasks} to="/calendar" />
+              <StatCard title={t('Due This Week')} value={stats.dueThisWeekTasks} to="/calendar" />
+            </section>
+            {analyticsSection}
+            {recentActivitySection}
           </>
         )}
 
-        {hasTaskData && (
-        <section className="space-y-6 order-2" aria-labelledby="workspace-analytics-title">
-          <div className="flex items-end justify-between gap-4">
-            <div>
-              <h2 id="workspace-analytics-title" className="text-lg font-semibold text-slate-950">{t('Workspace analytics')}</h2>
-              <p className="mt-1 text-sm text-slate-500">{t('Current workload distribution and completion trend.')}</p>
-            </div>
-          </div>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-2">
-            <ChartCard title={t('Tasks by Department')}>
-              {tasksByTeamData.length === 0 ? (
-                <ChartEmptyState>{t('No task data yet')}</ChartEmptyState>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 256 }}>
-                  <BarChart data={tasksByTeamData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
-                    <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
-                    <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
-                    <Bar dataKey="value" fill={chartColors.accent} radius={[4, 4, 0, 0]} barSize={36} />
-                  </BarChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
 
-            <ChartCard title={t('Tasks by Status')}>
-              {tasksByStatusData.length === 0 ? (
-                <ChartEmptyState>{t('No status data yet')}</ChartEmptyState>
-              ) : (
-                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 640, height: 256 }}>
-                  <PieChart>
-                    <Pie data={tasksByStatusData} cx="50%" cy="50%" innerRadius={56} outerRadius={82} paddingAngle={4} dataKey="value">
-                      {tasksByStatusData.map((entry, index) => (
-                        <Cell key={`cell-${entry.name}`} fill={chartColors.series[index % chartColors.series.length]} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
-                    <Legend iconType="circle" wrapperStyle={{ fontSize: '12px' }} />
-                  </PieChart>
-                </ResponsiveContainer>
-              )}
-            </ChartCard>
-          </div>
-
-          <ChartCard
-            title={t('Tracked Monthly Completions')}
-            description={t('Uses the actual completion timestamp. Historical completed tasks without one remain in all-time totals.')}
-          >
-            {hasTrackedCompletionData ? (
-              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0} initialDimension={{ width: 960, height: 256 }}>
-                <LineChart data={monthlyData} margin={{ top: 10, right: 20, left: 0, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={chartColors.grid} />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
-                  <YAxis axisLine={false} tickLine={false} tick={{ fill: chartColors.tick, fontSize: 12 }} />
-                  <Tooltip cursor={{ fill: chartColors.cursor }} contentStyle={{ borderRadius: '8px', border: `1px solid ${chartColors.grid}`, boxShadow: '0 4px 12px rgb(15 23 42 / 0.08)' }} />
-                  <Line type="monotone" dataKey="completed" stroke={chartColors.accent} strokeWidth={2.5} activeDot={{ r: 5 }} />
-                </LineChart>
-              </ResponsiveContainer>
-            ) : (
-              <ChartEmptyState>{t('No timestamped completions yet')}</ChartEmptyState>
-            )}
-          </ChartCard>
-        </section>
-        )}
-
-        <section className={cn(cardBase, 'order-3 p-4 sm:p-5')} aria-labelledby="recent-activity-title">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 id="recent-activity-title" className="text-base font-semibold text-slate-950">{t('Recent workspace activity')}</h2>
-              <p className="mt-1 text-sm text-slate-500">{t('Latest tasks across the work you can access.')}</p>
-            </div>
-            <Link to="/clients?period=all" className="flex items-center text-sm font-semibold text-blue-600 hover:text-blue-700">
-              {t('View tasks')} <ArrowRight className="ml-1 h-4 w-4" />
-            </Link>
-          </div>
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
-            {recentTasks.map(task => {
-              const dueDateParsed = parseOptionalDate(task.dueDate);
-              const isOverdue = Boolean(dueDateParsed && isTaskOpen(task) && isBefore(dueDateParsed, today));
-
-              return (
-                <Link key={task.id} to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 rounded-control bg-inset/70 p-3 transition-colors hover:bg-inset">
-                  <p data-i18n-skip className={cn('truncate text-sm font-semibold text-slate-900', isOverdue && 'text-red-700')}>{task.title}</p>
-                  <p data-i18n-skip className="mt-1 truncate text-xs text-slate-500">{task.clientName} - {task.projectName || 'Independent'}</p>
-                  <div className="mt-3 flex items-center justify-between gap-2 text-[11px]">
-                    <span className={cn('truncate text-slate-500', isOverdue && 'font-semibold text-red-600')}>
-                      {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
-                    </span>
-                    <span className={cn(
-                      'shrink-0 rounded-md bg-slate-100 px-2 py-1 font-semibold text-slate-700',
-                      task.status === 'Completed' && 'bg-emerald-50 text-emerald-700',
-                      task.status === 'In Progress' && 'bg-blue-50 text-blue-700',
-                      (task.status === 'Pending' || task.status === 'Waiting Approval') && 'bg-amber-50 text-amber-700',
-                      task.status === 'Cancelled' && 'bg-red-50 text-red-700'
-                    )}>
-                      {task.status}
-                    </span>
-                  </div>
-                </Link>
-              );
-            })}
-            {recentTasks.length === 0 && (
-              <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50/60 px-4 py-8 text-center md:col-span-2 xl:col-span-5">
-                <p className="text-sm font-semibold text-slate-600">{t('No recent tasks yet')}</p>
-                <p className="mt-1 text-xs text-slate-500">{t('Newly created work will appear here first.')}</p>
-                {canCreateTask && (
-                  <Button onClick={() => setCreateTaskModalOpen(true)} variant="secondary" className="mt-3 min-h-9 px-3 py-1.5 text-xs">
-                    <Plus className="h-3.5 w-3.5" />
-                    {t('Create task')}
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-        </section>
       </div>
       )}
     </div>

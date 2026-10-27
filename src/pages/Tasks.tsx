@@ -29,6 +29,7 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import PersonalTaskViews from '../components/PersonalTaskViews';
 import { taskPreferencesKey } from '../lib/personalTaskViews';
+import { isTaskInListScope, parseTaskListScope, shouldApplyTaskListScope, TASK_LIST_SCOPE_PARAM } from '../lib/taskListScope';
 
 const CLIENT_BOARD_COLUMNS = [
   { value: 'active', label: 'In progress' },
@@ -158,6 +159,7 @@ const TasksWorkspace: React.FC = () => {
     ? requestedPeriod
     : '';
   const routeSearch = searchParams.get('search') || '';
+  const listScope = parseTaskListScope(searchParams.get(TASK_LIST_SCOPE_PARAM));
 
   const updateSearch = useCallback((value: string) => {
     const next = new URLSearchParams(searchParams);
@@ -215,7 +217,7 @@ const TasksWorkspace: React.FC = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [searchTerm, filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority, dateFrom, dateTo, projectIdFilter, clientRouteFilter, taskIdFilter, assigneeRouteFilter, periodRouteFilter]);
+  }, [searchTerm, filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority, dateFrom, dateTo, projectIdFilter, clientRouteFilter, taskIdFilter, assigneeRouteFilter, periodRouteFilter, listScope]);
 
   const tasks = useMemo(
     () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients: clientProfiles, projects }),
@@ -263,6 +265,7 @@ const TasksWorkspace: React.FC = () => {
     return null;
   }, [locale, periodRouteFilter, today]);
 
+  const applyListScope = shouldApplyTaskListScope({ statusFilter: filterStatus, taskId: taskIdFilter });
   const filteredTasks = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
@@ -303,9 +306,11 @@ const TasksWorkspace: React.FC = () => {
           ? task.status === 'Waiting Approval' && isTaskOpen(task)
           : true;
 
-      return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask && matchesRoutePeriod && matchesFocus;
+      const matchesScope = isClientUser || !applyListScope || isTaskInListScope(task, listScope);
+
+      return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask && matchesRoutePeriod && matchesFocus && matchesScope;
     });
-  }, [assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, routeFocus, routePeriodBounds, searchTerm, taskIdFilter, tasks, users, today]);
+  }, [applyListScope, assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, isClientUser, listScope, projectIdFilter, routeFocus, routePeriodBounds, searchTerm, taskIdFilter, tasks, users, today]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -387,19 +392,24 @@ const TasksWorkspace: React.FC = () => {
     periodRouteFilter && (periodRouteFilter === 'today' ? 'Today' : periodRouteFilter === 'week' ? 'This week' : 'Overall'),
   ].filter((label): label is string => Boolean(label));
 
+  const emptyListMessage = !hasAnyFilter && applyListScope && listScope === 'active'
+    ? 'No active tasks. Completed work stays under Completed.'
+    : 'No tasks found matching your criteria.';
+
   const clearRouteFilter = (key: string) => {
     const next = new URLSearchParams(searchParams);
     next.delete(key);
     setSearchParams(next, { replace: true });
   };
 
-  const applyQuickFilter = (value: 'all' | 'today' | 'overdue' | 'waiting') => {
+  const applyQuickFilter = (value: 'active' | 'today' | 'overdue' | 'waiting' | 'completed' | 'all') => {
     const next = new URLSearchParams(searchParams);
     next.delete('focus');
     next.delete('period');
-    ['dueFrom', 'dueTo', 'status'].forEach(key => next.delete(key));
+    ['dueFrom', 'dueTo', 'status', TASK_LIST_SCOPE_PARAM].forEach(key => next.delete(key));
     if (value === 'today') next.set('period', 'today');
     else if (value === 'overdue' || value === 'waiting') next.set('focus', value);
+    else if (value === 'completed' || value === 'all') next.set(TASK_LIST_SCOPE_PARAM, value);
     setSearchParams(next, { replace: true });
     setPage(1);
   };
@@ -425,10 +435,10 @@ const TasksWorkspace: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title={isClientUser ? t('Company Tasks') : t('Tasks Management')}
+        title={isClientUser ? t('Company Tasks') : t('Tasks')}
         description={isClientUser
           ? t('Track your company work, review deliverables, and share feedback.')
-          : t('Manage assignments, approvals, revisions, files, and deadlines.')}
+          : t('Active assignments, reviews, and deadlines across the agency.')}
         onboardingTarget="tasks-overview"
         action={canCreateTasks(currentUser, rolePermissions) ? (
           <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
@@ -602,13 +612,18 @@ const TasksWorkspace: React.FC = () => {
           {!isClientUser && (
             <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('Quick task filters')}>
               {([
-                ['all', t('All')],
+                ['active', t('Active work')],
                 ['today', t('Due today')],
                 ['overdue', t('Overdue')],
                 ['waiting', t('Waiting approval')],
+                ['completed', t('Completed')],
+                ['all', t('All tasks')],
               ] as const).map(([value, label]) => {
-                const isActive = value === 'all'
-                  ? !routeFocus && !periodRouteFilter && !dateFrom && !dateTo && filterStatus === 'All'
+                const noFocus = !routeFocus && !periodRouteFilter && !dateFrom && !dateTo && filterStatus === 'All';
+                const isActive = value === 'active'
+                  ? noFocus && listScope === 'active'
+                  : value === 'completed' || value === 'all'
+                    ? noFocus && listScope === value
                   : value === 'today'
                     ? periodRouteFilter === 'today' || (!routeFocus && dateFrom === format(today, 'yyyy-MM-dd') && dateTo === format(today, 'yyyy-MM-dd'))
                     : value === 'overdue'
@@ -874,7 +889,7 @@ const TasksWorkspace: React.FC = () => {
                   )}
                   {!backend?.isLoading && pagedTasks.length === 0 && (
                     <tr>
-	                      <td colSpan={TABLE_COLUMN_COUNT} className="px-4 py-8 text-center text-slate-500">{t('No tasks found matching your criteria.')}</td>
+	                      <td colSpan={TABLE_COLUMN_COUNT} className="px-4 py-8 text-center text-slate-500">{t(emptyListMessage)}</td>
                     </tr>
                   )}
                 </tbody>
@@ -949,7 +964,7 @@ const TasksWorkspace: React.FC = () => {
                   );
                 })
               )}
-              {!backend?.isLoading && pagedTasks.length === 0 && <div className="p-8 text-center text-sm text-slate-700">{t('No tasks found matching your criteria.')}</div>}
+              {!backend?.isLoading && pagedTasks.length === 0 && <div className="p-8 text-center text-sm text-slate-700">{t(emptyListMessage)}</div>}
             </div>
 
             <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row gap-3 justify-between items-center bg-slate-50 text-sm">
@@ -972,6 +987,7 @@ const TasksWorkspace: React.FC = () => {
                 const columnTasks = isClientUser
                   ? filteredTasks.filter(t => getClientTaskStage(t) === status)
                   : filteredTasks.filter(t => t.status === status);
+                const hiddenByScope = !isClientUser && applyListScope && !isTaskInListScope({ status, isCompleted: status === 'Completed' }, listScope);
                 return (
                   <div
                     key={status}
@@ -980,6 +996,7 @@ const TasksWorkspace: React.FC = () => {
                     {/* Column Header */}
                     <div className="flex justify-between items-center mb-3 pb-2 border-b border-line shrink-0">
                       <span className="text-xs font-semibold text-slate-600">{isClientUser ? column.label : status}</span>
+                      {hiddenByScope && <button type="button" onClick={() => applyQuickFilter('all')} className="text-[11px] font-semibold text-accent hover:underline">{t('Show')}</button>}
                       <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-xs font-bold text-slate-700">{columnTasks.length}</span>
                     </div>
 

@@ -1,0 +1,74 @@
+[
+  {
+    "role": "superadmin",
+    "path": "/",
+    "width": 1440,
+    "h1": "Agency operations",
+    "overflowPx": 0,
+    "file": "seeded-superadmin-home-1440.png"
+  },
+  {
+    "role": "superadmin",
+    "path": "/tasks",
+    "width": 1440,
+    "h1": "Tasks Management",
+    "overflowPx": 0,
+    "file": "seeded-superadmin-tasks-1440.png"
+  },
+  {
+    "role": "pm",
+    "path": "/",
+    "width": 1440,
+    "h1": "Portfolio work",
+    "overflowPx": 0,
+    "file": "seeded-pm-home-1440.png"
+  },
+  {
+    "role": "pm",
+    "path": "/",
+    "width": 390,
+    "h1": "Portfolio work",
+    "overflowPx": 0,
+    "file": "seeded-pm-home-390.png"
+  },
+  {
+    "role": "pm",
+    "path": "/tasks",
+    "width": 1440,
+    "h1": "Portfolio work",
+    "overflowPx": 0,
+    "file": "seeded-pm-tasks-1440.png"
+  },
+  {
+    "role": "hod",
+    "path": "/",
+    "width": 1440,
+    "h1": "Department work",
+    "overflowPx": 0,
+    "file": "seeded-hod-home-1440.png"
+  },
+  {
+    "role": "hod",
+    "path": "/tasks?scope=department",
+    "width": 1440,
+    "h1": "Department work",
+    "overflowPx": 0,
+    "file": "seeded-hod-tasks_scope_department-1440.png"
+  },
+  {
+    "role": "staff",
+    "path": "/",
+    "width": 1440,
+    "h1": "My work",
+    "overflowPx": 0,
+    "file": "seeded-staff-home-1440.png"
+  },
+  {
+    "role": "staff",
+    "path": "/tasks",
+    "width": 390,
+    "h1": "Action Centre",
+    "overflowPx": 0,
+    "file": "seeded-staff-tasks-390.png"
+  }
+]

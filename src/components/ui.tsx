@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowUpRight, LucideIcon } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { cn } from '../lib/utils';
 import { buttonBase, cardBase } from './uiTokens';
 
@@ -16,13 +17,14 @@ interface PageHeaderProps {
 
 export const PageHeader: React.FC<PageHeaderProps> = ({ title, description, action, breadcrumb, meta, compact = false, onboardingTarget }) => (
   <header {...(onboardingTarget ? { 'data-onboarding-target': onboardingTarget } : {})} className={cn('app-page-header flex flex-col gap-5 border-b border-line/70', compact ? 'pb-4' : 'pb-6', 'sm:flex-row sm:items-end sm:justify-between')}>
-    <div className="min-w-0">
+    {/* The title keeps a readable minimum; the actions wrap instead of squeezing it to zero width. */}
+    <div className="min-w-0 sm:min-w-[14rem] sm:flex-1">
       {breadcrumb && <div className="mb-2 text-xs font-medium text-muted">{breadcrumb}</div>}
       <h1 className={cn('app-page-title text-balance font-semibold text-ink', compact ? 'text-2xl leading-8' : 'text-[1.75rem] leading-9 sm:text-[2rem] sm:leading-10')}>{title}</h1>
       {description && <p className="mt-1.5 max-w-[65ch] text-pretty text-sm leading-6 text-muted">{description}</p>}
       {meta && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">{meta}</div>}
     </div>
-    {action && <div className="shrink-0">{action}</div>}
+    {action && <div className="min-w-0 sm:max-w-[65%] sm:shrink-0">{action}</div>}
   </header>
 );
 
@@ -166,6 +168,25 @@ export const Surface: React.FC<React.HTMLAttributes<HTMLElement> & { variant?: '
   const Component = as;
   return <Component className={cn(variant === 'plain' ? 'calm-surface' : variant === 'inset' ? 'calm-inset' : 'calm-raised', className)} {...props} />;
 };
+
+/* ── MetricStrip ────────────────────────────────────────────────────────── */
+export type StripMetric = { label: string; value: React.ReactNode; to?: string; tone?: 'neutral' | 'danger' | 'warning' };
+
+// One quiet row of headline numbers. Tone appears only when a value needs action.
+export const MetricStrip = ({ label, items }: { label: string; items: StripMetric[] }) => (
+  <dl aria-label={label} className={`grid gap-px overflow-hidden rounded-panel bg-line/70 ring-1 ring-line/70 ${items.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : items.length > 4 ? 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
+    {items.map(item => {
+      const toneClass = item.tone === 'danger' && Number(item.value) > 0 ? 'text-red-700' : item.tone === 'warning' && Number(item.value) > 0 ? 'text-amber-700' : 'text-ink';
+      // Valid dl structure (div > dt + dd); a stretched link keeps the whole cell clickable.
+      return <div key={item.label} className={`relative bg-surface px-4 py-3 ${item.to ? 'transition-colors hover:bg-inset focus-within:ring-2 focus-within:ring-inset focus-within:ring-accent/40' : ''}`}>
+        <dt className="text-xs font-medium text-muted">{item.label}</dt>
+        <dd className={`calm-number mt-1 text-2xl font-semibold tracking-[-0.04em] ${toneClass}`}>
+          {item.to ? <Link to={item.to} aria-label={`${item.label}: ${item.value}`} className="after:absolute after:inset-0 focus:outline-none">{item.value}</Link> : item.value}
+        </dd>
+      </div>;
+    })}
+  </dl>
+);
 
 export const StatGroup: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className, ...props }) => (
   <div className={cn('calm-surface grid divide-y divide-line/70 overflow-hidden ring-1 ring-line/70 sm:divide-x sm:divide-y-0', className)} {...props} />

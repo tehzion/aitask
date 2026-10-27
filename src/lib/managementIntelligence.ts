@@ -22,11 +22,24 @@ import { parseOptionalDate } from './utils';
 
 export type ManagementAttentionSeverity = 'information' | 'attention' | 'critical';
 
+export type ManagementAttentionKind = 'projectRisk' | 'review' | 'completion' | 'renewal' | 'deliverable' | 'clientReview' | 'task';
+
 export interface ManagementAttentionItem {
   id: string;
+  kind: ManagementAttentionKind;
   severity: ManagementAttentionSeverity;
+  /** English fallback copy; the UI composes localized text from the fields below. */
   title: string;
   detail: string;
+  /** Record name shown verbatim (task, project, client, or deliverable). */
+  subject: string;
+  /** Company or plan context shown verbatim. */
+  context?: string;
+  overdueCount?: number;
+  openCount?: number;
+  revisionCount?: number;
+  blocked?: boolean;
+  waitingReview?: boolean;
   to: string;
   dueDate?: string;
 }
@@ -171,7 +184,19 @@ export const getManagementAttentionItems = ({
   now = new Date(),
   persona,
   userId,
-}: ManagementIntelligenceInput & { persona: 'boss' | 'projectManager' | 'operation' | 'account' | 'production' | 'client'; userId?: string }) => {
+  reviewQueue,
+  completionQueue = [],
+  excludeProjectRisks = false,
+}: ManagementIntelligenceInput & {
+  persona: 'boss' | 'projectManager' | 'operation' | 'account' | 'production' | 'client';
+  userId?: string;
+  /** Reviews awaiting this user's decision. Defaults to every internal review in scope. */
+  reviewQueue?: readonly Task[];
+  /** Approved work this user can complete now. */
+  completionQueue?: readonly Task[];
+  /** Set when the page already shows a project-risk panel next to this list. */
+  excludeProjectRisks?: boolean;
+}) => {
   const today = startOfDay(now);
   const inThreeDays = endOfDay(addDays(today, 3));
   const items: ManagementAttentionItem[] = [];
@@ -193,21 +218,40 @@ export const getManagementAttentionItems = ({
   const activePlans = clientPlans.filter(plan => plan.status === 'Active');
 
   if (persona === 'boss' || persona === 'projectManager') {
-    projectRows
+    if (!excludeProjectRisks) projectRows
       .filter(row => row.health.health === 'atRisk')
       .sort((left, right) => right.health.overdueCount - left.health.overdueCount)
       .forEach(row => add({
         id: `project-risk:${row.project.id}`,
+        kind: 'projectRisk',
         severity: 'critical',
         title: `${row.project.projectName} needs attention`,
         detail: `${row.health.overdueCount} overdue · ${row.health.openCount} open`,
+        subject: row.project.projectName,
+        context: row.project.clientName,
+        overdueCount: row.health.overdueCount,
+        openCount: row.health.openCount,
         to: `/tasks?projectId=${encodeURIComponent(row.project.id)}`,
       }));
-    getPortfolioReviewQueues(visibleTasks).internal.slice(0, 6).forEach(task => add({
+    (reviewQueue ?? getPortfolioReviewQueues(visibleTasks).internal).slice(0, 6).forEach(task => add({
       id: `review:${task.id}`,
+      kind: 'review',
       severity: 'attention',
       title: task.title,
       detail: `${task.clientName} · waiting for internal review`,
+      subject: task.title,
+      context: task.clientName,
+      to: `/tasks?taskId=${encodeURIComponent(task.id)}`,
+      dueDate: task.dueDate,
+    }));
+    completionQueue.slice(0, 4).forEach(task => add({
+      id: `completion:${task.id}`,
+      kind: 'completion',
+      severity: 'attention',
+      title: task.title,
+      detail: `${task.clientName} · ready to complete`,
+      subject: task.title,
+      context: task.clientName,
       to: `/tasks?taskId=${encodeURIComponent(task.id)}`,
       dueDate: task.dueDate,
     }));
@@ -217,26 +261,35 @@ export const getManagementAttentionItems = ({
       .sort((left, right) => (left.renewal?.getTime() || 0) - (right.renewal?.getTime() || 0))
       .forEach(({ plan, renewal }) => add({
         id: `renewal:${plan.id}`,
+        kind: 'renewal',
         severity: renewal && isBefore(renewal, today) ? 'critical' : 'attention',
         title: plan.clientName,
         detail: `${plan.name} · renewal ${renewal?.toISOString().slice(0, 10) || 'date missing'}`,
+        subject: plan.clientName,
+        context: plan.name,
         to: `/clients/${encodeURIComponent(plan.clientId)}`,
         dueDate: planRenewalDate(plan)?.toISOString(),
       }));
     overdueDeliverables.forEach(deliverable => add({
       id: `deliverable:${deliverable.id}`,
+      kind: 'deliverable',
       severity: 'critical',
       title: deliverable.title,
       detail: `${deliverable.clientName} · cycle ended`,
+      subject: deliverable.title,
+      context: deliverable.clientName,
       to: `/clients/${encodeURIComponent(deliverable.clientId)}`,
       dueDate: cycleEndByIdMap.get(deliverable.cycleId)?.toISOString(),
     }));
   } else if (persona === 'client') {
     visibleTasks.slice(0, 8).forEach(task => add({
       id: `client-review:${task.id}`,
+      kind: 'clientReview',
       severity: 'attention',
       title: task.title,
       detail: `${task.clientName} · ready for your review`,
+      subject: task.title,
+      context: task.clientName,
       to: `/tasks?taskId=${encodeURIComponent(task.id)}`,
       dueDate: task.dueDate,
     }));
@@ -247,9 +300,15 @@ export const getManagementAttentionItems = ({
         || (parseOptionalDate(left.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER) - (parseOptionalDate(right.dueDate)?.getTime() || Number.MAX_SAFE_INTEGER))
       .forEach(task => add({
         id: `task:${task.id}`,
+        kind: 'task',
         severity: isTaskOverdue(task, now) || task.workState?.blocker ? 'critical' : 'attention',
         title: task.title,
         detail: task.workState?.blocker ? 'Blocked work' : task.status === 'Waiting Approval' ? 'Waiting review' : task.revisionCount > 0 ? `Revision ${task.revisionCount}` : task.clientName,
+        subject: task.title,
+        context: task.clientName,
+        blocked: Boolean(task.workState?.blocker),
+        waitingReview: task.status === 'Waiting Approval',
+        revisionCount: task.revisionCount,
         to: `/tasks?taskId=${encodeURIComponent(task.id)}`,
         dueDate: task.dueDate,
       }));

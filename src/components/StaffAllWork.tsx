@@ -22,6 +22,7 @@ import { useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { isTaskOpen } from '../lib/taskReporting';
+import { shouldApplyTaskListScope } from '../lib/taskListScope';
 
 type StaffAllWorkBucket = 'all' | StaffWorkBucketKey;
 const buckets: StaffAllWorkBucket[] = ['all', 'needs_action', 'up_next', 'waiting', 'done'];
@@ -106,11 +107,15 @@ const StaffAllWork: React.FC = () => {
     }),
     [allTasks, clientProfiles, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
   );
+  // The default queue is active work only. Finished work stays in Done, and an
+  // explicit status filter (for example Completed) still reaches history.
+  const includeFinished = !shouldApplyTaskListScope({ statusFilter: status });
   const orderedTasks = React.useMemo(() => (
     bucket === 'all'
-      ? [...queue.needs_action, ...queue.up_next, ...queue.waiting, ...queue.done]
+      ? [...queue.needs_action, ...queue.up_next, ...queue.waiting, ...(includeFinished ? queue.done : [])]
       : queue[bucket]
-  ), [bucket, queue]);
+  ), [bucket, includeFinished, queue]);
+  const activeCount = queue.needs_action.length + queue.up_next.length + queue.waiting.length;
   const clients = React.useMemo(() => Array.from(new Set(tasks.map(task => task.clientName).filter(Boolean))).sort(), [tasks]);
   const projectsForFilter = React.useMemo(() => Array.from(new Set(tasks.map(task => task.projectName).filter(Boolean))).sort(), [tasks]);
   const departments = React.useMemo(() => Array.from(new Set(tasks.map(task => normalizeDepartment(task.department) || task.department).filter(Boolean))).sort(), [tasks]);
@@ -160,8 +165,8 @@ const StaffAllWork: React.FC = () => {
     <div className={`${pageShell} max-w-6xl`}>
       <PageHeader
         compact
-        title={t(isProjectManager ? 'Portfolio work' : isDepartmentLead ? 'Department work' : 'Action Centre')}
-        description={t(isProjectManager ? 'Your portfolio work, ordered by delivery risk and next action.' : isDepartmentLead ? 'Department work, including delegated tasks and items that need review.' : 'Decisions and next actions from your existing work queues.')}
+        title={t(isProjectManager ? 'Portfolio work' : isDepartmentLead ? 'Department tasks' : 'All work')}
+        description={t(isProjectManager ? 'Every task in your projects, ordered by risk and next action.' : isDepartmentLead ? 'Department and delegated tasks, including work awaiting your review.' : 'Your assigned and created tasks, ordered by next action.')}
         meta={<span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>}
         action={<div className="flex flex-wrap items-center gap-2">
           {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
@@ -214,7 +219,7 @@ const StaffAllWork: React.FC = () => {
           )}
 
           <SegmentedTabs<StaffAllWorkBucket>
-            items={buckets.map(item => ({ id: item, label: item === 'all' ? t('All') : t(getStaffBucketLabel(item)), count: item === 'all' ? tasks.length : queue[item].length }))}
+            items={buckets.map(item => ({ id: item, label: item === 'all' ? t('Active work') : t(getStaffBucketLabel(item)), count: item === 'all' ? activeCount : queue[item].length }))}
             value={bucket}
             onChange={setBucket}
             label={t('All work queues')}
@@ -233,7 +238,7 @@ const StaffAllWork: React.FC = () => {
           {taskId && !selectedTask && <UnavailableWork onDismiss={() => setTaskId()} />}
           <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
             {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={visibleTasks} users={users} onOpen={item => setTaskId(item.id)} />)}
-            {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t(activeFilterCount > 0 ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : bucket === 'needs_action' ? 'feedback.noNeedsAction' : bucket === 'up_next' ? 'feedback.noUpNext' : bucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
+            {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t(activeFilterCount > 0 ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : bucket === 'all' ? 'No active work. Finished tasks are under Done.' : bucket === 'needs_action' ? 'feedback.noNeedsAction' : bucket === 'up_next' ? 'feedback.noUpNext' : bucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
           </Surface>
         </div>
       </section>
