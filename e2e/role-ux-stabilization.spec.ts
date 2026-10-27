@@ -67,6 +67,10 @@ test('Boss and Staff queues move focus with keyboard tabs', async ({ page }) => 
   const bossTabs = page.getByRole('tablist', { name: 'Boss dashboard views' });
   await bossTabs.getByRole('tab', { name: 'Overview' }).focus();
   await page.keyboard.press('ArrowRight');
+  const portfolioTab = bossTabs.getByRole('tab', { name: 'Portfolio' });
+  await expect(portfolioTab).toHaveAttribute('aria-selected', 'true');
+  await expect(portfolioTab).toBeFocused();
+  await page.keyboard.press('ArrowRight');
   const pulseTab = bossTabs.getByRole('tab', { name: 'Agency pulse' });
   await expect(pulseTab).toHaveAttribute('aria-selected', 'true');
   await expect(pulseTab).toBeFocused();

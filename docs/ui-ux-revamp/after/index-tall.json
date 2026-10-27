@@ -1,0 +1,98 @@
+[
+  {
+    "role": "superadmin",
+    "path": "/",
+    "vp": "tall",
+    "h1": "Agency operations",
+    "overflowPx": 0,
+    "file": "superadmin-home-tall.png"
+  },
+  {
+    "role": "superadmin",
+    "path": "/tasks",
+    "vp": "tall",
+    "h1": "Tasks",
+    "overflowPx": 0,
+    "file": "superadmin-tasks-tall.png"
+  },
+  {
+    "role": "superadmin",
+    "path": "/projects",
+    "vp": "tall",
+    "h1": "Companies",
+    "overflowPx": 0,
+    "file": "superadmin-projects-tall.png"
+  },
+  {
+    "role": "pm",
+    "path": "/",
+    "vp": "tall",
+    "h1": "Dashboard",
+    "overflowPx": 0,
+    "file": "pm-home-tall.png"
+  },
+  {
+    "role": "pm",
+    "path": "/tasks",
+    "vp": "tall",
+    "h1": "Portfolio work",
+    "overflowPx": 0,
+    "file": "pm-tasks-tall.png"
+  },
+  {
+    "role": "pm",
+    "path": "/projects",
+    "vp": "tall",
+    "h1": "Companies",
+    "overflowPx": 0,
+    "file": "pm-projects-tall.png"
+  },
+  {
+    "role": "hod",
+    "path": "/",
+    "vp": "tall",
+    "h1": "Department work",
+    "overflowPx": 0,
+    "file": "hod-home-tall.png"
+  },
+  {
+    "role": "hod",
+    "path": "/tasks",
+    "vp": "tall",
+    "h1": "Department tasks",
+    "overflowPx": 0,
+    "file": "hod-tasks-tall.png"
+  },
+  {
+    "role": "staff",
+    "path": "/",
+    "vp": "tall",
+    "h1": "My work",
+    "overflowPx": 0,
+    "file": "staff-home-tall.png"
+  },
+  {
+    "role": "staff",
+    "path": "/tasks",
+    "vp": "tall",
+    "h1": "All work",
+    "overflowPx": 0,
+    "file": "staff-tasks-tall.png"
+  },
+  {
+    "role": "client",
+    "path": "/",
+    "vp": "tall",
+    "h1": "Home",
+    "overflowPx": 0,
+    "file": "client-home-tall.png"
+  },
+  {
+    "role": "client",
+    "path": "/clients",
+    "vp": "tall",
+    "h1": "Deliveries",
+    "overflowPx": 0,
+    "file": "client-clients-tall.png"
+  }
+]

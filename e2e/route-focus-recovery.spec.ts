@@ -33,8 +33,8 @@ test('deferred navigation focus preserves a control the user already selected', 
   await page.evaluate(() => window.__flushRouteFocus());
   await expect(overview).toBeFocused();
   await page.keyboard.press('ArrowRight');
-  await expect(tabs.getByRole('tab', { name: 'Agency pulse' })).toHaveAttribute('aria-selected', 'true');
-  await expect(tabs.getByRole('tab', { name: 'Agency pulse' })).toBeFocused();
+  await expect(tabs.getByRole('tab', { name: 'Portfolio', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(tabs.getByRole('tab', { name: 'Portfolio', exact: true })).toBeFocused();
 });
 
 declare global {

@@ -139,7 +139,8 @@ test('historical completed tasks do not have overdue styling in recent completio
   const completion = page.getByRole('tabpanel').locator('a[href="/tasks?taskId=followup-completed"]');
   await expect(completion).toBeVisible();
   await expect(completion.locator('time')).not.toHaveClass(/text-red-700/);
-  await expect(page.locator('a[href="/tasks?taskId=followup-completed"]').getByText('1 day ago', { exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await expect(page.getByRole('tabpanel').locator('a[href="/tasks?taskId=followup-completed"]').getByText('1 day ago', { exact: true })).toBeVisible();
 });
 
 const seedCompanyCycles = async (page: Page) => {

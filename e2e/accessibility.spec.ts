@@ -20,7 +20,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
-  await expect(page.getByRole('heading', { name: 'Portfolio work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
 };
 
 test('day/night mode and keyboard shortcuts remain accessible', async ({ page }) => {

@@ -1,0 +1,194 @@
+[
+  {
+    "role": "superadmin",
+    "path": "/",
+    "vp": "desktop",
+    "h1": "Agency operations",
+    "overflowPx": 0,
+    "file": "superadmin-home-desktop.png"
+  },
+  {
+    "role": "superadmin",
+    "path": "/tasks",
+    "vp": "desktop",
+    "h1": "Tasks",
+    "overflowPx": 0,
+    "file": "superadmin-tasks-desktop.png"
+  },
+  {
+    "role": "superadmin",
+    "path": "/projects",
+    "vp": "desktop",
+    "h1": "Companies",
+    "overflowPx": 0,
+    "file": "superadmin-projects-desktop.png"
+  },
+  {
+    "role": "superadmin",
+    "path": "/",
+    "vp": "mobile",
+    "h1": "Agency operations",
+    "overflowPx": 0,
+    "file": "superadmin-home-mobile.png"
+  },
+  {
+    "role": "superadmin",
+    "path": "/tasks",
+    "vp": "mobile",
+    "h1": "Tasks",
+    "overflowPx": 0,
+    "file": "superadmin-tasks-mobile.png"
+  },
+  {
+    "role": "superadmin",
+    "path": "/projects",
+    "vp": "mobile",
+    "h1": "Companies",
+    "overflowPx": 0,
+    "file": "superadmin-projects-mobile.png"
+  },
+  {
+    "role": "pm",
+    "path": "/",
+    "vp": "desktop",
+    "h1": "Dashboard",
+    "overflowPx": 0,
+    "file": "pm-home-desktop.png"
+  },
+  {
+    "role": "pm",
+    "path": "/tasks",
+    "vp": "desktop",
+    "h1": "Portfolio work",
+    "overflowPx": 0,
+    "file": "pm-tasks-desktop.png"
+  },
+  {
+    "role": "pm",
+    "path": "/projects",
+    "vp": "desktop",
+    "h1": "Companies",
+    "overflowPx": 0,
+    "file": "pm-projects-desktop.png"
+  },
+  {
+    "role": "pm",
+    "path": "/",
+    "vp": "mobile",
+    "h1": "Dashboard",
+    "overflowPx": 0,
+    "file": "pm-home-mobile.png"
+  },
+  {
+    "role": "pm",
+    "path": "/tasks",
+    "vp": "mobile",
+    "h1": "Portfolio work",
+    "overflowPx": 0,
+    "file": "pm-tasks-mobile.png"
+  },
+  {
+    "role": "pm",
+    "path": "/projects",
+    "vp": "mobile",
+    "h1": "Companies",
+    "overflowPx": 0,
+    "file": "pm-projects-mobile.png"
+  },
+  {
+    "role": "hod",
+    "path": "/",
+    "vp": "desktop",
+    "h1": "Department work",
+    "overflowPx": 0,
+    "file": "hod-home-desktop.png"
+  },
+  {
+    "role": "hod",
+    "path": "/tasks",
+    "vp": "desktop",
+    "h1": "Department tasks",
+    "overflowPx": 0,
+    "file": "hod-tasks-desktop.png"
+  },
+  {
+    "role": "hod",
+    "path": "/",
+    "vp": "mobile",
+    "h1": "Department work",
+    "overflowPx": 0,
+    "file": "hod-home-mobile.png"
+  },
+  {
+    "role": "hod",
+    "path": "/tasks",
+    "vp": "mobile",
+    "h1": "Department tasks",
+    "overflowPx": 0,
+    "file": "hod-tasks-mobile.png"
+  },
+  {
+    "role": "staff",
+    "path": "/",
+    "vp": "desktop",
+    "h1": "My work",
+    "overflowPx": 0,
+    "file": "staff-home-desktop.png"
+  },
+  {
+    "role": "staff",
+    "path": "/tasks",
+    "vp": "desktop",
+    "h1": "All work",
+    "overflowPx": 0,
+    "file": "staff-tasks-desktop.png"
+  },
+  {
+    "role": "staff",
+    "path": "/",
+    "vp": "mobile",
+    "h1": "My work",
+    "overflowPx": 0,
+    "file": "staff-home-mobile.png"
+  },
+  {
+    "role": "staff",
+    "path": "/tasks",
+    "vp": "mobile",
+    "h1": "All work",
+    "overflowPx": 0,
+    "file": "staff-tasks-mobile.png"
+  },
+  {
+    "role": "client",
+    "path": "/",
+    "vp": "desktop",
+    "h1": "Home",
+    "overflowPx": 0,
+    "file": "client-home-desktop.png"
+  },
+  {
+    "role": "client",
+    "path": "/clients",
+    "vp": "desktop",
+    "h1": "Deliveries",
+    "overflowPx": 0,
+    "file": "client-clients-desktop.png"
+  },
+  {
+    "role": "client",
+    "path": "/",
+    "vp": "mobile",
+    "h1": "Home",
+    "overflowPx": 0,
+    "file": "client-home-mobile.png"
+  },
+  {
+    "role": "client",
+    "path": "/clients",
+    "vp": "mobile",
+    "h1": "Deliveries",
+    "overflowPx": 0,
+    "file": "client-clients-mobile.png"
+  }
+]
