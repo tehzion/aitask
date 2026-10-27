@@ -177,6 +177,9 @@ No approval rule was added or changed. The UI now asks the *existing* rules who 
 - **Icons.** Removed decorative icons from metrics, the registrations banner, the PM overview header and the "Team workload" caption. The Help centre's `Sparkles` was replaced with the existing `Route` icon for guided walkthroughs and removed from the eyebrow. Status and alert icons in "Needs my attention" were kept, smaller, with screen-reader severity text.
 - **Layout.** The attention page is short; portfolio content moved to its own tab. Empty informational queues are hidden.
 - **Responsive fix (pre-existing defect).** `PageHeader` let the action area squeeze the page title to **0 px wide** at 768px (Super Admin "Agency operations" and PM title, reproduced on `f39c335`). The title now keeps a 14rem minimum and the actions wrap inside a 65% cap. An e2e assertion guards it at 320/390/768/1024/1440.
+- **Keyboard focus fix (pre-existing defect).** `ModalShell` returned focus to the previously focused element on a timer even when the user had already moved on. Example: after dismissing the release notice and tabbing into the dashboard tabs, focus jumped back to `<main>` and the next arrow key did nothing.
+  - On `f39c335` this failed `role-ux-stabilization` 1 run in 5; the denser Overview made it 4 in 5.
+  - Focus is now restored only if it was lost with the dialog. The keyboard test passes 5/5.
 
 ---
 

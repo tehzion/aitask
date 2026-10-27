@@ -125,7 +125,13 @@ const ModalShell: React.FC<ModalShellProps> = ({
           else root.setAttribute('aria-hidden', previousRootAriaHidden);
         }
       }
-      window.setTimeout(() => previouslyFocused?.focus(), 0);
+      window.setTimeout(() => {
+        // Return focus only when it was lost with the dialog. If the user has
+        // already moved to another control, restoring would pull them back.
+        const active = document.activeElement;
+        if (active && active !== document.body && active.isConnected) return;
+        previouslyFocused?.focus();
+      }, 0);
     };
   }, []);
 
