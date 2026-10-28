@@ -25,16 +25,16 @@ describe('delivery tracker navigation labels', () => {
     });
   });
 
-  it('uses Delivery tracker in the internal mobile navigation', () => {
+  it('uses the short Deliveries label in the internal mobile navigation', () => {
     internalUsers.slice(0, 2).forEach(user => {
       expect(getMobileNavigation(user).find(entry => entry.path === '/clients')).toMatchObject({
-        label: 'Delivery tracker',
+        label: 'Deliveries',
         path: '/clients',
       });
     });
     internalUsers.slice(2).forEach(user => {
       expect(getMobileNavigation(user).find(entry => entry.path === '/clients')).toMatchObject({
-        label: 'Delivery tracker',
+        label: 'Deliveries',
         path: '/clients',
       });
     });

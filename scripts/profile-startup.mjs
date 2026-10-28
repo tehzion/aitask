@@ -24,7 +24,7 @@ try {
     await page.getByRole('button', { name: 'Use Project Manager Demo', exact: true }).click();
     await page.getByLabel('Password', { exact: true }).fill('password123');
     const start = Date.now();
-    await page.getByRole('button', { name: 'Access Dashboard' }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.waitForURL(url => url.pathname === '/' || url.pathname === '/settings');
     if (new URL(page.url()).pathname === '/settings') await page.getByRole('button', { name: 'Continue for now' }).click();
     const notice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });

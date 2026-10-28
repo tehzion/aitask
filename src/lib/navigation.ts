@@ -160,8 +160,9 @@ export const getMobileNavigation = (
   clientProfilePath?: string,
 ) => {
   const sections = getNavigationSections(user, rolePermissions, clientProfilePath);
-  if (user?.role === 'Staff' || user?.role === 'HOD' || user?.role === 'Client') {
-    return sections.mobilePrimary || sections.primary;
-  }
-  return filterVisible(user, rolePermissions, generalMobilePrimary);
+  const items = user?.role === 'Staff' || user?.role === 'HOD' || user?.role === 'Client'
+    ? sections.mobilePrimary || sections.primary
+    : filterVisible(user, rolePermissions, generalMobilePrimary);
+  // The bottom bar has no room for "Delivery tracker" at 320px.
+  return items.map(item => item.label === 'Delivery tracker' ? { ...item, label: 'Deliveries' } : item);
 };

@@ -215,6 +215,13 @@ test('Client pages stay free of internal review and management sections', async 
     const visibleText = await main(page).innerText();
     expect(internalNames.filter(name => visibleText.includes(name)), path).toEqual([]);
   }
+
+  // Client Settings keeps to the Client's own account, without agency internals.
+  await page.goto('/settings');
+  await expect(main(page).getByRole('heading', { name: 'Client Access' })).toBeVisible();
+  for (const internal of ['Department', 'Application release', 'Performance and save diagnostics', 'registration requests']) {
+    await expect(main(page).getByText(internal, { exact: false })).toHaveCount(0);
+  }
 });
 
 test('every role lands on pages whose headings match their navigation', async ({ page }) => {

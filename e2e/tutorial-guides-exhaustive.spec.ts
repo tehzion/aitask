@@ -22,7 +22,7 @@ const loginWithDemo = async (page: import('@playwright/test').Page, username: st
     await page.getByLabel('Email or username').fill(username);
     await page.getByLabel('Password').fill('password123');
   }
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
   const releaseNotice = page.getByRole('button', { name: 'Happy working' });

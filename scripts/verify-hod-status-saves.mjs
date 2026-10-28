@@ -119,7 +119,7 @@ try {
   await page.goto(`${base}login`);
   await page.getByLabel('Email', { exact: true }).fill(account.email);
   await page.getByLabel('Password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Access Dashboard', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.getByRole('button', { name: 'Happy working', exact: true }).click();
   const openEditor = async () => {
     await page.goto(`${base}tasks?taskId=status-task`);

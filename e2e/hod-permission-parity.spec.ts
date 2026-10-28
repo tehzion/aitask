@@ -92,7 +92,7 @@ test('HOD task creation includes populated Boss-curated projects while excluding
     useStore.setState({ users: [...state.users, boss], projects: [{ ...base, id: 'curated-project', createdBy: boss.id }, { ...base, id: 'foreign-project', clientName: 'Foreign Co', projectName: 'Foreign Project', createdBy: 'audit-pm' }], tasks: [...state.tasks, { ...state.tasks.find(task => task.id === 'hod-foreign')!, id: 'curated-foreign-task', projectId: 'curated-project', clientName: 'Curated Co' }, { ...state.tasks.find(task => task.id === 'hod-foreign')!, id: 'pm-foreign-task', projectId: 'foreign-project', clientName: 'Foreign Co' }] });
   });
   await page.goto('/tasks');
-  await page.getByRole('button', { name: 'Create task', exact: true }).click();
+  await page.locator('#main-content').getByRole('button', { name: 'New task', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Create task', exact: true });
   const choices = dialog.getByRole('combobox', { name: /Link to Company/ });
   await expect(choices.locator('option[value="curated-project"]')).toHaveCount(1);

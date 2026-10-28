@@ -19,7 +19,7 @@ const signInAsBoss = async (page: Page) => {
   if (await demo.count()) await demo.click();
   else await page.getByLabel('Email or username').fill('Boss Koo');
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   await dismissPasswordSetup(page);
   await dismissReleaseNotice(page);

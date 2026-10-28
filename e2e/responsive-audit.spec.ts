@@ -69,7 +69,7 @@ const signInAs = async (page: Page, username: string) => {
     await page.getByLabel('Email or username').fill(username);
   }
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   await dismissTransientOverlays(page);
 };
@@ -192,7 +192,7 @@ test.describe('responsive role and route audit', () => {
       await page.reload();
       await page.getByRole('button', { name: /(?:Use|使用) Staff Demo/ }).click();
       await page.locator('#password').fill('password123');
-      await page.getByRole('button', { name: /Access Dashboard|进入仪表板/ }).click();
+      await page.getByRole('button', { name: /^(Sign in|登录)$/ }).click();
       await page.waitForURL(url => url.pathname === '/settings');
       await expect(page.getByRole('heading', { name: /Account Setup|账号设置/ })).toBeVisible();
       await expect(page.locator('#current-password')).toBeVisible();

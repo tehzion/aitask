@@ -741,16 +741,20 @@ const Settings: React.FC = () => {
                   <p className="font-semibold text-ink">{effectiveRoleName}</p>
                   {currentUser?.customRoleId && <p className="mt-1 text-xs text-muted">{t('Base role')}: {getRoleDisplayName(currentUser.role)}</p>}
                 </div>
-                <div>
-                  <label className="mb-1 block text-xs font-semibold text-muted">{t('Department')}</label>
-                  <p className="font-semibold text-ink">
-                    {currentUser ? getMemberDepartments(currentUser).join(', ') : t('Not assigned')}
-                  </p>
-                </div>
-                <div className="lg:col-span-2">
-                  <label className="mb-1 block text-xs font-semibold text-muted">{t('Client Company')}</label>
-                  <p className="font-semibold text-ink">{currentUser?.companyName || t('Not linked')}</p>
-                </div>
+                {/* Clients see their company, never the agency's internal departments. */}
+                {isClientUser ? (
+                  <div className="lg:col-span-2">
+                    <label className="mb-1 block text-xs font-semibold text-muted">{t('Client Company')}</label>
+                    <p className="font-semibold text-ink">{currentUser?.companyName || t('Not linked')}</p>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="mb-1 block text-xs font-semibold text-muted">{t('Department')}</label>
+                    <p className="font-semibold text-ink">
+                      {currentUser ? getMemberDepartments(currentUser).join(', ') : t('Not assigned')}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
 
@@ -942,7 +946,7 @@ const Settings: React.FC = () => {
 
         <div className="border-t border-slate-200 pt-6 xl:col-span-3">
           <h2 className="text-lg font-semibold text-slate-950">{t('Workspace')}</h2>
-          <p className="mt-1 text-sm text-slate-500">{t('Notifications, workflow preferences, and operational status.')}</p>
+          <p className="mt-1 text-sm text-slate-500">{isClientUser ? t('Notification preferences.') : t('Notifications, workflow preferences, and operational status.')}</p>
         </div>
 
         {/* Sound Notifications */}
@@ -957,7 +961,9 @@ const Settings: React.FC = () => {
                 {soundEnabled ? t('Sound alerts are enabled') : t('Sound alerts are muted')}
               </p>
               <p className="mt-1 text-sm text-slate-500">
-                {t('Play a chime for new assignments, deadlines, reviews, feedback, and registration requests. You can also toggle sound from the volume icon in the top bar.')}
+                {isClientUser
+                  ? t('Play a chime for new deliveries, reviews, and feedback. You can also toggle sound from the volume icon in the top bar.')
+                  : t('Play a chime for new assignments, deadlines, reviews, feedback, and registration requests. You can also toggle sound from the volume icon in the top bar.')}
               </p>
             </div>
             <button
@@ -1223,7 +1229,7 @@ const Settings: React.FC = () => {
         </div>
       )}
 
-      <section className={`${cardBase} overflow-hidden xl:col-span-3`}>
+      {!isClientUser && <section className={`${cardBase} overflow-hidden xl:col-span-3`}>
         <div className="flex items-center gap-3 border-b border-slate-100 px-5 py-4">
           <PackageCheck className="h-5 w-5 text-blue-600" />
           <h2 className="text-base font-semibold text-slate-900">{t('Application release')}</h2>
@@ -1249,7 +1255,7 @@ const Settings: React.FC = () => {
         <div className="border-t border-slate-100 px-5 py-2.5">
           <p className="font-mono text-[11px] text-slate-400">{APP_BUILD_LABEL}</p>
         </div>
-      </section>
+      </section>}
       {confirmation && (
         <ConfirmDialog
           labelledBy={confirmationTitleId}

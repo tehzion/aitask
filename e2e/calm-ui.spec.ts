@@ -21,7 +21,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => ['/', '/settings'].includes(url.pathname));
   if (/\/settings$/.test(page.url())) {
     await page.getByRole('button', { name: 'Continue for now' }).click();

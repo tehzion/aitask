@@ -47,7 +47,7 @@ const signIn = async (page: Page, username: string) => {
   }, username);
   await page.getByLabel('Email or username').fill(username);
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   await page.evaluate(async () => {
     const { stopBackendAutoSync } = await import('/src/store/index.ts');

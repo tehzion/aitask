@@ -348,7 +348,7 @@ const Dashboard: React.FC = () => {
             {canCreateTask && (
               <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
                 <Plus className="h-4 w-4" />
-                {t('Create task')}
+                {t('New task')}
               </Button>
             )}
           </div>
@@ -467,7 +467,7 @@ const Dashboard: React.FC = () => {
                 {canCreateTask && (
                   <Button onClick={() => setCreateTaskModalOpen(true)} variant="secondary" className="mt-3 min-h-9 px-3 py-1.5 text-xs">
                     <Plus className="h-3.5 w-3.5" />
-                    {t('Create task')}
+                    {t('New task')}
                   </Button>
                 )}
               </div>
@@ -497,7 +497,7 @@ const Dashboard: React.FC = () => {
             {canCreateTask && (
               <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
                 <Plus className="h-4 w-4" />
-                {t('Create task')}
+                {t('New task')}
               </Button>
             )}
           </div>
@@ -551,7 +551,7 @@ const Dashboard: React.FC = () => {
               {canCreateTask && (
                 <Button onClick={() => setCreateTaskModalOpen(true)} className="shrink-0">
                   <Plus className="h-4 w-4" />
-                  {currentUser?.role === 'Staff' || currentUser?.role === 'HOD' ? t('Create task') : t('Create first task')}
+                  {currentUser?.role === 'Staff' || currentUser?.role === 'HOD' ? t('New task') : t('Create first task')}
                 </Button>
               )}
               <Link

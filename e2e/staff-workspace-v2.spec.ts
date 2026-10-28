@@ -22,7 +22,7 @@ const openStaffWorkspace = async (page: import('@playwright/test').Page) => {
   await page.reload();
   await page.getByRole('button', { name: 'Use Staff Demo' }).click();
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => ['/', '/settings'].includes(url.pathname));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
   const releaseNotice = page.getByRole('button', { name: 'Happy working' });
@@ -73,20 +73,20 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   const taskRow = page.getByRole('button', { name: /6\. Video Editing/ });
   await expect(taskRow.getByText('Dependency status unavailable', { exact: true })).toBeVisible();
   await taskRow.click();
-  await expect(page.getByRole('button', { name: 'Send for review' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Send|Resubmit) for review$/ })).toBeVisible();
   const taskFocusAxe = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect(taskFocusAxe.violations, `Staff task focus: ${taskFocusAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
 
   // This frozen demo has unresolved predecessors. Evidence alone must not
   // bypass the dependency gate; ordinary evidence submission is covered in
   // staff-workflow-gaps and the signed review lifecycle has its own suite.
-  await expect(page.getByRole('button', { name: 'Send for review' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^(Send|Resubmit) for review$/ })).toBeDisabled();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const task = useStore.getState().tasks.find(item => item.title === '6. Video Editing')!;
     useStore.getState().updateTaskAttachment(task.id, 'https://example.com/staff-final-video');
   });
-  await expect(page.getByRole('button', { name: 'Send for review' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: /^(Send|Resubmit) for review$/ })).toBeDisabled();
   await expect(page.getByRole('alertdialog', { name: 'Earlier steps are unfinished' })).toHaveCount(0);
 });
 
@@ -102,7 +102,7 @@ test('staff mobile keeps focus, task actions and secondary creation reachable', 
   }
 
   await openTask.click();
-  await expect(page.getByRole('button', { name: 'Send for review' })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^(Send|Resubmit) for review$/ })).toBeVisible();
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-task-focus-mobile-light.png', screenshotOptions(page));
   }
@@ -110,8 +110,8 @@ test('staff mobile keeps focus, task actions and secondary creation reachable', 
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Open more destinations' }).click();
-  await expect(page.getByRole('button', { name: 'Create task' })).toBeVisible();
-  await page.getByRole('button', { name: 'Create task' }).click();
+  await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'New task' })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'New task' }).click();
   await expect(page.getByRole('heading', { name: 'Create task' })).toBeVisible();
 });
 

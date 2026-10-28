@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test';
 async function login(page: Page, name = 'Project Manager Demo') {
   await page.goto('/login');
   await page.getByRole('button', { name: `Use ${name}`, exact: true }).click();
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
   const notice = page.getByRole('button', { name: 'Happy working' });

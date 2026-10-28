@@ -343,7 +343,7 @@ const Login: React.FC = () => {
 
                 <Button type="submit" className="w-full py-3" disabled={isLoggingIn}>
                   <LayoutDashboard className="w-4 h-4" />
-                  {isLoggingIn ? t('Checking account...') : t('Access Dashboard')}
+                  {isLoggingIn ? t('Checking account...') : t('Sign in')}
                 </Button>
               </form>
 
