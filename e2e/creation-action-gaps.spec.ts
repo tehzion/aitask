@@ -18,7 +18,7 @@ const seed = async (page: Page) => {
       serviceItems: [{ id: 'creation-design', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 100 }],
       startDate: '2026-10-01', billingDay: 1, contractEndDate: '2027-10-01', discountType: 'none', discountValue: 0, taxRateBps: 0 });
     const activation = useStore.getState().activateClientPlan(result.planId!);
-    useStore.setState({ projects: [{ id: 'creation-project', clientId: result.clientId, clientName: 'Creation QA Company', projectName: 'QA Campaign', serviceType: 'Design', serviceTypes: ['Design'], createdBy: boss.id, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' }] });
+    useStore.setState({ projects: [{ id: 'creation-project', clientId: result.clientId, clientName: 'Creation QA Company', projectName: 'QA Campaign', hodMemberIds: ['u-hod-demo-local'], serviceType: 'Design', serviceTypes: ['Design'], createdBy: boss.id, createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z' }] });
     return { clientId: result.clientId!, cycleId: activation.cycleId! };
   });
 };
@@ -30,6 +30,7 @@ const openTask = async (page: Page) => {
   await dialog.getByLabel(/Link to Company \/ Brand/).selectOption('creation-project');
   await dialog.getByLabel('Task Title').fill('Recoverable creation');
   await dialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
+  await dialog.getByLabel('Responsible HOD').selectOption('u-hod-demo-local');
   return dialog;
 };
 

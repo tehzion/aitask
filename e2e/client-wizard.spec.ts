@@ -102,6 +102,7 @@ test('creates a client profile first, then a named project', async ({ page }) =>
   await expect(projectDialog.getByLabel('Company name *')).toHaveValue(/CL-/);
   await projectDialog.getByLabel('Project name *').fill('Q4 Launch');
   await projectDialog.getByRole('button', { name: 'Design' }).click();
+  await projectDialog.getByRole('checkbox', { name: 'HOD Demo' }).check();
   await projectDialog.getByRole('button', { name: 'Create project', exact: true }).click();
   await expect(projectDialog).toBeHidden();
   await expect(page.getByText('Projects: Q4 Launch', { exact: true }).last()).toBeVisible();
@@ -117,6 +118,7 @@ test('creates a client profile first, then a named project', async ({ page }) =>
   await taskDialog.getByLabel(/Link to Company \/ Brand/).selectOption(project!.id);
   await taskDialog.getByLabel('Task Title').fill('Launch creative brief');
   await taskDialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
+  await taskDialog.getByLabel('Responsible HOD').selectOption('u-hod-demo-local');
   await taskDialog.getByRole('button', { name: 'Create & open task' }).click();
   await expect(taskDialog).toBeHidden();
   await expect(page).toHaveURL(/\/tasks\?taskId=/);
