@@ -13,12 +13,9 @@ const output = { id: 'output', clientId: 'company', cycleId: 'cycle', taskIds: [
 beforeEach(() => useStore.setState({ ...initial, currentUser: staff, users: [staff, owner, hod], tasks: [structuredClone(task)], clients: [], projects: [], deliverables: [], serviceCycles: [], rolePermissions: [], notifications: [], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } }, true));
 afterEach(() => useStore.setState(initial, true));
 describe('staff work lifecycle', () => {
-  it('requires evidence through quick status and Full edit, including reverse deliverable links', () => {
+  it('submits deliverable-linked work without an output, through quick status and Full edit', () => {
     useStore.setState({ deliverables: [output] });
-    expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(false);
-    expect(useStore.getState().updateTask(task.id, { status: 'Completed' }).ok).toBe(false);
-    expect(useStore.getState().tasks[0].status).toBe('Pending');
-    expect(useStore.getState().updateTask(task.id, { status: 'Waiting Approval', attachmentLink: 'https://example.com/artwork' }).ok).toBe(true);
+    expect(useStore.getState().updateTask(task.id, { status: 'Waiting Approval' }).ok).toBe(true);
     expect(useStore.getState().tasks[0].workState).toMatchObject({ reviewRequestedBy: staff.id });
     expect(useStore.getState().tasks[0].workState?.reviewRequestedAt).toBeTruthy();
   });

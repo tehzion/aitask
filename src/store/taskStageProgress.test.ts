@@ -201,11 +201,10 @@ describe('role readiness at alternate entry points', () => {
       expect(current().workState?.reviewRequestedBy).toBeUndefined();
     }
   });
-  it('requires evidence again when HOD approves submitted linked work', () => {
+  it('lets the HOD approve submitted linked work without an output', () => {
     useStore.setState({ tasks: [{ ...task, status: 'Waiting Approval', assignedTo: staff.id, deliverableId: 'output' }] });
     actor(hod);
-    expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(false);
-    expect(useStore.getState().updateTask(task.id, { status: 'Approved', attachmentLink: 'https://example.com/output' }).ok).toBe(true);
+    expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(true);
   });
   it('customer revision returns to Staff and requires another HOD approval before PM completion', () => {
     useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Approved', completionPercentage: 80 }] });

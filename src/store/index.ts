@@ -8,7 +8,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
 import { deliverableLinkError, hasInvalidDeliveryLink } from '../lib/deliveryLinks';
-import { applyTaskWorkIntent, recordTaskWorkTransition, taskEvidenceError, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
+import { applyTaskWorkIntent, recordTaskWorkTransition, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
 import {
   User,
   ClientProfile,
@@ -2472,8 +2472,6 @@ export const useStore = create<StoreState>()(
         const isCompleted = nextStatus === 'Completed';
         const transitionError = taskTransitionError(currentUser, task, { ...task, status: nextStatus, isCompleted }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) { result = { ok: false, error: transitionError }; return state; }
-        const evidenceError = taskEvidenceError(task, { ...task, status: nextStatus, isCompleted }, state.deliverables, state.tasks);
-        if (evidenceError) { result = { ok: false, error: evidenceError }; return state; }
         const workflowError = workflowTransitionError(task, { ...task, status: nextStatus, isCompleted }, currentUser, state.tasks, state.serviceCycles, state.deliverables, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (workflowError) { result = { ok: false, error: workflowError }; return state; }
         const isWaitingApproval = nextStatus === 'Waiting Approval';
@@ -3145,8 +3143,6 @@ export const useStore = create<StoreState>()(
           updatedTask.clientApprovalStatus = 'Rejected'; updatedTask.revisionCount = task.revisionCount + 1;
         }
         if (state.backend.mode === 'local' && updatedTask.status === 'Waiting Approval' && task.status !== updatedTask.status && !getDepartmentReviewers(state.users, { ...updatedTask, workState: { ...updatedTask.workState, reviewRequestedBy: currentUser.id } }, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) return { ok: false, error: TASK_HOD_REQUIRED };
-        const evidenceError = taskEvidenceError(task, updatedTask, state.deliverables, state.tasks);
-        if (evidenceError) return { ok: false, error: evidenceError };
         const transitionError = taskTransitionError(currentUser, task, updatedTask, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) return { ok: false, error: transitionError };
         updatedTask = recordTaskWorkTransition(task, updatedTask, currentUser.id, now);
@@ -3540,10 +3536,6 @@ export const useStore = create<StoreState>()(
         const taskId = nowId('T');
         const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, assignedTo: resolvedAssigneeId || '', status, isCompleted: status === 'Completed' }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) { useToastStore.getState().addToast(transitionError, 'warning'); return ''; }
-        if (taskEvidenceError(undefined, { ...taskData, id: taskId, status, isCompleted: status === 'Completed', revisionCount: 0, clientApprovalStatus: 'Pending' }, state.deliverables)) {
-          useToastStore.getState().addToast(msg('staff.evidenceRequired'), 'warning');
-          return '';
-        }
         set((state) => {
           if (!canCreateTasks(state.currentUser, state.rolePermissions)) return state;
 

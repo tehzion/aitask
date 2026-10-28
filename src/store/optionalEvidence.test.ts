@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { useStore } from './index';
 import type { Deliverable, Task, User } from '../types';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
-import { TASK_EVIDENCE_REQUIRED, taskEvidenceError } from '../lib/staffWorkflow';
 
 const initial = useStore.getState();
 const staff: User = { id: 'evidence-staff', name: 'Staff', role: 'Staff', department: 'Designer', departments: ['Designer'] };
@@ -15,9 +14,8 @@ const linked: Task = { ...call, id: 'linked-task', title: 'Banner delivery', del
 beforeEach(() => useStore.setState({ ...initial, currentUser: staff, users: [staff, owner], tasks: [structuredClone(call), structuredClone(linked)], clients: [], projects: [], deliverables: [deliverable], serviceCycles: [], rolePermissions: [], notifications: [], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } }, true));
 afterEach(() => useStore.setState(initial, true));
 
-describe('outputs are optional for ordinary tasks', () => {
+describe('outputs are optional when submitting', () => {
   it('submits an ordinary task for review without a link or file', () => {
-    expect(taskEvidenceError(call, { ...call, status: 'Waiting Approval' }, [deliverable])).toBeUndefined();
     expect(useStore.getState().updateTaskStatus(call.id, 'Waiting Approval').ok).toBe(true);
     expect(useStore.getState().tasks.find(task => task.id === call.id)?.status).toBe('Waiting Approval');
   });
@@ -29,21 +27,14 @@ describe('outputs are optional for ordinary tasks', () => {
     expect(useStore.getState().tasks.find(task => task.id === call.id)).toMatchObject({ status: 'Completed', isCompleted: true });
   });
 
-  it('does not disable status actions for a missing output on ordinary tasks', () => {
-    const controls = getTaskStatusControls(staff, call, ['Pending', 'In Progress', 'Waiting Approval', 'Completed'], [], { users: [staff, owner] }, { tasks: [call], cycles: [], deliverables: [deliverable] });
-    expect(controls.some(control => control.disabledReason === TASK_EVIDENCE_REQUIRED)).toBe(false);
-  });
-});
-
-describe('configured delivery evidence stays enforced', () => {
-  it('blocks review and completion of a delivery-linked task until its output exists', () => {
-    expect(useStore.getState().updateTaskStatus(linked.id, 'Waiting Approval').ok).toBe(false);
-    expect(useStore.getState().updateTask(linked.id, { status: 'Completed' }).ok).toBe(false);
+  it('submits a delivery-linked task for review without a link or file', () => {
     const controls = getTaskStatusControls(staff, linked, ['In Progress', 'Waiting Approval'], [], { users: [staff, owner] }, { tasks: [linked], cycles: [], deliverables: [deliverable] });
-    expect(controls.find(control => control.status === 'Waiting Approval')?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
+    expect(controls.find(control => control.status === 'Waiting Approval')?.disabledReason).toBeUndefined();
+    expect(useStore.getState().updateTaskStatus(linked.id, 'Waiting Approval').ok).toBe(true);
+    expect(useStore.getState().tasks.find(task => task.id === linked.id)?.status).toBe('Waiting Approval');
   });
 
-  it('accepts the linked task once an output link is added', () => {
+  it('still accepts an output link when one is supplied', () => {
     expect(useStore.getState().updateTask(linked.id, { status: 'Waiting Approval', attachmentLink: 'https://example.com/banners' }).ok).toBe(true);
   });
 });

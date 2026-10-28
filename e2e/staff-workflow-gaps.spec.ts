@@ -71,6 +71,8 @@ test('staff accepts an assignment, requests help, resolves it, and sees attribut
   await page.reload();
   await sheet.getByRole('button', { name: 'Clear blocker' }).click();
   await expect(sheet.getByRole('button', { name: 'Clear blocker' })).toHaveCount(0);
+  // Task history is collapsed by default in the task sheet.
+  await sheet.locator('summary', { hasText: 'History' }).click();
   await expect(sheet.getByText('Help request changed', { exact: false }).first()).toBeVisible();
   expect((await saved(page)).workHistory).toHaveLength(3);
 });
@@ -105,23 +107,16 @@ test('discarded help retry retains the draft and cannot announce acknowledgement
   await expect(page.getByRole('alert')).toBeVisible();
 });
 
-for (const status of ['Waiting Approval']) test(`linked tasks need evidence before ${status}`, async ({ page }) => {
+test('linked tasks can be sent for review without an output', async ({ page }) => {
   await seed(page, true);
   const sheet = page.getByRole('dialog', { name: title });
   await sheet.getByRole('button', { name: 'Start work', exact: true }).click();
+  // Output is optional for every task, including deliverable-linked work.
+  await expect(sheet.getByText('Optional', { exact: true })).toBeVisible();
   await sheet.getByRole('button', { name: 'Send for review', exact: true }).click();
-  await expect(sheet.getByRole('alert')).toContainText('Add an output link');
-  expect((await saved(page)).status).toBe('In Progress');
-  await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    useStore.getState().updateTaskAttachment('workflow-artwork', 'https://example.com/output');
-  });
-  await sheet.getByRole('button', { name: 'Send for review', exact: true }).click();
-  await expect.poll(async () => (await saved(page)).status).toBe(status);
-  if (status === 'Waiting Approval') {
-    await expect(sheet.getByText('Sent for review', { exact: false }).first()).toBeVisible();
-    expect((await saved(page)).workState!.reviewRequestedAt).toBeTruthy();
-  }
+  await expect.poll(async () => (await saved(page)).status).toBe('Waiting Approval');
+  await expect(sheet.getByText('Sent for review', { exact: false }).first()).toBeVisible();
+  expect((await saved(page)).workState!.reviewRequestedAt).toBeTruthy();
 });
 
 test('help and unaccepted filters follow current task state', async ({ page }) => {

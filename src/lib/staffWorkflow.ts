@@ -2,7 +2,6 @@ import type { Deliverable, Task, TaskWorkState } from '../types';
 import { isWorkflowTaskSatisfied } from './workflowReview';
 import { safeHttpsUrl } from './security';
 
-export const TASK_EVIDENCE_REQUIRED = 'Add an output link or upload a deliverable file before sending this linked task for review or completing it.';
 export const TASK_HISTORY_FIELDS = ['title', 'description', 'notes', 'dueDate', 'startDate', 'assignedTo', 'responsibleHodId', 'assignmentState', 'assignmentOverride', 'department', 'status', 'priority', 'attachmentLink', 'outputAttachments', 'reviewCover', 'accountableLeadId', 'requiresInternalApproval', 'acceptedBy', 'blocker'] as const;
 
 export const isTaskLinkedToDeliverable = (task: Pick<Task, 'id' | 'deliverableId'>, deliverables: readonly Deliverable[]) =>
@@ -27,13 +26,6 @@ export const hasTaskEvidence = (task: Task, deliverables: readonly Deliverable[]
   const linked = links[0];
   return linked.clientId === task.clientId && (!task.serviceCycleId || linked.cycleId === task.serviceCycleId)
     && linked.attachments.some(file => file.bucket === 'client-service-files' && Boolean(file.path?.trim()) && Boolean(file.id));
-};
-
-export const taskEvidenceError = (before: Task | undefined, after: Task, deliverables: readonly Deliverable[], tasks: Task[] = []) => {
-  const enteringReady = ['Waiting Approval', 'Approved', 'Completed'].includes(after.status) && before?.status !== after.status;
-  const newlyCompleted = after.isCompleted && !before?.isCompleted;
-  return (enteringReady || newlyCompleted) && isTaskLinkedToDeliverable(after, deliverables) && !hasTaskEvidence(after, deliverables, tasks)
-    ? TASK_EVIDENCE_REQUIRED : undefined;
 };
 
 /** Local-mode counterpart of the database trigger. Remote actors/times are always stamped by the server. */

@@ -28,7 +28,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
-import { hasTaskEvidence, isTaskLinkedToDeliverable, TASK_EVIDENCE_REQUIRED, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
+import { hasTaskEvidence, isTaskLinkedToDeliverable, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
 import { isTaskOpen, isTaskOverdue } from '../lib/taskReporting';
 import { canApproveInternalReview, getWorkflowStepKind, INTERNAL_REVIEW_PERMISSION_MESSAGE, isWorkflowTaskSatisfied, workflowTransitionError } from '../lib/workflowReview';
 
@@ -329,7 +329,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
 
   // Only a genuinely missing requirement gets a footer message; evidence is
   // required solely for delivery-linked work.
-  const footerHint = guidedActionError === TASK_EVIDENCE_REQUIRED ? 'Add the required output before submitting.' : guidedActionError;
+  const footerHint = guidedActionError;
 
   const footer = canEdit ? (
     <div className="space-y-2">
@@ -493,11 +493,11 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         <section aria-labelledby="staff-task-attachments" className="space-y-2 border-t border-line/70 pt-5">
           <div className="flex items-baseline justify-between gap-3">
             <h3 id="staff-task-attachments" className="text-sm font-semibold text-ink">{t('Attachments and links')}</h3>
-            {!linkedOutput && <span className="text-xs text-muted">{t('Optional')}</span>}
+            <span className="text-xs text-muted">{t('Optional')}</span>
           </div>
-          {/* Evidence is required only for delivery-linked work; ordinary tasks can be submitted without files. */}
-          {linkedOutput
-            ? <p className={`text-sm ${evidenceAvailable ? 'text-muted' : 'text-amber-800 dark:text-[#fff2c2]'}`}>{t(evidenceAvailable ? 'Output added for this deliverable.' : 'This task delivers a client deliverable. Add its output before sending it for review.')}</p>
+          {/* Output is optional for every task, including delivery-linked work. */}
+          {linkedOutput && evidenceAvailable
+            ? <p className="text-sm text-muted">{t('Output added for this deliverable.')}</p>
             : !liveTask.attachmentLink && <p className="text-sm text-muted">{t(canEdit ? 'Add files or links in Edit task if needed.' : 'No attachments.')}</p>}
           {liveTask.attachmentLink && (attachment
             ? <a href={attachment} target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center justify-between gap-3 rounded-control border border-line px-3 text-sm font-medium text-ink hover:bg-inset hover:text-accent"><span className="truncate">{liveTask.attachmentName ? <span data-i18n-skip>{liveTask.attachmentName}</span> : t('Open attachment')}</span><ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" /></a>

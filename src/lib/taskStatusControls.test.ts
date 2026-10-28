@@ -3,7 +3,6 @@ import type { Task, User } from '../types';
 import { getTaskStatusControls } from './taskStatusControls';
 import { canRequestTaskRevision, getTaskStatusOptions } from './taskWorkflowAccess';
 import { getStaffGuidedAction } from './staffWorkspace';
-import { TASK_EVIDENCE_REQUIRED } from './staffWorkflow';
 
 const makeActors = () => ({
   pm: { id: 'pm', name: 'PM', role: 'Project Manager', departments: [] } as User,
@@ -69,10 +68,10 @@ describe('PM completion controls', () => {
     expect(completion(pm, { ...optional, status: 'Approved', clientApprovalStatus: 'Approved' })).toEqual({ status: 'Completed', disabledReason: undefined });
   });
 
-  it('still requires earlier workflow steps and output evidence for opted-out tasks', () => {
+  it('still requires earlier workflow steps, but not output, for opted-out tasks', () => {
     const optional = { ...task, requiresInternalApproval: false, generatedFromDeliverable: true, workflowStepKind: 'work' as const, workflowDependenciesReady: false };
     expect(completion(pm, optional)?.disabledReason).toBe('Complete the earlier workflow steps first.');
-    expect(completion(pm, { ...task, requiresInternalApproval: false, deliverableId: 'output' })?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
+    expect(completion(pm, { ...task, requiresInternalApproval: false, deliverableId: 'output' })?.disabledReason).toBeUndefined();
   });
 
   it('does not grant final completion to staff, HOD, or a foreign PM', () => {
@@ -95,8 +94,8 @@ describe('PM completion controls', () => {
     expect(completion(pm, approved)?.disabledReason).toBe('Complete the earlier workflow steps first.');
   });
 
-  it('explains missing output evidence before completing an approved linked task', () => {
-    expect(completion(pm, { ...task, status: 'Approved', deliverableId: 'output' })?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
+  it('lets the PM complete an approved linked task without output', () => {
+    expect(completion(pm, { ...task, status: 'Approved', deliverableId: 'output' })?.disabledReason).toBeUndefined();
   });
 
   it('offers only one canonical completion option for custom status lists', () => {
