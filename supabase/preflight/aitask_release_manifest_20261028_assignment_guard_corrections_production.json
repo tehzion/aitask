@@ -5,9 +5,8 @@
   "immutable": false,
   "capturedAt": "2026-10-28T00:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "Production verified through repository 20261028150000_hod_patch_empty_defaults. The 20261028 migrations were applied with the same versions on 2026-10-28; the earlier tail resolves through connector-generated migration aliases.",
+  "status": "Production verified through repository 20261028150000_hod_patch_empty_defaults. The 20261028 migrations were applied with the same versions on 2026-10-28; the earlier tail resolves through connector-generated migration aliases. 20261028160000_optional_task_output (optional task output) is pending production.",
   "validatedMigrationTail": [
-    "20261020131544_project_management_completion",
     "20261021110000_monthly_plan_renewal_integrity",
     "20261023120000_pm_hod_staff_assignment_state",
     "20261023150000_hod_task_execution_permissions",
@@ -16,9 +15,12 @@
     "20261028120000_pm_no_hod_assignment_fallback",
     "20261028130000_service_command_guard_direct_writes",
     "20261028140000_task_stage_guard_corrections",
-    "20261028150000_hod_patch_empty_defaults"
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output"
   ],
-  "pendingProductionMigrations": [],
+  "pendingProductionMigrations": [
+    "20261028160000_optional_task_output"
+  ],
   "productionVerification": {
     "historyAligned": false,
     "historyThrough": "20261028150000_hod_patch_empty_defaults",
@@ -75,7 +77,7 @@
     "20261028150000_hod_patch_empty_defaults": "HOD saves are no longer rejected when the app fills absent fields with defaults or omits the server-kept accountableLeadId/reviewCover; real changes to restricted fields stay denied."
   },
   "qualityGates": {
-    "disposableSupabaseStack": "PASS (2026-10-28): CI=true pnpm verify:supabase:rollout \u2014 77 pgTAP files / 1148 tests, storage, staff saves, HOD status, onboarding, workflow review gate, HOD output UI and security audit checks.",
+    "disposableSupabaseStack": "PASS (2026-10-28): CI=true pnpm verify:supabase:rollout — 77 pgTAP files / 1148 tests, storage, staff saves, HOD status, onboarding, workflow review gate, HOD output UI and security audit checks.",
     "productionApply": "APPLIED 2026-10-28 by the owner in the Supabase SQL Editor as one transaction, recorded in supabase_migrations.schema_migrations; live definitions of all six changed functions verified identical to the validated local stack, and the three entity write policies call aitask_can_mutate_entity."
   }
 }
