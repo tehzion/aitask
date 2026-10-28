@@ -13,7 +13,10 @@ export default function NavigationGuard() {
     let frame = requestAnimationFrame(() => { frame = requestAnimationFrame(() => recordDiagnostic('route.ready', performance.now() - start)); });
     return () => cancelAnimationFrame(frame);
   }, [location.key]);
-  const blocker = useBlocker(({ currentLocation, nextLocation }) => Boolean(useStore.getState().currentUser) && hasUnsavedChanges() && (
+  // A navigation the app makes for the user (e.g. clearing a list filter that
+  // would hide a record they just saved) marks itself and is not a leave.
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => Boolean(useStore.getState().currentUser) && hasUnsavedChanges()
+    && !(nextLocation.state as { skipUnsavedGuard?: boolean } | null)?.skipUnsavedGuard && (
     currentLocation.pathname !== nextLocation.pathname
     || currentLocation.search !== nextLocation.search
     || currentLocation.hash !== nextLocation.hash

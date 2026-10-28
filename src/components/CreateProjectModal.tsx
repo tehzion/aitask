@@ -58,7 +58,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       const next = new URLSearchParams(current);
       next.delete('search');
       return next;
-    }, { replace: true });
+    }, { replace: true, state: { skipUnsavedGuard: true } });
   }, [setSearchParams]);
 
   const [clientId, setClientId] = useState('');

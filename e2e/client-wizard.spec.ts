@@ -75,10 +75,15 @@ test('shows a company added through project creation while a company search is a
   await projectDialog.getByRole('button', { name: '+ Add client' }).click();
   const clientDialog = page.getByRole('dialog', { name: 'Add a client company' });
   await clientDialog.getByLabel('Company name *').fill('Filtered Company E2E');
+  // Clearing the hidden search after saving a client is not leaving the page,
+  // so the only prompt is the explicit discard confirmation on close.
+  const prompts: string[] = [];
+  page.on('dialog', dialog => { prompts.push(dialog.message()); void dialog.accept(); });
   await clientDialog.getByRole('button', { name: 'Save client' }).click();
   await expect(projectDialog.getByLabel('Company name *')).toHaveValue(/CL-/);
-  page.once('dialog', dialog => dialog.accept());
-  await projectDialog.getByRole('button', { name: 'Cancel' }).click();
+  await projectDialog.getByRole('button', { name: 'Close create project modal' }).click();
+  await expect(projectDialog).toHaveCount(0);
+  expect(prompts).toEqual(['Discard unsaved changes?']);
 
   await expect(page).not.toHaveURL(/search=/);
   await expect(page.getByRole('heading', { name: 'Filtered Company E2E' })).toBeVisible();
@@ -148,4 +153,20 @@ test('can add a client inside project creation and continue the same form', asyn
   await projectDialog.getByRole('button', { name: 'Create project', exact: true }).click();
   await expect(projectDialog).toBeHidden();
   await expect(page.getByText('Projects: Inline Project', { exact: true }).last()).toBeVisible();
+});
+
+test('leaving the page with an unsaved project still asks first', async ({ page }) => {
+  await seedProjectManager(page);
+  await page.goto('/calendar');
+  await page.getByRole('link', { name: /Companies/ }).first().click();
+  await expect(page).toHaveURL(/\/projects/);
+  await page.getByRole('button', { name: 'New project' }).click();
+  const projectDialog = page.getByRole('dialog', { name: 'Create project' });
+  await projectDialog.getByLabel('Project name *').fill('Unsaved project');
+  const prompts: string[] = [];
+  page.on('dialog', dialog => { prompts.push(dialog.message()); void dialog.dismiss(); });
+  // Browser Back is a real leave and must still be confirmed.
+  await page.goBack().catch(() => undefined);
+  await expect.poll(() => prompts).toContain('Leave with unsaved changes?');
+  await expect(projectDialog.getByLabel('Project name *')).toHaveValue('Unsaved project');
 });
