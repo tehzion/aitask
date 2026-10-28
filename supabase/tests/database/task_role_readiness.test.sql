@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(28);
+select plan(30);
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000005501','authenticated','authenticated','stage-pm@aitask.local','',now(),'{}','{}',now(),now()),
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000005502','authenticated','authenticated','stage-hod@aitask.local','',now(),'{}','{}',now(),now()),
@@ -44,6 +44,7 @@ set local role authenticated;
 select is((pg_temp.stage_update('{"status":"Revision"}')->>'ok')::boolean,true,'HOD can use explicit Revision status');
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where entity_id='stage-task'),50,'explicit Revision is 50 percent');
 select is((select (data->>'revisionCount')::integer from public.aitask_entities where entity_id='stage-task'),1,'explicit Revision records one return');
+select is((select data->>'clientApprovalStatus' from public.aitask_entities where entity_id='stage-task'),'Pending','internal revision does not create a Client rejection');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503',true);
 set local role authenticated;
@@ -88,6 +89,7 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005502'
 set local role authenticated;
 select is((pg_temp.stage_update('{"status":"Approved"}')->>'ok')::boolean,true,'legacy Staff HOD approves submitted work');
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where entity_id='stage-task'),80,'legacy HOD approval persists at 80 percent');
+select is((select data->>'clientApprovalStatus' from public.aitask_entities where entity_id='stage-task'),'Pending','internal approval does not create Client acceptance');
 select is((pg_temp.stage_update('{"status":"Completed"}')->>'ok')::boolean,false,'legacy HOD still cannot finalize for the PM');
 select is((pg_temp.stage_update('{"title":"Unaudited replacement"}')->>'ok')::boolean,false,'approved output cannot be replaced without revision');
 select is((pg_temp.stage_update('{"status":"Completed","title":"Unaudited replacement"}')->>'ok')::boolean,false,'changing output and finalizing in one request cannot bypass review');

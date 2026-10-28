@@ -7,7 +7,7 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
     const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
       clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [],
@@ -53,7 +53,7 @@ test('a frozen workflow exposes only statuses allowed by its required task progr
     const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/modules/services/domain/serviceManagement.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false },
       clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },

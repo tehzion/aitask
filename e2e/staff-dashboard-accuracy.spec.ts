@@ -15,7 +15,7 @@ const seed = async (page: Page, department: 'Operation' | 'Account & Finance' | 
     const staff = { ...state.users.find(user => user.name === 'Staff Demo')!, id: 'staff-dash-audit-user', name: 'Dashboard audit staff', department, departments: [department], mustResetPassword: false };
     const other = { ...(state.users.find(user => user.id !== staff.id && user.role === 'Staff') || state.users.find(user => user.isSuperAdmin)!), department, departments: [department] };
     enablePasswordResetBypass(staff.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${staff.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', 'en');
     const template = { ...state.tasks[0], clientId: 'staff-dash-a', clientName: 'Assigned company', projectId: undefined, projectName: undefined,
       assignedTo: staff.id, createdBy: other.id, department, startDate: '2026-10-01', dueDate: '2026-10-07', status: 'Pending', isCompleted: false,

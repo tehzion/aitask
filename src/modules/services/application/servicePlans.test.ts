@@ -209,8 +209,8 @@ describe('client service plan store', () => {
     expect(useStore.getState().deliverables[0].status).toBe('Ready');
     useStore.getState().updateDeliverableStatus(deliverableId, 'Delivered');
     expect(useStore.getState().serviceCycles[0].status).toBe('Completed');
-    useStore.getState().updateTaskStatus(useStore.getState().tasks[0].id, 'In Progress');
-    expect(useStore.getState().deliverables[0].status).toBe('In Progress');
+    expect(useStore.getState().updateTaskStatus(useStore.getState().tasks[0].id, 'Pending')).toEqual({ ok: true });
+    expect(useStore.getState().deliverables[0].status).toBe('Planned');
     expect(useStore.getState().serviceCycles[0].status).toBe('Published');
   });
 

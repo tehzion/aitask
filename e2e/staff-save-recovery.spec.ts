@@ -15,7 +15,7 @@ const seedStaff = async (page: Page, service = false) => {
     const state = useStore.getState();
     const staff = state.users.find(user => user.name === 'Staff Demo')!;
     enablePasswordResetBypass(staff.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${staff.id}`, 'acknowledged');
     const assigned = state.tasks.find(task => task.assignedTo === staff.id && task.clientId && task.serviceCycleId)!;
     const readyStaff = { ...staff, mustResetPassword: false };
     useStore.setState({ currentUser: readyStaff, users: state.users.map(user => user.id === staff.id ? readyStaff : user), backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });

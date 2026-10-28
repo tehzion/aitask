@@ -1,6 +1,7 @@
 import { BookOpen } from 'lucide-react';
 import React from 'react';
 import { useStore } from '../../../app/store/workspaceStore';
+import { getEffectivePermissions } from '../../../shared/authorization/access';
 import { getOnboardingPersona } from '../domain/onboarding';
 import { getTutorialById, getVisibleTutorials, TUTORIAL_GUIDE_START_EVENT } from '../domain/tutorials';
 
@@ -14,7 +15,8 @@ const ContextualTutorialLink: React.FC<ContextualTutorialLinkProps> = ({ tutoria
   const rolePermissions = useStore(state => state.rolePermissions);
   const tutorial = getTutorialById(tutorialId);
   const persona = getOnboardingPersona(currentUser, rolePermissions);
-  if (!tutorial?.guide?.length || !getVisibleTutorials(persona).some(item => item.id === tutorial.id)) return null;
+  const effectivePermissions = getEffectivePermissions(currentUser, rolePermissions);
+  if (!tutorial?.guide?.length || !getVisibleTutorials(persona, effectivePermissions).some(item => item.id === tutorial.id)) return null;
 
   const open = () => {
     window.dispatchEvent(new CustomEvent(TUTORIAL_GUIDE_START_EVENT, {

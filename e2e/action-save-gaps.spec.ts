@@ -10,7 +10,7 @@ const seedBoss = async (page: Page) => {
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     const task = { ...state.tasks[0], id: 'action-gap-task', title: 'Action gap task',
       clientName: 'Action QA', clientId: undefined, projectId: undefined, projectName: undefined,
       deliverableId: undefined, serviceCycleId: undefined, status: 'Pending', priority: 'Medium',
@@ -127,7 +127,7 @@ for (const kind of ['package', 'workflow'] as const) {
       const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
       enablePasswordResetBypass('action-next-account');
-      localStorage.setItem('aitask:release-notice:2026-08-service-operations:action-next-account', 'acknowledged');
+      localStorage.setItem('aitask:release-notice:2026-10-project-workflows:action-next-account', 'acknowledged');
       useStore.setState(state => ({ currentUser: { ...state.currentUser!, id: 'action-next-account', mustResetPassword: false } }));
     });
     await expect(page.getByLabel(controls.name, { exact: true })).toHaveValue('');
@@ -160,7 +160,7 @@ for (const kind of ['package', 'workflow'] as const) {
     await page.getByRole('button', { name: 'Retry save', exact: true }).click();
     const editor = page.locator(kind === 'package' ? 'section[aria-labelledby="service-packages-title"]' : 'section[aria-labelledby="workflow-templates-title"]');
     await expect(editor.getByText(kind === 'package' ? 'Package deleted. Existing client plans remain unchanged.'
-      : 'Workflow template deleted. Frozen copies in plans remain unchanged.', { exact: true })).toBeVisible();
+      : 'Workflow template deleted. Existing plans keep their current task steps.', { exact: true })).toBeVisible();
   });
 }
 

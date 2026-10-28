@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { defaultRolePermissions } from '../../../shared/authorization/access';
 import type { User } from '../../../shared/types/index';
 import {
 	clearOnboardingStatus,
@@ -43,8 +44,34 @@ describe('onboarding content and persistence', () => {
     const chinese = getOnboardingSteps('projectManager', 'zh');
     expect(english.length).toBeGreaterThan(4);
     expect(english.some(step => step.target === 'create-task')).toBe(true);
-    expect(english.find(step => step.id === 'workflow')?.title).toContain('handoff');
-    expect(chinese.find(step => step.id === 'workflow')?.title).toContain('交接');
+    expect(english.find(step => step.id === 'workflow')?.title).toContain('review');
+    expect(chinese.find(step => step.id === 'workflow')?.title).toContain('审核');
+  });
+
+  it('keeps first-login steps inside the member’s effective page and action access', () => {
+    const permissions = {
+      ...defaultRolePermissions['Project Manager'],
+      viewProjects: false,
+      createTasks: false,
+      viewReports: false,
+    };
+    const steps = getOnboardingSteps('projectManager', 'en', permissions);
+    expect(steps.some(step => step.target === 'projects-overview')).toBe(false);
+    expect(steps.some(step => step.target === 'create-task')).toBe(false);
+    expect(steps.some(step => step.target === 'reports-overview')).toBe(false);
+    expect(steps.some(step => step.target === 'dashboard-overview')).toBe(true);
+    expect(steps.some(step => step.target === 'help-overview')).toBe(true);
+  });
+
+  it('filters action-specific onboarding and Help guidance by permission', () => {
+    const hodPermissions = { ...defaultRolePermissions.HOD, manageCreatedTasks: false };
+    expect(getOnboardingSteps('hod', 'en', hodPermissions).some(step => step.id === 'assign')).toBe(false);
+
+    const clientPermissions = { ...defaultRolePermissions.Client, clientReview: false };
+    expect(getOnboardingSteps('client', 'en', clientPermissions).some(step => step.id === 'feedback')).toBe(false);
+
+    const managerPermissions = { ...defaultRolePermissions['Project Manager'], viewTasks: false };
+    expect(getHelpCopy('projectManager', 'en', managerPermissions).steps.join(' ')).not.toContain('task requirements');
   });
 
   it('gives every persona a route for each first-login onboarding step', () => {

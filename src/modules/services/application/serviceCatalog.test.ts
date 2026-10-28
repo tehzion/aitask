@@ -115,7 +115,7 @@ describe('service catalog deletion', () => {
     });
 
     const result = useStore.getState().deleteWorkflowTemplate('SWT-frozen');
-    expect(result).toEqual({ ok: false, error: 'This workflow is frozen into existing packages or plans. Deactivate it instead of deleting.' });
+    expect(result).toEqual({ ok: false, error: 'This task workflow is still in use. Deactivate it to stop using it for new plans.' });
     expect(useStore.getState().serviceWorkflowTemplates).toHaveLength(1);
   });
 

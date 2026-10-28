@@ -9,7 +9,7 @@ import { isPendingMutationResolution } from '../../../infrastructure/commands/mu
 import { safeHttpsUrl } from '../../../infrastructure/serialization/security';
 import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../../../shared/authorization/access';
 import { assignableDepartments, getMemberDepartments } from '../../../shared/authorization/departments';
-import { assignableTaskAssignees, eligibleTaskHods } from '../../../shared/authorization/taskWorkflowAccess';
+import { assignableTaskAssignees, eligibleTaskHods, eligibleTaskStaff } from '../../../shared/authorization/taskWorkflowAccess';
 import { useI18n } from '../../../shared/components/I18nProvider';
 import ModalShell from '../../../shared/components/ModalShell';
 import SystemMessage from '../../../shared/components/SystemMessage';
@@ -64,6 +64,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const clientSelectId = React.useId();
   const departmentId = React.useId();
   const assigneeId = React.useId();
+  const serviceTypeId = React.useId();
+  const priorityId = React.useId();
+  const visibilityId = React.useId();
   const attachmentLinkId = React.useId();
   const attachmentNameId = React.useId();
   const notesId = React.useId();
@@ -93,7 +96,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   React.useEffect(() => { if (!isOpen) setFormEdited(false); }, [isOpen]);
   const [priority, setPriority] = useState<Priority>('Medium');
   const [visibility, setVisibility] = useState<TaskVisibility>(() => (
-    ['Staff', 'HOD'].includes(currentUser?.role || '') ? 'internal' : 'client-visible'
+    currentUser?.role === 'Client' ? 'client-visible' : 'internal'
   ));
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
@@ -129,9 +132,15 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     () => eligibleTaskHods(department || undefined, selectedProject, users, rolePermissions),
     [department, rolePermissions, selectedProject, users],
   );
+  const eligibleStaff = React.useMemo(
+    () => eligibleTaskStaff(department || undefined, selectedProject, users, rolePermissions),
+    [department, rolePermissions, selectedProject, users],
+  );
   const filteredUsers = department
-    ? assignableTaskAssignees(currentUser, department, users, rolePermissions)
-        .filter(user => canAssignOthers || user.id === currentUser?.id)
+    ? isProjectManager
+      ? eligibleHods.length ? eligibleHods : eligibleStaff
+      : assignableTaskAssignees(currentUser, department, users, rolePermissions, { project: selectedProject })
+          .filter(user => canAssignOthers || user.id === currentUser?.id)
     : [];
   const linkedTaskContext = Boolean(createTaskInitialClientId || createTaskInitialClientName);
   const showCompanyLink = currentUser?.role !== 'Client' || linkedTaskContext;
@@ -175,7 +184,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setCustomServiceInput('');
     setCustomServiceError('');
     setPriority('Medium');
-    setVisibility(['Staff', 'HOD'].includes(currentUser?.role || '') ? 'internal' : 'client-visible');
+    setVisibility(currentUser?.role === 'Client' ? 'client-visible' : 'internal');
     setStartDate(getTodayInputDate());
     setDueDate('');
     setAttachmentLink('');
@@ -396,12 +405,15 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     }
 
     if (isProjectManager) {
-      if (!eligibleHods.length) {
-        setAssignmentError('No eligible HOD is configured for this project and department. Assign an HOD to the project before creating this task.');
-        return;
-      }
-      if (!responsibleHodId || !eligibleHods.some(user => user.id === responsibleHodId)) {
-        setAssignmentError('Choose the responsible HOD for this task.');
+      if (eligibleHods.length) {
+        if (!responsibleHodId || !eligibleHods.some(user => user.id === responsibleHodId)) {
+          setAssignmentError('Choose the responsible HOD for this task.');
+          return;
+        }
+      } else if (assignedTo && !eligibleStaff.some(user => user.id === assignedTo)) {
+        setAssignmentError(eligibleStaff.length
+          ? 'Choose an eligible Staff member for this task.'
+          : 'No eligible Staff member is configured for this project and department.');
         return;
       }
     }
@@ -417,7 +429,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const resolvedAssignedTo = isProjectManager ? responsibleHodId : assignedTo;
+    const resolvedAssignedTo = isProjectManager
+      ? eligibleHods.length ? responsibleHodId : assignedTo
+      : assignedTo;
     const taskId = addTask({
       title: trimmedTitle,
       description: description.trim(),
@@ -435,8 +449,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       visibility,
       department,
       assignedTo: resolvedAssignedTo,
-      responsibleHodId: isProjectManager ? responsibleHodId : undefined,
-      assignmentState: isProjectManager ? 'pending_hod' : undefined,
+      responsibleHodId: isProjectManager && eligibleHods.length ? responsibleHodId : undefined,
+      assignmentState: isProjectManager && eligibleHods.length ? 'pending_hod' : undefined,
       serviceType: trimmedServiceType,
       priority,
       startDate: finalStartDate,
@@ -506,7 +520,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <div>
                 <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                   <label htmlFor={projectSelectId} className="block text-sm font-medium text-slate-700">
-                    {t('Link to Company / Brand')} {isStaffTaskCreator ? <span className="text-red-500">*</span> : t('(Optional)')}
+                    {t('projects.projectForTask')} {isStaffTaskCreator ? <span className="text-red-500">*</span> : t('(Optional)')}
                   </label>
                   {canCreateProjects && !isStaffTaskCreator && (
                     <button
@@ -525,13 +539,14 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     onChange={e => selectProject(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                   >
-                    <option value="">{t(isStaffTaskCreator ? 'Choose an available company or brand' : 'No Company Link / Independent Task')}</option>
+                    <option value="">{t(isStaffTaskCreator ? 'Choose an available company or brand' : 'No project / company-only task')}</option>
                     {assignableProjects.map(p => (
                       <option key={p.id} data-i18n-skip value={p.id}>{p.projectName} ({p.clientName})</option>
                     ))}
                   </select>
                   <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                 </div>
+                <p className="mt-1 text-xs leading-5 text-slate-500">{t('projects.projectTaskHelp')}</p>
               </div>
               )}
 
@@ -574,7 +589,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <div>
                 <div>
                   <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
-                    <label htmlFor={clientSelectId} className="block text-sm font-medium text-slate-700">{t('Client / Brand Name')} <span className="text-red-500">*</span></label>
+                    <label htmlFor={clientSelectId} className="block text-sm font-medium text-slate-700">{t('projects.companyForTask')} <span className="text-red-500">*</span></label>
                     {!isStaffTaskCreator && (
                       <button
                         type="button"
@@ -603,6 +618,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       {t('Company follows')} <span data-i18n-skip>{selectedProject.projectName}</span>.
                     </p>
                   )}
+                  {!selectedProject && <p className="mt-1 text-xs leading-5 text-slate-500">{t('projects.companyTaskHelp')}</p>}
                 </div>
               </div>
 
@@ -633,22 +649,29 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">{t(isProjectManager ? 'Responsible HOD' : 'Assignee')}</label>
+                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">
+                    {t(isProjectManager && eligibleHods.length ? 'Responsible HOD' : 'Assignee')}{' '}
+                    {isProjectManager && eligibleHods.length > 0
+                      ? <span className="text-red-500">*</span>
+                      : isProjectManager ? <span className="text-xs font-normal text-slate-500">({t('Optional')})</span> : null}
+                  </label>
                   <div className="relative">
                     <select
                       id={assigneeId}
-                      value={isProjectManager ? responsibleHodId : assignedTo}
-                      onChange={e => isProjectManager ? setResponsibleHodId(e.target.value) : setAssignedTo(e.target.value)}
+                      aria-required={isProjectManager && eligibleHods.length > 0 || undefined}
+                      value={isProjectManager && eligibleHods.length ? responsibleHodId : assignedTo}
+                      onChange={e => isProjectManager && eligibleHods.length ? setResponsibleHodId(e.target.value) : setAssignedTo(e.target.value)}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
-                      <option value="">{t(isProjectManager ? (eligibleHods.length ? 'Choose responsible HOD' : 'No eligible HOD configured') : 'Unassigned')}</option>
-                      {(isProjectManager ? eligibleHods : filteredUsers).map(u => (
+                      <option value="">{t(isProjectManager && eligibleHods.length ? 'Choose responsible HOD' : 'Unassigned')}</option>
+                      {filteredUsers.map(u => (
                         <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>
                       ))}
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>
                   {isProjectManager && eligibleHods.length > 0 && <p className="mt-1 text-xs text-slate-500">{t('The HOD will assign Staff after reviewing this task.')}</p>}
+                  {isProjectManager && eligibleHods.length === 0 && <p className="mt-1 text-xs text-slate-500">{t('You remain accountable for this task and can assign an eligible Staff member later.')}</p>}
                   {assignmentError && (
                     <p className="text-xs text-red-500 mt-1"><SystemMessage message={assignmentError} /></p>
                   )}
@@ -657,9 +680,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Service Type')}</label>
+                  <label htmlFor={serviceTypeId} className="block text-sm font-medium text-slate-700 mb-1">{t('Service Type')}</label>
                   <div className="relative">
                     <select
+                      id={serviceTypeId}
                       value={serviceType} onChange={e => selectService(e.target.value)}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
@@ -696,9 +720,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Priority')}</label>
+                  <label htmlFor={priorityId} className="block text-sm font-medium text-slate-700 mb-1">{t('Priority')}</label>
                   <div className="relative">
                     <select
+                      id={priorityId}
                       value={priority} onChange={e => setPriority(e.target.value as Priority)}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
@@ -708,9 +733,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">{t('Client visibility')}</label>
+                  <label htmlFor={visibilityId} className="block text-sm font-medium text-slate-700 mb-1">{t('Client visibility')}</label>
                   <div className="relative">
                     <select
+                      id={visibilityId}
                       value={visibility} onChange={e => setVisibility(e.target.value as TaskVisibility)}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >

@@ -15,6 +15,7 @@ const Calendar = React.lazy(() => import('../modules/calendar/pages/Calendar'));
 const DeliveryTracker = React.lazy(() => import('../modules/services/pages/DeliveryTracker'));
 const ClientWorkspace = React.lazy(() => import('../modules/clients/pages/ClientWorkspace'));
 const Companies = React.lazy(() => import('../modules/projects/pages/Clients'));
+const ProjectWorkspace = React.lazy(() => import('../modules/projects/pages/ProjectWorkspace'));
 const Reports = React.lazy(() => import('../modules/reports/pages/Reports'));
 const Approvals = React.lazy(() => import('../modules/users/pages/Approvals'));
 const Settings = React.lazy(() => import('../modules/settings/pages/Settings'));
@@ -52,6 +53,7 @@ function AppContent() {
             {/* ClientWorkspace performs client ownership and assigned-staff checks itself. */}
             <Route path="clients/:clientId" element={<ClientWorkspace />} />
             <Route path="projects" element={<RoleRoute path="/projects"><Companies /></RoleRoute>} />
+            <Route path="projects/:projectId" element={<RoleRoute path="/projects"><ProjectWorkspace /></RoleRoute>} />
             <Route path="reports" element={<RoleRoute path="/reports"><Reports /></RoleRoute>} />
             <Route path="approvals" element={<RoleRoute path="/approvals"><Approvals /></RoleRoute>} />
             <Route path="notifications" element={<Notifications />} />
@@ -66,7 +68,7 @@ function AppContent() {
         <div
           role="status"
           aria-live="polite"
-          className="fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[70] mx-auto flex max-w-xl items-start gap-3 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white shadow-xl shadow-slate-950/20 md:bottom-auto md:left-auto md:right-5 md:top-20"
+          className="pointer-events-none fixed bottom-[calc(5rem+env(safe-area-inset-bottom))] left-4 right-4 z-[70] mx-auto flex max-w-xl items-start gap-3 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-white shadow-xl shadow-slate-950/20 md:bottom-auto md:left-auto md:right-5 md:top-20"
         >
           <WifiOff className="mt-0.5 h-5 w-5 shrink-0 text-sky-300" />
           <div>

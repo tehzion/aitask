@@ -17,9 +17,9 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
     await expect(continueButton).toBeVisible();
     await continueButton.click();
   }
-  const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
+  const releaseNotice = page.getByRole('dialog', { name: 'Projects have clearer owners and next steps' });
   await expect(releaseNotice).toBeVisible();
-  await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
+  await releaseNotice.getByRole('button', { name: 'Continue to AiTask' }).click();
   await expect(page.getByRole('heading', { name: 'Portfolio work' })).toBeVisible();
 };
 

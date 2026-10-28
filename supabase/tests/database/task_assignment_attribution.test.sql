@@ -30,7 +30,7 @@ insert into public.aitask_members(
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
   ('pgtap-assign', 'client', 'assign-pm1-client', '{"id":"assign-pm1-client","clientName":"Assign PM One Co","createdBy":"pgtap-assign-pm1"}'::jsonb),
-  ('pgtap-assign', 'project', 'assign-pm1-project', '{"id":"assign-pm1-project","clientId":"assign-pm1-client","clientName":"Assign PM One Co","projectName":"Assign Launch","createdBy":"pgtap-assign-pm1"}'::jsonb),
+  ('pgtap-assign', 'project', 'assign-pm1-project', '{"id":"assign-pm1-project","clientId":"assign-pm1-client","clientName":"Assign PM One Co","projectName":"Assign Launch","createdBy":"pgtap-assign-pm1","projectManagerIds":["pgtap-assign-pm1","pgtap-assign-pmempty"],"hodMemberIds":[],"staffMemberIds":["pgtap-assign-staff","pgtap-assign-staff2"]}'::jsonb),
   ('pgtap-assign', 'task', 'assign-pm1-task', '{"id":"assign-pm1-task","clientId":"assign-pm1-client","clientName":"Assign PM One Co","projectId":"assign-pm1-project","title":"Portfolio Task","department":"Designer","assignedTo":"pgtap-assign-staff","createdBy":"pgtap-assign-staff","status":"Pending","visibility":"internal"}'::jsonb);
 
 -- PM One reassigns a portfolio task they did not create (previous behavior

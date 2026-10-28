@@ -80,11 +80,44 @@ describe('role-controlled task milestones', () => {
     useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Approved', completionPercentage: 80 }] });
     actor(hod);
     expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
-    expect(current()).toMatchObject({ completionPercentage: 50, revisionCount: 1, clientApprovalStatus: 'Rejected' });
+    expect(current()).toMatchObject({ completionPercentage: 50, revisionCount: 1, clientApprovalStatus: 'Pending' });
+  });
+  it('reopens completed work and notifies the current assignee', () => {
+    useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, assignedBy: pm.id, status: 'Completed', isCompleted: true, completedAt: '2026-10-20T12:00:00.000Z', completionPercentage: 100 }] });
+    const result = useStore.getState().updateTaskStatus(task.id, 'Pending');
+
+    expect(result.ok).toBe(true);
+    expect(current()).toMatchObject({ status: 'Pending', isCompleted: false, completedAt: undefined });
+    expect(useStore.getState().notifications).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Task Status Updated', targetUserId: staff.id, route: { page: 'tasks', entityId: task.id } }),
+    ]));
   });
 });
 
 describe('role readiness at alternate entry points', () => {
+  it('requires a responsible assignee before starting work or requesting a revision', () => {
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress')).toEqual({
+      ok: false,
+      error: 'Assign a responsible person before starting work.',
+    });
+    expect(current().status).toBe('Pending');
+
+    useStore.setState({ tasks: [{ ...task, status: 'Completed', isCompleted: true, assignedTo: '' }] });
+    expect(useStore.getState().requestRevision(task.id, 'Rework this output')).toEqual({
+      ok: false,
+      error: 'Assign a responsible person before requesting a revision.',
+    });
+    expect(current()).toMatchObject({ status: 'Completed', isCompleted: true, revisionCount: 0 });
+  });
+
+  it('does not create an In Progress task without a responsible assignee', () => {
+    useStore.setState({ users: [pm], tasks: [], projects: [] });
+    const { id: taskId, ...draft } = task;
+    expect(taskId).toBe(task.id);
+    expect(useStore.getState().addTask({ ...draft, status: 'In Progress', assignedTo: '' })).toBe('');
+    expect(useStore.getState().tasks).toEqual([]);
+  });
+
   it('refuses an orphan review and saves it after a department HOD is configured', () => {
     actor(staff);
     useStore.setState({ users: [pm, staff, client], clients: [], tasks: [{ ...task, createdBy: 'missing-owner', assignedTo: staff.id, status: 'In Progress' }] });
@@ -246,7 +279,7 @@ describe('HOD task-action guards', () => {
     useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Waiting Approval', workState: { reviewRequestedBy: staff.id, reviewRequestedAt: '2026-10-02', acceptedBy: staff.id, acceptedAt: '2026-10-01' } }] });
     actor(hod);
     expect(useStore.getState().requestRevision(task.id, 'Redo').ok).toBe(true);
-    expect(current()).toMatchObject({ status: 'In Progress', revisionCount: 1, clientApprovalStatus: 'Rejected', isCompleted: false });
+    expect(current()).toMatchObject({ status: 'In Progress', revisionCount: 1, clientApprovalStatus: 'Pending', isCompleted: false });
     expect(current().workState?.reviewRequestedBy).toBeUndefined();
     expect(current().reviewDecision).toBeUndefined();
   });
@@ -288,6 +321,20 @@ describe('HOD task-action guards', () => {
     actor(client);
     expect(useStore.getState().reviewClientApproval(task.id, 'Approved', 'Customer OK').ok).toBe(true);
     expect(current().reviewDecision?.reviewedBy).toBe(hod.id);
+  });
+
+  it('preserves Client acceptance across internal revision and completion transitions', () => {
+    useStore.setState({ tasks: [{ ...task, assignedTo: staff.id, status: 'Approved', clientApprovalStatus: 'Approved', completionPercentage: 80 }] });
+    actor(hod);
+    expect(useStore.getState().requestRevision(task.id, 'Internal quality correction').ok).toBe(true);
+    expect(current()).toMatchObject({ status: 'In Progress', revisionCount: 1, clientApprovalStatus: 'Approved' });
+    actor(staff);
+    expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
+    actor(hod);
+    expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(true);
+    actor(pm);
+    expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(true);
+    expect(current()).toMatchObject({ status: 'Completed', clientApprovalStatus: 'Approved' });
   });
 });
 

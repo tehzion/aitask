@@ -4,7 +4,7 @@ import { isWorkflowTaskSatisfied } from '../../../shared/rules/workflowReview';
 import type { Deliverable, Task, TaskWorkState } from '../../../shared/types/index';
 
 export const TASK_EVIDENCE_REQUIRED = 'Add an output link or upload a deliverable file before sending this linked task for review or completing it.';
-export const TASK_HISTORY_FIELDS = ['title', 'description', 'notes', 'dueDate', 'startDate', 'assignedTo', 'responsibleHodId', 'assignmentState', 'assignmentOverride', 'department', 'status', 'priority', 'attachmentLink', 'outputAttachments', 'reviewCover', 'accountableLeadId', 'requiresInternalApproval', 'acceptedBy', 'blocker'] as const;
+export const TASK_HISTORY_FIELDS = ['title', 'description', 'notes', 'dueDate', 'startDate', 'assignedTo', 'responsibleHodId', 'assignmentState', 'assignmentOverride', 'department', 'status', 'priority', 'attachmentLink', 'supportingAttachments', 'outputAttachments', 'reviewCover', 'accountableLeadId', 'requiresInternalApproval', 'acceptedBy', 'blocker'] as const;
 
 export const isTaskLinkedToDeliverable = (task: Pick<Task, 'id' | 'deliverableId'>, deliverables: readonly Deliverable[]) =>
   Boolean(task.deliverableId || deliverables.some(item => item.taskIds?.includes(task.id)));

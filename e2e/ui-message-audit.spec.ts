@@ -17,7 +17,7 @@ const seed = async (page: Page, role: string, locale: 'en' | 'zh') => {
     enablePasswordResetBypass(actor.id);
     localStorage.setItem('aitask:locale', locale);
     localStorage.setItem('aitask-color-theme', locale === 'zh' ? 'dark' : 'light');
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${actor.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${actor.id}`, 'acknowledged');
     const today = new Date().toISOString().slice(0, 10);
     const clientName = actor.companyName || 'Message audit company';
     const client = { id: 'message-audit-company', clientName, createdBy: actor.id, createdAt: `${today}T00:00:00.000Z`, updatedAt: `${today}T00:00:00.000Z` };

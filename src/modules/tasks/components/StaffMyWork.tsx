@@ -116,13 +116,13 @@ const StaffMyWork: React.FC = () => {
 
   return (
     <div data-onboarding-target="dashboard-overview" className={`${pageShell} max-w-6xl space-y-6`}>
-      <header className="flex items-start justify-between gap-4 border-b border-line/70 pb-4 sm:items-end">
+      <header className="flex flex-col gap-3 border-b border-line/70 pb-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <p className="calm-eyebrow">{t('My work')} · {formatLocalizedWeekdayDate(todayDate, locale)}</p>
           <h1 className="mt-1 text-[1.8rem] font-semibold leading-9 tracking-[-0.045em] text-ink sm:text-4xl">{isDepartmentLead ? t('Department work') : t('My work')}</h1>
           <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isDepartmentLead ? t('Personally assigned responsibilities stay in My Work; use the Action Centre for department decisions and next actions.') : t('Personally assigned responsibilities, ordered by what you need to do next.')}</p>
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex w-full flex-wrap items-center justify-between gap-2 sm:w-auto sm:flex-col sm:items-end">
           {canCreateTask && <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
           <BackendFreshness />
         </div>
@@ -191,7 +191,7 @@ const StaffMyWork: React.FC = () => {
         <Surface variant="raised" className="p-6 sm:p-8">
           {queue.waiting.length > 0 ? <Clock3 aria-hidden="true" className="h-9 w-9 text-accent" /> : <CheckCircle2 aria-hidden="true" className="h-9 w-9 text-accent" />}
           <h2 className="mt-4 text-xl font-semibold text-ink">{queue.waiting.length > 0 ? t('Waiting for review') : isHod && scope === 'department' ? t('Your department queue is clear') : t('Your assigned queue is clear')}</h2>
-          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">{queue.waiting.length > 0 ? <>{queue.waiting.length} {t('Waiting review')}</> : isHod ? t('Delegated work in your departments will appear here. You can still review completed work or open the full workbench.') : t('New assignments will appear here. You can review completed work in All work.')}</p>
+          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">{queue.waiting.length > 0 ? <>{queue.waiting.length} {t('Waiting review')}</> : isHod ? t('Department assignments will appear here. You can still review completed tasks or open All work for the full list.') : t('New assignments will appear here. You can review completed work in All work.')}</p>
         </Surface>
       )}
 

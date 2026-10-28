@@ -72,6 +72,9 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
   if (before && ['Approved', 'Completed'].includes(after.status) && protectedOutput.some(field => Object.prototype.hasOwnProperty.call(after, field) && JSON.stringify(before[field] || '') !== JSON.stringify(after[field] || ''))) return 'Ask the HOD or project manager to return approved work for revision.';
   if (before && before.status !== after.status && ['Approved', 'Completed'].includes(after.status)
     && ['assignedTo', 'department'].some(field => Object.prototype.hasOwnProperty.call(after, field) && before[field as 'assignedTo' | 'department'] !== after[field as 'assignedTo' | 'department'])) return 'Reassign work before submitting it for review.';
+  const nextAssigneeId = after.assignedTo ?? before?.assignedTo;
+  if (after.status === 'In Progress' && (!nextAssigneeId || !nextAssigneeId.trim())
+    && (!before || before.status !== after.status)) return 'Assign a responsible person before starting work.';
   if (before?.status === after.status && before.isCompleted === after.isCompleted) return undefined;
   const ordinaryStaff = user?.role === 'Staff' && !isHodUser(user, roles);
   if (before && before.status !== after.status && after.status === 'In Progress'
@@ -199,7 +202,7 @@ export const taskAssignmentStageError = (
   nextAssigneeId: string | undefined,
   users: readonly User[],
   roles: CustomRole[] = [],
-  options: { allowDirectStaff?: boolean } = {},
+  options: { allowDirectStaff?: boolean; project?: Project } = {},
 ): string | undefined => {
   if (!actor || isBossKoo(actor) || actor.role !== 'Project Manager') return undefined;
   if (options.allowDirectStaff) return undefined;
@@ -207,7 +210,10 @@ export const taskAssignmentStageError = (
   if (!nextAssignee) return undefined;
   if (isHodUser(nextAssignee, roles)) return undefined;
   if (nextAssignee.role === 'Project Manager') return undefined;
-  return departmentHasHod(task?.department, users, roles) ? TASK_HOD_ASSIGNMENT_REQUIRED : undefined;
+  const hasEligibleHod = options.project
+    ? eligibleTaskHods(task?.department, options.project, users, roles).length > 0
+    : departmentHasHod(task?.department, users, roles);
+  return hasEligibleHod ? TASK_HOD_ASSIGNMENT_REQUIRED : undefined;
 };
 
 /**
@@ -219,10 +225,20 @@ export const assignableTaskAssignees = (
   department: Department | undefined,
   users: readonly User[],
   roles: CustomRole[] = [],
-  options: { allowDirectStaff?: boolean } = {},
+  options: { allowDirectStaff?: boolean; project?: Project } = {},
 ): User[] => {
   if (!department) return [];
-  return users.filter(user => isEligibleTaskAssignee(user, department)
+  return users.filter(user => user.hasLogin !== false
+    && isEligibleTaskAssignee(user, department)
+    && (!options.project || (isHodUser(user, roles)
+      ? eligibleTaskHods(department, options.project, users, roles).some(candidate => candidate.id === user.id)
+      : user.role === 'Staff'
+        ? eligibleTaskStaff(department, options.project, users, roles).some(candidate => candidate.id === user.id)
+        : user.role === 'Project Manager'
+          ? (isBossKoo(user) || (options.project.projectManagerIds !== undefined
+            ? options.project.projectManagerIds.includes(user.id)
+            : options.project.createdBy === user.id))
+          : false))
     && !taskAssignmentStageError(actor, { department }, user.id, users, roles, options));
 };
 export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {

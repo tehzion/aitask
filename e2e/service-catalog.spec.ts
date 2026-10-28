@@ -9,7 +9,7 @@ const setBoss = async (page: import('@playwright/test').Page) => {
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => ['/', '/settings'].includes(url.pathname));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 };
@@ -51,6 +51,7 @@ test('service catalog: template and package creation, frozen plan and delete gua
   await page.getByRole('button', { name: 'Delete workflow QA Video Chain' }).click();
   const deleteDialog = page.getByRole('dialog', { name: /Delete the/ });
   await expect(deleteDialog).toBeVisible();
+  await expect(deleteDialog.getByText('Deleting a workflow will not change task steps already added to plans. If a package or plan still uses it, deactivate it instead.')).toBeVisible();
   await deleteDialog.getByRole('button', { name: 'Delete workflow' }).click();
-  await expect(page.getByText(/Deactivate it instead of deleting./)).toBeVisible();
+  await expect(page.getByText('This task workflow is still in use. Deactivate it to stop using it for new plans.', { exact: true })).toBeVisible();
 });

@@ -164,7 +164,7 @@ try {
   await page.getByLabel('Email', { exact: true }).fill(worker.email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Access Dashboard', exact: true }).click();
-  await page.getByRole('button', { name: 'Happy working', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to AiTask', exact: true }).click();
   await expect.poll(() => page.evaluate(async id => (await import('/src/app/store/workspaceStore.ts')).useStore.getState().tasks.some(task => task.id === id), taskIds[1]), { timeout: 15000 }).toBe(true);
   await expect.poll(() => page.evaluate(async () => (await import('/src/infrastructure/database/supabaseClient.ts')).supabase.getChannels().some(channel => channel.state === 'joined')), { timeout: 15000 }).toBe(true);
   await login('uat-boss');

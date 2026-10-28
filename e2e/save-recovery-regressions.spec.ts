@@ -9,7 +9,7 @@ async function seed(page: Page) {
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], projects: [], tasks: [], clientPlans: [],
       serviceCycles: [], deliverables: [], addons: [], servicePricingSnapshots: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
@@ -65,7 +65,9 @@ async function openMilestones(page: Page) {
   await page.goto('/projects');
   const card = page.locator('main div.bg-surface.p-5').filter({ has: page.getByRole('heading', { name: 'Audit company', exact: true }) });
   await card.getByRole('button', { name: 'Details', exact: true }).click();
-  await page.getByRole('button', { name: 'Open project', exact: true }).click();
+  await page.getByRole('link', { name: 'Open project', exact: true }).click();
+  await expect(page).toHaveURL('/projects/audit-project');
+  await page.getByRole('button', { name: 'Manage project', exact: true }).click();
   const panel = page.getByRole('dialog', { name: 'Audit project', exact: true });
   await panel.getByRole('tab', { name: 'Milestones', exact: true }).click();
   await panel.getByPlaceholder('Milestone name').fill('Milestone A');

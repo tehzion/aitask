@@ -18,7 +18,7 @@ import { cardBase, inputBase, modalFooter } from '../../../shared/components/uiT
 import { useImeSafeInput } from '../../../shared/hooks/useImeSafeInput';
 import { useLocalToday } from '../../../shared/hooks/useLocalToday';
 import { formatLocalizedDate } from '../../../shared/i18n/i18n';
-import { getLocalizedDepartment, getLocalizedPriority, getLocalizedRole, getLocalizedStatus } from '../../../shared/i18n/localeLabels';
+import { getLocalizedDepartment, getLocalizedPriority, getLocalizedRole, getLocalizedTaskStatus } from '../../../shared/i18n/localeLabels';
 import type { Department, Task, User } from '../../../shared/types/index';
 import { cn, parseOptionalDate } from '../../../shared/utils/utils';
 import {
@@ -134,7 +134,7 @@ const TaskGroup = ({
           >
             <div className="min-w-0">
               <p data-i18n-skip className="truncate text-sm font-semibold text-slate-900">{task.title}</p>
-              <p className="mt-1 truncate text-xs text-slate-500"><span data-i18n-skip>{task.clientName}</span> · {getLocalizedStatus(task.status, locale)}</p>
+              <p className="mt-1 truncate text-xs text-slate-500"><span data-i18n-skip>{task.clientName}</span> · {getLocalizedTaskStatus(task.status, locale)}</p>
             </div>
             <div className="flex items-center justify-between gap-3 sm:justify-end">
               <span className={cn('rounded-md px-2 py-1 text-[11px] font-semibold', priorityClasses[task.priority])}>{getLocalizedPriority(task.priority, locale)}</span>

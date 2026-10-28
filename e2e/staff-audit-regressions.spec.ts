@@ -14,7 +14,7 @@ const seed = async (page: Page, waiting = false) => {
     const pm = { id: 'audit-pm', name: 'Audit PM', role: 'Project Manager', departments: ['Management'] };
     enablePasswordResetBypass(user.id);
     localStorage.setItem('aitask:locale', 'en');
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${user.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${user.id}`, 'acknowledged');
     const task = { id: 'audit-work', title: 'Audit artwork', clientName: 'Audit Company', serviceType: 'Design', description: '', department: 'Designer', assignedTo: user.id, assignedBy: hod.id, createdBy: pm.id, startDate: '2026-10-01', dueDate: '2026-10-15', priority: 'Medium', status: isWaiting ? 'Waiting Approval' : 'Pending', isCompleted: false, completionPercentage: isWaiting ? 60 : 20, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false, visibility: 'internal' };
     useStore.setState({ currentUser: user, users: [user, hod, pm], tasks: [task], clients: [], projects: [], notifications: [], rolePermissions: [], serviceCycles: [], deliverables: [], clientPlans: [], backend: { ...old.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   }, waiting);
@@ -67,7 +67,7 @@ test('All work HOD scope and queue tablists control distinct panels', async ({ p
     const staff = { id: 'scope-worker', name: 'Scope Worker', role: 'Staff', departments: ['Designer'], department: 'Designer' };
     enablePasswordResetBypass(hod.id);
     localStorage.setItem('aitask:locale', 'en');
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${hod.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${hod.id}`, 'acknowledged');
     useStore.setState({ currentUser: hod, users: [hod, staff], tasks: [], clients: [], projects: [], notifications: [], rolePermissions: [], serviceCycles: [], deliverables: [], clientPlans: [], backend: { ...old.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   });
   await page.goto('/tasks');

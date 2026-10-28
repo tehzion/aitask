@@ -206,7 +206,9 @@ const Layout: React.FC = () => {
       if (!main) return;
       main.scrollTop = 0;
       // A user may already have chosen a control before this deferred route focus runs.
-      if (document.activeElement !== main && main.contains(document.activeElement)) return;
+      const activeElement = document.activeElement;
+      if (activeElement !== main && main.contains(activeElement)) return;
+      if (activeElement instanceof HTMLElement && activeElement.matches('[data-global-search]')) return;
       main.focus({ preventScroll: true });
     });
     return () => window.cancelAnimationFrame(frame);

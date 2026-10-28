@@ -14,6 +14,7 @@ describe('task progress milestones', () => {
     expect(getTaskProgress(task(), users)).toBe(20);
     expect(getTaskProgress(task({ workState: { acceptedBy: staff.id } }), users)).toBe(30);
     expect(getTaskProgress(task({ status: 'In Progress' }), users)).toBe(30);
+    expect(getTaskProgress(task({ status: 'In Progress', revisionCount: 1 }), users)).toBe(50);
     expect(getTaskProgress(task({ status: 'Waiting Approval', completionPercentage: 100 }), users)).toBe(60);
     expect(getTaskProgress(task({ status: 'In Progress', clientApprovalStatus: 'Rejected' }), users)).toBe(50);
     expect(getTaskProgress(task({ status: 'Approved' }), users)).toBe(80);

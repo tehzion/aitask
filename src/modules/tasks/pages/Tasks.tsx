@@ -5,7 +5,7 @@ import { Link } from 'react-router-dom';
 import { useStore } from '../../../app/store/workspaceStore';
 import { safeHttpsUrl } from '../../../infrastructure/serialization/security';
 import { canCreateTasks, isBossKoo } from '../../../shared/authorization/access';
-import { getClientTaskStage } from '../../../shared/authorization/clientPortal';
+import { getClientTaskStage, getClientTaskStatusLabel } from '../../../shared/authorization/clientPortal';
 import { assignableTaskAssignees } from '../../../shared/authorization/taskWorkflowAccess';
 import { SkeletonMobileCard, SkeletonTableRow } from '../../../shared/components/SkeletonCard';
 import SystemMessage from '../../../shared/components/SystemMessage';
@@ -13,7 +13,7 @@ import { Badge, Button, PageHeader } from '../../../shared/components/ui';
 import { cardBase, inputBase, pageShell, tableShell } from '../../../shared/components/uiTokens';
 import '../../../shared/i18n/actionFeedbackCopy';
 import { formatLocalizedDate } from '../../../shared/i18n/i18n';
-import { getLocalizedDepartment, getLocalizedPriority, getLocalizedStatus } from '../../../shared/i18n/localeLabels';
+import { getLocalizedDepartment, getLocalizedPriority, getLocalizedTaskStatus } from '../../../shared/i18n/localeLabels';
 import { getTaskProgress } from '../../../shared/rules/taskProgress';
 import { type Priority, type Task } from '../../../shared/types/index';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../../../shared/utils/utils';
@@ -28,17 +28,11 @@ import { useTasksWorkspace } from '../hooks/useTasksWorkspace';
 
 const TasksWorkspace: React.FC = () => {
   const { isClientUser, t, locale, currentUser, rolePermissions, setCreateTaskModalOpen, quickSyncError, activeProject, clearRouteFilter, taskIdFilter, setSelectedTask, activeAssignee, periodRouteFilter, searchParams, setSearchParams, routeFocus, activeClient, canViewActiveClient, activeClientProfile, activeClientFallbackDetails, activeClientTasks, activeClientOpenTasks, activeClientCompletedTasks, activeClientProjects, activeClientWebsite, activeClientFacebook, dateFrom, dateTo, filterStatus, today, applyQuickFilter, searchInput, filteredTasks, setViewType, viewType, setFiltersOpen, filtersOpen, activeFilterLabels, hasAnyFilter, clearAllFilters, filterDepartment, setFilterDepartment, departmentOptions, filterAssignee, setFilterAssignee, assigneeOptions, filterClient, setFilterClient, clientOptions, setFilterStatus, taskStatuses, filterPriority, setFilterPriority, setDateFrom, setDateTo, backend, pagedTasks, handleRowContextMenu, users, canEditTask, handleQuickEditClick, getUserName, clientTaskAction, TABLE_COLUMN_COUNT, currentPage, setPage, totalPages, getDeptBadge, selectedTask, selectedLiveTask, activeQuickEdit, tasks, setActiveQuickEdit, updateTaskPriority, setQuickSyncError, persistQuickChange, canAssignOthers, updateTaskAssignee } = useTasksWorkspace();
-
-  const clientStatusLabel = (task: Task) => {
-    if (task.status === 'Cancelled') return 'Cancelled';
-    if (task.clientApprovalStatus === 'Approved') return 'Approved';
-    if (task.status === 'Approved' || task.status === 'Completed' || task.isCompleted) return 'Awaiting your review';
-    return 'In progress';
-  };
+  const projects = useStore(state => state.projects);
 
   const renderStatusControl = (task: Task) => (
     <span className={`inline-flex text-xs px-2.5 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
-      {isClientUser ? t(clientStatusLabel(task)) : getLocalizedStatus(task.status, locale)}
+      {isClientUser ? t(getClientTaskStatusLabel(task)) : getLocalizedTaskStatus(task.status, locale)}
     </span>
   );
 
@@ -364,7 +358,7 @@ const TasksWorkspace: React.FC = () => {
             {!isClientUser && <div className="relative">
               <select aria-label={t('Filter by status')} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
                 <option value="All">{t('All statuses')}</option>
-                {[...new Set([...taskStatuses, 'Approved'])].map(status => <option key={status} value={status}>{getLocalizedStatus(status, locale)}</option>)}
+                {[...new Set([...taskStatuses, 'Approved'])].map(status => <option key={status} value={status}>{getLocalizedTaskStatus(status, locale)}</option>)}
               </select>
               <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
             </div>}
@@ -762,7 +756,7 @@ const TasksWorkspace: React.FC = () => {
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 mb-1">{t('Status')}</label>
                 <span className={`inline-flex rounded-md px-2.5 py-1.5 text-xs font-semibold ${getStatusColor(currentTask.status)}`}>
-                  {getLocalizedStatus(currentTask.status, locale)}
+                  {getLocalizedTaskStatus(currentTask.status, locale)}
                 </span>
               </div>
 
@@ -811,7 +805,9 @@ const TasksWorkspace: React.FC = () => {
                   >
                     {(canAssignOthers
                       ? (() => {
-                          const options = assignableTaskAssignees(currentUser, currentTask.department, users, rolePermissions);
+                          const options = assignableTaskAssignees(currentUser, currentTask.department, users, rolePermissions, {
+                            project: currentTask.projectId ? projects.find(project => project.id === currentTask.projectId) : undefined,
+                          });
                           const current = users.find(u => u.id === currentTask.assignedTo);
                           return current && !options.some(u => u.id === current.id) ? [current, ...options] : options;
                         })()

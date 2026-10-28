@@ -38,8 +38,8 @@ const WorkflowTemplateManager = () => {
     }),
     findRecord: id => useStore.getState().serviceWorkflowTemplates.find(template => template.id === id),
     persist: (value, id) => saveWorkflowTemplate({ ...value, id }), remove: deleteWorkflowTemplate,
-    command: 'service_workflow.manage', savedMessage: 'Workflow saved. Existing client and cycle snapshots were not changed.',
-    deletedMessage: 'Workflow template deleted. Frozen copies in plans remain unchanged.',
+    command: 'service_workflow.manage', savedMessage: 'Workflow saved. Existing plans and monthly cycles keep their current task steps.',
+    deletedMessage: 'Workflow template deleted. Existing plans keep their current task steps.',
   });
   const [templateToDelete, setTemplateToDelete] = React.useState<ServiceWorkflowTemplate | null>(null);
 
@@ -65,7 +65,7 @@ const WorkflowTemplateManager = () => {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-5">
         <div>
           <h2 id="workflow-templates-title" className="font-semibold text-slate-950">{t('Task Workflow Templates')}</h2>
-          <p className="mt-1 text-sm text-slate-500">{t('Reusable internal task chains that are frozen with each client plan.')}</p>
+          <p className="mt-1 text-sm text-slate-500">{t('Create reusable task steps for new client plans. Existing plans keep the steps they were created with.')}</p>
         </div>
         <Button variant="secondary" onClick={() => edit()} disabled={saving || hasPending}><Workflow className="h-4 w-4" />{t('New workflow')}</Button>
       </div>
@@ -135,7 +135,7 @@ const WorkflowTemplateManager = () => {
         <ConfirmDialog
           labelledBy="delete-workflow-template-title"
           title={t(`Delete the "${templateToDelete.name}" workflow template?`)}
-          description={t('Plans that already froze this workflow keep their copy.')}
+          description={t('Deleting a workflow will not change task steps already added to plans. If a package or plan still uses it, deactivate it instead.')}
           confirmLabel={t('Delete workflow')}
           busy={saving}
           onClose={() => setTemplateToDelete(null)}

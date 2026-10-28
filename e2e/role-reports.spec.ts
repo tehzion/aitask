@@ -12,7 +12,7 @@ test('Account reports include assigned work and exclude other departments', asyn
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !/\/login$/.test(url.pathname));
   await waitForWorkspaceHydration(page);
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 

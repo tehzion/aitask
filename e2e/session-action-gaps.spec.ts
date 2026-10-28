@@ -13,7 +13,7 @@ const seedBoss = async (page: Page, provisionExistingPassword = false) => {
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
     if (provisionExistingPassword) await setLocalUserPassword(boss.id, DEFAULT_USER_PASSWORD);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     const readyBoss = { ...boss, mustResetPassword: false };
     useStore.setState({ currentUser: readyBoss, users: state.users.map(user => user.id === boss.id ? readyBoss : user), backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   }, provisionExistingPassword);
@@ -35,7 +35,7 @@ test('an old role response cannot clear another account’s in-flight role draft
     const { useStore } = await import('/src/app/store/workspaceStore.ts');
     const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     enablePasswordResetBypass('another-role-account');
-    localStorage.setItem('aitask:release-notice:2026-08-service-operations:another-role-account', 'acknowledged');
+    localStorage.setItem('aitask:release-notice:2026-10-project-workflows:another-role-account', 'acknowledged');
     useStore.setState(state => ({ currentUser: { ...state.currentUser!, id: 'another-role-account', mustResetPassword: false } }));
   });
   await expect(name).toHaveValue('');

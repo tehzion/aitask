@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { defaultRolePermissions } from '../../../shared/authorization/access';
 import { getLearningTrack, getVisibleTutorials, searchTutorials, tutorials } from './tutorials';
 
 describe('detailed tutorial catalogue', () => {
@@ -15,6 +16,26 @@ describe('detailed tutorial catalogue', () => {
     expect(clientTutorials.some(tutorial => tutorial.id === 'create-task')).toBe(false);
     expect(searchTutorials(clientTutorials, 'download', 'en').some(tutorial => tutorial.id === 'download-deliverables')).toBe(true);
     expect(searchTutorials(clientTutorials, '下载', 'zh').some(tutorial => tutorial.id === 'download-deliverables')).toBe(true);
+  });
+
+  it('hides action guides when effective permissions do not grant the action', () => {
+    const staffPermissions = { ...defaultRolePermissions.Staff, createTasks: false };
+    const staffGuides = getVisibleTutorials('staff', staffPermissions);
+    expect(staffGuides.some(tutorial => tutorial.id === 'create-task')).toBe(false);
+    expect(staffGuides.some(tutorial => tutorial.id === 'write-clear-task-brief')).toBe(false);
+    expect(staffGuides.some(tutorial => tutorial.id === 'view-assigned-tasks')).toBe(true);
+
+    const noTaskAccess = { ...defaultRolePermissions.Staff, viewTasks: false };
+    expect(getVisibleTutorials('staff', noTaskAccess).some(tutorial => tutorial.category === 'task-management')).toBe(false);
+
+    const noPlanAccess = { ...defaultRolePermissions['Project Manager'], manageClientPlans: false };
+    expect(getVisibleTutorials('projectManager', noPlanAccess).some(tutorial => tutorial.id === 'renew-service-plan')).toBe(false);
+
+    const clientCannotReview = { ...defaultRolePermissions.Client, clientReview: false };
+    expect(getVisibleTutorials('client', clientCannotReview).some(tutorial => tutorial.id === 'approve-deliverables')).toBe(false);
+
+    const managerCannotAddCompanies = { ...defaultRolePermissions['Project Manager'], createClients: false };
+    expect(getVisibleTutorials('projectManager', managerCannotAddCompanies).some(tutorial => tutorial.id === 'create-company')).toBe(false);
   });
 
   it('ranks business synonyms and searches instructional content', () => {

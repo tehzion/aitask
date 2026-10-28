@@ -114,7 +114,7 @@ const ManagementOverview: React.FC = () => {
       <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h2 id="management-overview-title" className="text-lg font-semibold text-ink">{t('Management overview')}</h2>
-          <p className="mt-1 text-sm text-muted">{t('Company-wide operational snapshot.')}</p>
+          <p className="mt-1 text-sm text-muted">{t('Organization-wide operations at a glance.')}</p>
         </div>
         <Link to="/reports" className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-accent hover:underline">
           {t('Open monthly report')} <ArrowRight className="h-4 w-4" aria-hidden="true" />
@@ -145,7 +145,7 @@ const ManagementOverview: React.FC = () => {
             {healthRows.map(row => {
               const isRisk = row.health.health === 'atRisk';
               return (
-                <Link key={row.project.id} to={`/tasks?projectId=${encodeURIComponent(row.project.id)}`} className="group flex items-center justify-between gap-4 px-5 py-3 transition hover:bg-inset/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/35">
+                <Link key={row.project.id} to={`/projects/${encodeURIComponent(row.project.id)}`} className="group flex items-center justify-between gap-4 px-5 py-3 transition hover:bg-inset/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/35">
                   <div className="min-w-0">
                     <p data-i18n-skip className="truncate text-sm font-semibold text-ink">{row.project.projectName}</p>
                     <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{row.project.clientName}</span> · {row.health.overdueCount} {t('overdue')} · {row.health.pendingApprovalCount} {t('pending reviews')}</p>

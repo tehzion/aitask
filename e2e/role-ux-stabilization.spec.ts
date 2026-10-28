@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const dismissReleaseNotice = async (page: Page) => {
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 };
@@ -113,27 +113,38 @@ test('Staff collapsed navigation is labelled and mobile layout remains accessibl
   expect(axe.violations, axe.violations.map(item => item.id).join(', ')).toEqual([]);
 });
 
-test('Staff and Boss dashboards stay accessible across desktop and mobile', async ({ page }) => {
-  for (const role of [
-    { username: 'Staff Demo', heading: 'My work' },
-    { username: 'Boss Koo', heading: 'Agency operations' },
-  ]) {
-    const viewports = [{ width: 390, height: 844 }, { width: 1280, height: 800 }];
-    for (const [index, viewport] of viewports.entries()) {
-      await page.setViewportSize(viewport);
-      if (index === 0) await signIn(page, role.username);
-      await page.goto('/');
-      await expect(page.getByRole('heading', { name: role.heading })).toBeVisible();
+const auditDashboardAccessibility = async (
+  page: Page,
+  role: { username: string; heading: string },
+  viewport: { width: number; height: number },
+) => {
+  await page.setViewportSize(viewport);
+  await signIn(page, role.username);
+  await page.goto('/');
+  await expect(page.getByRole('heading', { name: role.heading })).toBeVisible();
 
-      const mainAxe = await new AxeBuilder({ page }).include('main').analyze();
-      expect(mainAxe.violations, `${role.username} ${viewport.width}px dashboard: ${mainAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
-      if (viewport.width < 768) {
-        const navigationAxe = await new AxeBuilder({ page }).include('[aria-label="Mobile navigation"]').analyze();
-        expect(navigationAxe.violations, `${role.username} ${viewport.width}px mobile navigation: ${navigationAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
-      }
-    }
-    await page.getByRole('button', { name: 'Logout' }).click();
+  const mainAxe = await new AxeBuilder({ page }).include('main').analyze();
+  expect(mainAxe.violations, `${role.username} ${viewport.width}px dashboard: ${mainAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
+  if (viewport.width < 768) {
+    const navigationAxe = await new AxeBuilder({ page }).include('[aria-label="Mobile navigation"]').analyze();
+    expect(navigationAxe.violations, `${role.username} ${viewport.width}px mobile navigation: ${navigationAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);
   }
+};
+
+test('Staff mobile dashboard stays accessible', async ({ page }) => {
+  await auditDashboardAccessibility(page, { username: 'Staff Demo', heading: 'My work' }, { width: 390, height: 844 });
+});
+
+test('Staff desktop dashboard stays accessible', async ({ page }) => {
+  await auditDashboardAccessibility(page, { username: 'Staff Demo', heading: 'My work' }, { width: 1280, height: 800 });
+});
+
+test('Boss mobile dashboard stays accessible', async ({ page }) => {
+  await auditDashboardAccessibility(page, { username: 'Boss Koo', heading: 'Agency operations' }, { width: 390, height: 844 });
+});
+
+test('Boss desktop dashboard stays accessible', async ({ page }) => {
+  await auditDashboardAccessibility(page, { username: 'Boss Koo', heading: 'Agency operations' }, { width: 1280, height: 800 });
 });
 
 test('Staff sees a clear approvals denial while Boss Koo keeps the Project Manager workspace', async ({ page }) => {

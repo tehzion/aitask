@@ -84,6 +84,36 @@ describe('PM to HOD routing', () => {
     useStore.setState({ users: [pm, staff, client], projects: [{ ...project, hodMemberIds: [] }] });
     expect(useStore.getState().addTask({ ...taskDraft, assignmentState: 'pending_hod' })).toBe('');
   });
+
+  it('creates a direct Staff assignment when this project has no HOD', () => {
+    const fallbackProject = { ...project, hodMemberIds: [], staffMemberIds: [staff.id] };
+    useStore.setState({ projects: [fallbackProject] });
+    const id = useStore.getState().addTask({ ...taskDraft, assignedTo: staff.id });
+    expect(id).toBeTruthy();
+    expect(useStore.getState().tasks[0]).toMatchObject({ assignedTo: staff.id });
+    expect(useStore.getState().tasks[0].responsibleHodId).toBeUndefined();
+    expect(useStore.getState().tasks[0].assignmentState).toBeUndefined();
+  });
+
+  it('keeps an unassigned no-HOD task accountable to its creating PM', () => {
+    const fallbackProject = { ...project, hodMemberIds: [], staffMemberIds: [staff.id] };
+    useStore.setState({ projects: [fallbackProject] });
+    const id = useStore.getState().addTask({ ...taskDraft, assignedTo: '' });
+    expect(id).toBeTruthy();
+    expect(useStore.getState().tasks[0]).toMatchObject({
+      assignedTo: '',
+      createdBy: pm.id,
+      assignedBy: pm.id,
+      assignmentState: 'needs_hod',
+    });
+    expect(useStore.getState().tasks[0].responsibleHodId).toBeUndefined();
+  });
+
+  it('rejects a same-department Staff member who is not a member of this project', () => {
+    const foreignStaff = { ...staff, id: 'routing-foreign-staff' };
+    useStore.setState({ users: [pm, hod, staff, foreignStaff, client], projects: [{ ...project, hodMemberIds: [], staffMemberIds: [staff.id] }] });
+    expect(useStore.getState().addTask({ ...taskDraft, assignedTo: foreignStaff.id })).toBe('');
+  });
 });
 
 describe('HOD delegation state', () => {
@@ -104,5 +134,32 @@ describe('HOD delegation state', () => {
     expect(useStore.getState().overrideTaskAssignee(id, staff.id, 'Urgent client escalation').ok).toBe(true);
     expect(useStore.getState().tasks[0].assignmentOverride?.reason).toBe('Urgent client escalation');
     expect(useStore.getState().tasks[0].workHistory?.at(-1)?.fields).toEqual(expect.arrayContaining(['assignedTo', 'assignmentState', 'assignmentOverride']));
+  });
+
+  it('lets a PM use the direct fallback when only an unrelated project has a department HOD', () => {
+    const fallbackProject = { ...project, hodMemberIds: [], staffMemberIds: [staff.id] };
+    const task: Task = { ...taskDraft, id: 'fallback-task', assignedTo: '', projectId: fallbackProject.id, createdBy: pm.id };
+    useStore.setState({ projects: [fallbackProject], tasks: [task] });
+    expect(useStore.getState().updateTaskAssignee(task.id, staff.id)).toMatchObject({ ok: true });
+    expect(useStore.getState().tasks[0]).toMatchObject({ assignedTo: staff.id });
+  });
+
+  it('keeps the full edit assignment path aligned with the quick assignment path', () => {
+    const fallbackProject = { ...project, hodMemberIds: [], staffMemberIds: [staff.id] };
+    const task: Task = { ...taskDraft, id: 'fallback-full-edit', assignedTo: '', projectId: fallbackProject.id, createdBy: pm.id };
+    useStore.setState({ projects: [fallbackProject], tasks: [task] });
+    expect(useStore.getState().updateTask(task.id, { assignedTo: staff.id })).toMatchObject({ ok: true });
+    expect(useStore.getState().tasks[0]).toMatchObject({ assignedTo: staff.id });
+  });
+
+  it('rejects inactive and project-unassigned users before local assignment changes', () => {
+    const inactive = { ...staff, id: 'routing-inactive-staff', hasLogin: false };
+    const foreign = { ...staff, id: 'routing-foreign-staff' };
+    const fallbackProject = { ...project, hodMemberIds: [], staffMemberIds: [staff.id] };
+    const task: Task = { ...taskDraft, id: 'fallback-task', assignedTo: '', projectId: fallbackProject.id, createdBy: pm.id };
+    useStore.setState({ users: [pm, hod, staff, inactive, foreign, client], projects: [fallbackProject], tasks: [task] });
+    expect(useStore.getState().updateTaskAssignee(task.id, inactive.id).ok).toBe(false);
+    expect(useStore.getState().updateTaskAssignee(task.id, foreign.id).ok).toBe(false);
+    expect(useStore.getState().tasks[0].assignedTo).toBe('');
   });
 });

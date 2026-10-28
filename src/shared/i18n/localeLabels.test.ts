@@ -5,6 +5,7 @@ import {
 	getLocalizedPriority,
 	getLocalizedRole,
 	getLocalizedStatus,
+	getLocalizedTaskStatus,
 } from './localeLabels';
 
 describe('locale-aware enum labels', () => {
@@ -15,6 +16,12 @@ describe('locale-aware enum labels', () => {
     expect(getLocalizedDepartment('Designer', 'zh')).toBe('设计');
     expect(getLocalizedPriority('Urgent', 'zh')).toBe('紧急');
     expect(getLocalizedDevice('Mobile', 'zh')).toBe('手机');
+  });
+
+  it('uses one task-specific label for review and approval states', () => {
+    expect(getLocalizedTaskStatus('Waiting Approval', 'en')).toBe('Waiting for review');
+    expect(getLocalizedTaskStatus('Waiting Approval', 'zh')).toBe('待审核');
+    expect(getLocalizedTaskStatus('Approved', 'en')).toBe('Review approved');
   });
 
   it('preserves custom values exactly', () => {

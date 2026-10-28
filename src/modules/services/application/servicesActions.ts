@@ -165,7 +165,7 @@ export const createServicesActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     ];
     const referenced = frozenWorkflows.some(workflow => workflow?.templateId === id);
     if (referenced) {
-      return { ok: false, error: 'This workflow is frozen into existing packages or plans. Deactivate it instead of deleting.' };
+      return { ok: false, error: 'This task workflow is still in use. Deactivate it to stop using it for new plans.' };
     }
     set(current => ({
       serviceWorkflowTemplates: current.serviceWorkflowTemplates.filter(item => item.id !== id),
@@ -663,7 +663,7 @@ export const createServicesActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     const cycle = state.serviceCycles.find(item => item.id === deliverable.cycleId);
     const serviceItem = cycle?.serviceItems.find(item => item.id === deliverable.serviceItemId);
     const workflow = serviceItem?.workflow;
-    if (!cycle || !workflow?.steps.length) return { ok: false, error: 'This service item has no frozen task workflow.' };
+    if (!cycle || !workflow?.steps.length) return { ok: false, error: 'This service item has no saved task steps to include in the cycle.' };
     const existing = state.tasks.filter(task => task.deliverableId === deliverable.id && task.generatedFromDeliverable);
     if (existing.length) return { ok: true, taskIds: existing.sort((a, b) => (a.workflowStepOrder || 0) - (b.workflowStepOrder || 0)).map(task => task.id) };
     if (!canCreateTasks(actor, state.rolePermissions)) return { ok: false, error: 'You do not have permission to create tasks.' };

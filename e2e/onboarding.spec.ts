@@ -29,7 +29,7 @@ const loginWithDemo = async (page: import('@playwright/test').Page, username: st
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 };
@@ -43,7 +43,7 @@ const promoteDemoToFreshMember = async (page: import('@playwright/test').Page, i
   // The release notice is keyed by user id, so changing the demo identity
   // creates a fresh notice as well. Dismiss that app-level modal before
   // asserting the onboarding experience.
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 };
@@ -123,5 +123,5 @@ test('client onboarding stays scoped to client-visible guidance', async ({ page 
 
   await page.goto('/help');
   await expect(page.getByRole('heading', { name: 'Client guide' })).toBeVisible();
-  await expect(page.getByText(/Internal notes, team assignments, and internal workflow stay private/)).toBeVisible();
+  await expect(page.getByText(/Internal notes, staff assignments, and team review steps stay private/)).toBeVisible();
 });

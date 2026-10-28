@@ -7,7 +7,7 @@ import {
 	translateUiText,
 	type AppLocale,
 } from '../i18n/i18n';
-import { getLocalizedDepartment, getLocalizedPriority, getLocalizedStatus } from '../i18n/localeLabels';
+import { getLocalizedDepartment, getLocalizedPriority, getLocalizedTaskStatus } from '../i18n/localeLabels';
 import { formatMessage, isMessageId, type MessageDescriptor, type MessageId, type MessageValues } from '../i18n/messages';
 import { userFacingMessage } from '../utils/userFacingMessage';
 import { cn } from '../utils/utils';
@@ -35,7 +35,7 @@ export const I18nProvider: React.FC<React.PropsWithChildren> = ({ children }) =>
     if (typeof safeValue === 'object' || isMessageId(safeValue)) {
       const descriptor = typeof safeValue === 'object' ? safeValue : { id: safeValue as MessageId, values };
       const localized = { ...descriptor.values };
-      if (descriptor.id === 'task.statusUpdated' && typeof localized.status === 'string') localized.status = getLocalizedStatus(localized.status, locale);
+      if (descriptor.id === 'task.statusUpdated' && typeof localized.status === 'string') localized.status = getLocalizedTaskStatus(localized.status, locale);
       if (descriptor.id === 'task.priorityUpdated' && typeof localized.priority === 'string') localized.priority = getLocalizedPriority(localized.priority, locale);
       if (descriptor.id === 'errors.assigneeDepartment' && typeof localized.department === 'string') localized.department = getLocalizedDepartment(localized.department, locale);
       return formatMessage({ ...descriptor, values: localized }, locale);

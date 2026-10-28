@@ -174,7 +174,7 @@ try {
   await page.getByLabel('Email', { exact: true }).fill(account.email);
   await page.getByLabel('Password', { exact: true }).fill(password);
   await page.getByRole('button', { name: 'Access Dashboard', exact: true }).click();
-  await page.getByRole('button', { name: 'Happy working', exact: true }).click();
+  await page.getByRole('button', { name: 'Continue to AiTask', exact: true }).click();
   const openEditor = async () => {
     await page.goto(`${base}tasks?taskId=status-task`);
     const browserState = await page.evaluate(async () => {
@@ -234,17 +234,12 @@ try {
   console.log('[hod-status] Workspace returned to idle after the confirmed browser retry.');
   await page.route('**/rest/v1/rpc/aitask_execute_command', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, code: 'FORBIDDEN', error: 'You do not have permission to make this change.' }) }));
   await dialog.getByRole('button', { name: 'Start work', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('correct the rejected change');
+  await expect(dialog.getByRole('alert')).toContainText('You do not have permission to make this change.');
   await expect(dialog.getByRole('button', { name: 'Retry my changes', exact: true })).toHaveCount(0);
   assert.equal(canonicalStatus('status-task'), 'Pending', 'Rejected browser change was not persisted');
-  if (process.env.AITASK_HOD_STATUS_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.AITASK_HOD_STATUS_EVIDENCE_DIR}/rejected-status-recovery.png`, fullPage: true });
-  await page.unroute('**/rest/v1/rpc/aitask_execute_command');
-  await dialog.getByRole('button', { name: 'Restore saved data', exact: true }).click();
-  await page.getByRole('dialog', { name: 'Discard unsaved changes?' })
-    .getByRole('button', { name: 'Discard changes', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toHaveCount(0, { timeout: 20000 });
   await expect(dialog.getByText('Pending', { exact: true })).toBeVisible();
-  await expect(dialog.getByText('Wait for the current save to finish before making another change.', { exact: true })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Restore saved data', exact: true })).toHaveCount(0);
+  await page.unroute('**/rest/v1/rpc/aitask_execute_command');
   await expect(dialog.getByRole('button', { name: 'Start work', exact: true })).toBeEnabled();
   await dialog.getByRole('button', { name: 'Start work', exact: true }).click();
   await expect.poll(() => canonicalStatus('status-task')).toBe('In Progress');

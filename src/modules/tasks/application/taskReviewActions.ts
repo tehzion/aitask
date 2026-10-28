@@ -26,6 +26,29 @@ export const attachTaskOutput = (state: StoreState, set: (patch: Partial<StoreSt
   return { ok: true };
 };
 
+export const attachTaskSupportingFile = (state: StoreState, set: (patch: Partial<StoreState>) => void, pendingMessage: string, taskId: string, attachment: AttachmentRef): MutationActionResult => {
+  const task = state.tasks.find(item => item.id === taskId); const actor = state.currentUser;
+  if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMessage };
+  const scope = { users: state.users, clients: state.clients, projects: state.projects };
+  if (!task || !actor || actor.role === 'Client' || !canEditTask(actor, task, state.rolePermissions, scope)
+    || (task.assignedTo !== actor.id && !canManageTaskReview(actor, task, state.rolePermissions, scope))) return { ok: false, error: 'Only the assigned worker or responsible reviewer can upload supporting files.' };
+  if (['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status)) return { ok: false, error: 'Supporting files cannot be changed after this task is submitted or closed.' };
+  const parts = attachment.path.split('/');
+  const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+  if (attachment.bucket !== 'task-supporting-files' || attachment.uploadedBy !== actor.id
+    || parts.length !== 3 || parts[0] !== SECURE_WORKSPACE_ID || parts[1] !== task.id
+    || !parts[2].startsWith(`${attachment.id}-`) || parts.some(part => !part || part === '.' || part === '..')
+    || attachment.path.includes('\\') || !allowedTypes.has(attachment.mimeType)
+    || !Number.isFinite(attachment.sizeBytes) || attachment.sizeBytes < 0 || attachment.sizeBytes > 100 * 1024 * 1024) {
+    return { ok: false, error: 'Choose a valid PDF or image file for this task.' };
+  }
+  if (task.supportingAttachments?.some(file => file.path === attachment.path)) return { ok: true };
+  if ((task.supportingAttachments?.length || 0) >= 50) return { ok: false, error: 'A task can contain at most 50 supporting files.' };
+  const next = recordTaskWorkTransition(task, { ...task, supportingAttachments: [...(task.supportingAttachments || []), attachment], updatedAt: new Date().toISOString() }, actor.id);
+  set({ tasks: state.tasks.map(item => item.id === task.id ? next : item), ...(state.backend.mode === 'supabase' ? { backend: { ...state.backend, hasLocalChanges: true, pendingMutations: 1, pendingCommandType: 'task.update' as const } } : {}) });
+  return { ok: true };
+};
+
 export const setTaskReviewConfig = (state: StoreState, set: (patch: Partial<StoreState>) => void, pendingMessage: string, notify: (ids: string[], data: { title: string; message: string; route: { page: 'tasks'; entityId: string }; iconType: 'status' }, exclude: string) => import('../../../shared/types/index').AppNotification[], taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string; requiresInternalApproval?: boolean; approvalMode?: Task['approvalMode'] }): MutationActionResult => {
   const task = state.tasks.find(item => item.id === taskId); const actor = state.currentUser;
   if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMessage };

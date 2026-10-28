@@ -30,7 +30,7 @@ select is((select data->>'clientApprovalStatus' from public.aitask_entities wher
 select is((select (data->>'isCompleted')::boolean and (data->>'completionPercentage')::integer=100 from public.aitask_entities where workspace_id='visible-completion-test' and entity_id='visible-task'),true,'client-visible completion is recorded at 100 percent');
 
 select is((pg_temp.complete_task('internal-task')->>'ok')::boolean,true,'a project manager can complete internal approved work');
-select is((select data->>'clientApprovalStatus' from public.aitask_entities where workspace_id='visible-completion-test' and entity_id='internal-task'),'Approved','internal completion keeps immediate acceptance');
+select is((select data->>'clientApprovalStatus' from public.aitask_entities where workspace_id='visible-completion-test' and entity_id='internal-task'),'Pending','internal completion leaves Client acceptance pending');
 
 reset role;
 select * from finish();

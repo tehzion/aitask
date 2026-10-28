@@ -12,7 +12,7 @@ const seed = async (page: Page) => {
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
     localStorage.setItem('aitask:locale', 'en');
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false },
       users: [boss, { id: 'owner-qa-pm', name: 'Owner QA PM', role: 'Project Manager', department: 'Designer', departments: ['Designer'] }],
       clients: [{ id: 'recovery-qa-client', clientName: 'Recovery QA Company', createdAt: '2026-10-01', updatedAt: '2026-10-01' }],
@@ -201,7 +201,7 @@ for (const action of ['owner', 'deletion'] as const) {
       const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
       enablePasswordResetBypass('other-recovery-boss');
-      localStorage.setItem('aitask:release-notice:2026-08-service-operations:other-recovery-boss', 'acknowledged');
+      localStorage.setItem('aitask:release-notice:2026-10-project-workflows:other-recovery-boss', 'acknowledged');
       useStore.setState(state => ({ currentUser: { ...state.currentUser!, id: 'other-recovery-boss', mustResetPassword: false },
         tasks: [], clients: [], backend: { ...state.backend, hasLocalChanges: false, pendingMutations: 0 } }));
     });

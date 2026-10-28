@@ -5,6 +5,7 @@ import { formatLocalizedDate } from '../../../shared/i18n/i18n';
 import type { ClientServicePlan, ServiceCycle } from '../../../shared/types/index';
 import { getTodayInputDate, parseOptionalDate } from '../../../shared/utils/utils';
 import { getCurrentPlanCycle } from '../../dashboard/domain/dashboardData';
+import ContextualTutorialLink from '../../help/components/ContextualTutorialLink';
 
 const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upcomingPlan, onCreateNextPlan, onViewNextPlan, onViewCycle, onViewHistory }: {
   plan: ClientServicePlan;
@@ -42,7 +43,7 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
   return <section aria-label={t('Monthly update schedule')} className="rounded-panel border border-line bg-surface px-5 py-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 className="font-semibold text-ink">{t('Monthly Plan Overview')}</h2>
+        <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-ink">{t('Monthly Plan Overview')}</h2>{canManagePlans && <ContextualTutorialLink tutorialId="renew-service-plan" label={t('help.planRenewalGuide')} />}</div>
         <p className="mt-1 text-sm font-medium text-ink" data-i18n-skip>{plan.name}</p>
       </div>
       <div className="flex flex-wrap gap-2">

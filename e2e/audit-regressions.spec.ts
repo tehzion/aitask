@@ -8,7 +8,7 @@ const seedPlan = async (page: Page) => {
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], tasks: [], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], servicePricingSnapshots: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     const created = useStore.getState().createClientWithPlan({ clientName: 'Audit Client', planName: 'Original', origin: 'custom', serviceItems: [{ id: 'audit-item', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 100 }], startDate: '2026-08-15', billingDay: 15, discountType: 'none', discountValue: 0, taxRateBps: 0 });
     useStore.getState().activateClientPlan(created.planId!);
@@ -229,7 +229,7 @@ test('browser back and programmatic palette navigation preserve a declined draft
   const { clientId } = await seedPlan(page);
   // Build a same-document router history entry; page.goto creates a new
   // document that React Router's navigation blocker cannot intercept.
-  await page.getByRole('link', { name: 'Companies', exact: true }).click();
+  await page.getByRole('link', { name: 'Companies & projects', exact: true }).click();
   await page.locator(`main a[href="/clients/${clientId}"]:visible`).first().click();
   await page.getByRole('tab', { name: 'Plan', exact: true }).click();
   await page.getByLabel('Plan name', { exact: true }).fill('Protected draft');

@@ -10,7 +10,7 @@ const seedHod = async (page: Page, options: { recipients?: boolean; manage?: boo
     const state = useStore.getState();
     const hod = { id: 'audit-hod', name: 'Audit HOD', role: 'HOD', department: 'Video Editor', departments: ['Video Shooting', 'Video Editor'], permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: manage !== false }, mustResetPassword: false };
     enablePasswordResetBypass(hod.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${hod.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${hod.id}`, 'acknowledged');
     const users = [hod, { id: 'audit-pm', name: 'Audit PM', role: 'Project Manager', department: 'Management', departments: ['Management'] }, { id: 'audit-designer', name: 'Audit Designer', role: 'Staff', department: 'Designer', departments: ['Designer'] }];
     if (recipients !== false) users.push({ id: 'audit-editor', name: 'Audit Editor', role: 'Staff', department: 'Video Editor', departments: ['Video Editor'] });
     const base = { clientName: 'Audit Co', serviceType: 'Video Editing', description: '', startDate: '2026-10-01', dueDate: '2026-10-10', status: 'Pending', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false, recurrenceFrequency: 'None', comments: [], approvalHistory: [], visibility: 'internal' };
@@ -90,7 +90,7 @@ test('HOD task creation includes populated Boss-curated projects while excluding
   await page.goto('/tasks');
   await page.getByRole('button', { name: 'Create task', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Create task', exact: true });
-  const choices = dialog.getByRole('combobox', { name: /Link to Company/ });
+  const choices = dialog.getByRole('combobox', { name: /^Project/ });
   await expect(choices.locator('option[value="curated-project"]')).toHaveCount(1);
   await expect(choices.locator('option[value="foreign-project"]')).toHaveCount(0);
 });

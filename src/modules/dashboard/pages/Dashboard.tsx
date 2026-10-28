@@ -22,7 +22,7 @@ import { useColorTheme } from '../../../app/lifecycle/useColorTheme';
 import BackendFreshness from '../../../app/shell/BackendFreshness';
 import { useStore } from '../../../app/store/workspaceStore';
 import { isLocalServiceDemoEnabled, LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID } from '../../../mock/localServiceDemo';
-import { canCreateTasks, getClientKey, getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo } from '../../../shared/authorization/access';
+import { canCreateTasks, getClientKey, getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo, isHodUser } from '../../../shared/authorization/access';
 import { getClientTaskStage } from '../../../shared/authorization/clientPortal';
 import { getMemberDepartments } from '../../../shared/authorization/departments';
 import { useI18n } from '../../../shared/components/I18nProvider';
@@ -247,13 +247,15 @@ const Dashboard: React.FC = () => {
       : [],
     [currentUser, showStaffOperations, tasks]
   );
-  const dashboardDescription = currentUser?.role === 'Staff' || currentUser?.role === 'HOD'
-    ? staffAssignedTasks.length > 0
-      ? <>{t('Welcome back,')} <span data-i18n-skip>{currentUser.name}</span>{t('. Here is what needs your attention and what you have completed.')}</>
-      : <>{t('Welcome back,')} <span data-i18n-skip>{currentUser.name}</span>{t('. Your assigned and department-scoped work will appear here.')}</>
-    : hasTaskData
-      ? <>{t('Welcome back,')} <span data-i18n-skip>{currentUser?.name}</span>{t("! Here's your task overview.")}</>
-      : <>{t('Welcome back,')} <span data-i18n-skip>{currentUser?.name}</span>{t('! Your live workspace is ready.')}</>;
+  const dashboardDescription = isBossKoo(currentUser)
+    ? t('dashboard.bossDescription')
+    : currentUser?.role === 'Project Manager'
+      ? t('dashboard.projectManagerDescription')
+      : showClientPortal
+        ? t({ id: 'dashboard.clientDescription', values: { company: currentUser?.companyName || t('your company') } })
+        : isHodUser(currentUser, rolePermissions)
+          ? t('dashboard.hodDescription')
+          : t('dashboard.staffDescription');
 
   const stats = useMemo(() => {
     const weekRange = getWorkWeekRange(today);
@@ -440,6 +442,7 @@ const Dashboard: React.FC = () => {
   if (currentUser?.role === 'Project Manager' && !isBossKoo(currentUser)) return (
     <div className={pageShell}>
       <PageHeader
+        actionBreakpoint="xl"
         title={t('Portfolio work')}
         description={t('Deadlines, review risk, active companies, and commercial records in your portfolio.')}
         onboardingTarget="dashboard-overview"
@@ -467,11 +470,10 @@ const Dashboard: React.FC = () => {
     <>
     <div className={pageShell}>
       <PageHeader
+        actionBreakpoint="xl"
         title={isBossKoo(currentUser) ? t('Agency operations') : currentUser?.role === 'Project Manager' ? t('Portfolio work') : showClientPortal ? t('Home') : t('Dashboard')}
         onboardingTarget="dashboard-overview"
-        description={showClientPortal
-          ? <>{t('Deliveries waiting for review, upcoming work, and shared updates for')} <span data-i18n-skip>{currentUser?.companyName || 'your company'}</span>.</>
-          : dashboardDescription}
+        description={dashboardDescription}
         action={(
           <div className="flex flex-wrap items-center gap-2.5">
             <BackendFreshness />
@@ -662,8 +664,23 @@ const Dashboard: React.FC = () => {
                   {filteredPortfolioRows.length === 0 ? (
                     <p className="px-5 py-6 text-sm text-muted">{t('No companies or projects match this owner yet.')}</p>
                   ) : (
-                    <div className="overflow-x-auto">
+                    <>
+                    <p id="portfolio-monitor-scroll-help" className="px-5 pt-3 text-xs text-muted">{t('dashboard.portfolioMonitor.scrollHelp')}</p>
+                    <div
+                      className="overflow-x-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent"
+                      tabIndex={0}
+                      role="region"
+                      aria-label={t('dashboard.portfolioMonitor.table')}
+                      aria-describedby="portfolio-monitor-scroll-help"
+                      onKeyDown={event => {
+                        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+                          event.currentTarget.scrollBy({ left: event.key === 'ArrowRight' ? 96 : -96, behavior: 'auto' });
+                          event.preventDefault();
+                        }
+                      }}
+                    >
                       <table className="w-full min-w-[560px] text-left text-sm">
+                        <caption className="sr-only">{t('dashboard.portfolioMonitor.table')}</caption>
                         <thead className="border-b border-line/60 bg-inset/40 text-xs tracking-wide text-muted">
                           <tr>
                             <th className="px-5 py-3 font-semibold">{t('Type')}</th>
@@ -710,6 +727,7 @@ const Dashboard: React.FC = () => {
                         </div>
                       </div>
                     </div>
+                    </>
                   )}
                 </section>
 

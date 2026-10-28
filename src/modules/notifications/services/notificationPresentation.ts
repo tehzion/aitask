@@ -1,5 +1,5 @@
 import { type AppLocale } from '../../../shared/i18n/i18n';
-import { getLocalizedRole, getLocalizedStatus } from '../../../shared/i18n/localeLabels';
+import { getLocalizedRole, getLocalizedTaskStatus } from '../../../shared/i18n/localeLabels';
 import type { AppNotification, NotificationCategory } from '../../../shared/types/index';
 import { classifyNotification, notificationCategoryLabels, notificationIconType } from './notificationCenter';
 
@@ -21,7 +21,7 @@ const patterns: [RegExp, (...values: string[]) => string][] = [
   [/^"([\s\S]+)" is ready for department review\.$/, title => `“${title}”已准备好进行部门审核。`],
   [/^"([\s\S]+)" is ready for review\.$/, title => `“${title}”已准备好进行审核。`],
   [/^"([\s\S]+)" is ready for client review\.$/, title => `“${title}”已准备好供客户审阅。`],
-  [/^"([\s\S]+)" was moved to (.+) by ([\s\S]+)\.$/, (title, status, name) => `${name}已将“${title}”移至${getLocalizedStatus(status, 'zh')}。`],
+  [/^"([\s\S]+)" was moved to (.+) by ([\s\S]+)\.$/, (title, status, name) => `${name}已将“${title}”移至${getLocalizedTaskStatus(status, 'zh')}。`],
   [/^"([\s\S]+)" was approved by ([\s\S]+)\.$/, (title, name) => `${name}已通过“${title}”的审核。`],
   [/^"([\s\S]+)" has been assigned to you by ([\s\S]+)\.$/, (title, name) => `${name}已将“${title}”分配给您。`],
   [/^You have been assigned a new task: "([\s\S]+)"\.$/, title => `您收到新任务：“${title}”。`],

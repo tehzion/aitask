@@ -73,7 +73,8 @@
     "projects": {
       "public": [
         "components/CreateProjectModal.tsx",
-        "pages/Clients.tsx"
+        "pages/Clients.tsx",
+        "pages/ProjectWorkspace.tsx"
       ],
       "composition": [
         "application/projectsActions.ts"

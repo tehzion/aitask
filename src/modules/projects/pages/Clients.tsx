@@ -40,7 +40,6 @@ import { resolveClientAddedDate } from '../../clients/domain/clientDates';
 import ContextualTutorialLink from '../../help/components/ContextualTutorialLink';
 import CreateClientPlanModal from '../../services/components/CreateClientPlanModal';
 import CreateProjectModal from '../components/CreateProjectModal';
-import ProjectManagementPanel from '../components/ProjectManagementPanel';
 
 type ClientSource = 'Profile' | 'Task' | 'Company' | 'Account';
 
@@ -206,7 +205,6 @@ const Clients: React.FC = () => {
   const [isCreateClientOpen, setIsCreateClientOpen] = React.useState(false);
   const [isCreateProjectOpen, setIsCreateProjectOpen] = React.useState(false);
   const [editingProject, setEditingProject] = React.useState<Project | null>(null);
-  const [managedProjectId, setManagedProjectId] = React.useState('');
   const [initialProjectClientId, setInitialProjectClientId] = React.useState('');
   const [planClientId, setPlanClientId] = React.useState('');
   const [openMenuClientKey, setOpenMenuClientKey] = React.useState<string | null>(null);
@@ -797,8 +795,9 @@ const Clients: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title={isClientUser ? t('Company profile') : t('Companies')}
-        description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : canSeeAllClients ? t('The complete client database for company details, contacts, accounts, services, and linked work.') : t('Companies in your portfolio.')}
+        actionBreakpoint="xl"
+        title={isClientUser ? t('Company profile') : t('projects.pageTitle')}
+        description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : t('projects.pageDescription')}
         onboardingTarget="projects-overview"
         meta={<><span>{clients.length} {t('visible companies')}</span><span aria-hidden="true">·</span><span>{totalTasks} {t('linked tasks')}</span></>}
         action={<div className="flex flex-wrap gap-2">
@@ -808,6 +807,8 @@ const Clients: React.FC = () => {
           {canAddTasks && <Button data-onboarding-target="create-task" variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
         </div>}
       />
+
+      {!isClientUser && <p className="-mt-3 max-w-4xl text-xs leading-5 text-muted">{t('projects.terminologyHelp')}</p>}
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2 border-y border-line/70 py-3 text-sm" aria-label={t('Client summary')}>
         {(isClientUser
@@ -827,7 +828,7 @@ const Clients: React.FC = () => {
           <table className="w-full min-w-[1180px] text-left text-sm">
             <thead className="sticky top-0 z-[1] border-b border-line bg-inset text-xs text-muted">
               <tr>
-                <th className="px-5 py-4 font-semibold">{t('Company / Client')}</th>
+                <th className="px-5 py-4 font-semibold">{t('Company')}</th>
                 <th className="px-5 py-4 font-semibold">{t('Contact')}</th>
                 <th className="px-5 py-4 font-semibold">{t('Services')}</th>
                 <th className="px-5 py-4 font-semibold">{t('Tasks')}</th>
@@ -1309,7 +1310,7 @@ const Clients: React.FC = () => {
                             <p className="mt-0.5 text-xs text-slate-500">{t('Start date')}: {project.startDate || '—'} · {t('Deadline')}: {project.deadline || '—'}</p>
                           </div>
                           <div className="flex flex-wrap gap-2">
-                            <button type="button" onClick={() => setManagedProjectId(project.id)} className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-blue-700">{t('Open project')}</button>
+                            <Link to={`/projects/${encodeURIComponent(project.id)}`} className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40">{t('Open project')}</Link>
                             {canEditProject(currentUser, project, rolePermissions) && (
                               <button type="button" onClick={() => openProjectEditor(project)} className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50">{t('Edit project')}</button>
                             )}
@@ -1476,11 +1477,6 @@ const Clients: React.FC = () => {
         onClose={closeProjectEditor}
         onClientCreated={() => navigate('/projects', { replace: true })}
       />
-      {managedProjectId && <ProjectManagementPanel
-        projectId={managedProjectId}
-        onClose={() => setManagedProjectId('')}
-        onEdit={value => { setManagedProjectId(''); openProjectEditor(value); }}
-      />}
       {planClientId && <CreateClientPlanModal
         client={clientProfiles.find(client => client.id === planClientId)}
         onClose={() => setPlanClientId('')}

@@ -12,13 +12,14 @@ test('staff submission reaches the department HOD inbox and opens pending work',
     const hod = { ...staff, id: 'handoff-hod', name: 'Review HOD', role: 'HOD', customRoleId: undefined, customRoleName: undefined };
     enablePasswordResetBypass(staff.id);
     enablePasswordResetBypass(hod.id);
-    for (const user of [staff, hod]) localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${user.id}`, 'acknowledged');
+    for (const user of [staff, hod]) localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${user.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', 'en');
     useStore.setState({ currentUser: staff, users: [staff, hod], rolePermissions: [], clients: [], projects: [], clientPlans: [], deliverables: [], serviceCycles: [], notifications: [], tasks: [{ ...state.tasks[0], generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, id: 'handoff-task', title: 'Artwork for HOD review', clientName: 'Handoff Company', clientId: undefined, projectId: undefined, department: 'Designer', assignedTo: staff.id, assignedBy: hod.id, createdBy: hod.id, status: 'In Progress', isCompleted: false, revisionCount: 0, completionPercentage: 50, predecessorTaskIds: [], deliverableId: undefined, serviceCycleId: undefined, visibility: 'internal', comments: [], approvalHistory: [] }], backend: { ...state.backend, mode: 'local', status: 'local', pendingMutations: 0, hasLocalChanges: false } });
   });
   await page.goto('/tasks?taskId=handoff-task');
   const welcome = page.getByRole('dialog', { name: 'Welcome to AiTask' });
   if (await welcome.isVisible().catch(() => false)) await welcome.getByRole('button', { name: 'Explore on my own' }).click();
+  await expect(welcome).toBeHidden();
   await page.getByRole('button', { name: 'Send for review', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Awaiting Review' })).toBeVisible();
   await page.evaluate(async () => {

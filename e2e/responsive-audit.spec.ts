@@ -36,11 +36,12 @@ const auditRoles: AuditRole[] = [
   },
 ];
 
-const mobileViewports = [
+const auditViewports = [
   { name: '320', width: 320, height: 700 },
-  { name: '375', width: 375, height: 812 },
   { name: '390', width: 390, height: 844 },
-  { name: '414', width: 414, height: 896 },
+  { name: '768', width: 768, height: 1024 },
+  { name: '1024', width: 1024, height: 768 },
+  { name: '1440', width: 1440, height: 900 },
 ] as const;
 
 const expectNoHorizontalOverflow = async (page: Page, context: string) => {
@@ -53,7 +54,7 @@ const expectNoHorizontalOverflow = async (page: Page, context: string) => {
 const dismissTransientOverlays = async (page: Page) => {
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   await continueButton.waitFor({ state: 'visible', timeout: 1_500 }).then(() => continueButton.click()).catch(() => undefined);
-  const releaseClose = page.getByRole('button', { name: 'Happy working' });
+  const releaseClose = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseClose.waitFor({ state: 'visible', timeout: 1_500 }).then(() => releaseClose.click()).catch(() => undefined);
 };
 
@@ -84,19 +85,111 @@ const assertMobileNavigation = async (page: Page, context: string) => {
   await expect(more).toBeVisible();
 };
 
-test.describe('responsive role and route audit', () => {
-  test.describe.configure({ mode: 'serial' });
+const inspectMain = async (page: Page, label: string) => {
+  const measurement = await page.locator('main').evaluate(main => ({
+    clientWidth: main.clientWidth,
+    scrollWidth: main.scrollWidth,
+    offenders: Array.from(main.querySelectorAll('*'))
+      .filter(element => {
+        const style = getComputedStyle(element);
+        return element.getBoundingClientRect().width > 0
+          && element.scrollWidth > element.clientWidth + 1
+          && !['auto', 'scroll'].includes(style.overflowX);
+      })
+      .slice(0, 12)
+      .map(element => ({
+        tag: element.tagName.toLowerCase(),
+        className: typeof element.className === 'string' ? element.className : '',
+        text: element.textContent?.trim().replace(/\s+/g, ' ').slice(0, 80) || '',
+        rect: Math.round(element.getBoundingClientRect().width),
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+        overflowX: getComputedStyle(element).overflowX,
+      })),
+  }));
+  console.info(`[responsive spot check] ${label}: ${JSON.stringify(measurement)}`);
+  return measurement;
+};
 
-  test('covers every role fixture across the responsive route matrix', async ({ page }) => {
-    test.setTimeout(180_000);
-    for (const role of auditRoles) {
+test.describe('responsive role and route audit', () => {
+  test('keeps the Project list within the viewport at tablet width', async ({ page }) => {
+    await signInAs(page, 'Project Manager Demo');
+    await page.setViewportSize({ width: 768, height: 1024 });
+    await page.goto('/projects');
+    await expect(page.locator('main')).toBeVisible();
+    const projectList = await inspectMain(page, 'PM /projects at 768px');
+    await page.screenshot({ path: 'audit-evidence/2026-10-25/responsive-after-projects-tablet.png', fullPage: true });
+    expect(projectList.scrollWidth).toBeLessThanOrEqual(projectList.clientWidth + 1);
+  });
+
+  test('keeps HOD dashboard content within the phone viewport', async ({ page }) => {
+    await signInAs(page, 'HOD Demo');
+    await page.setViewportSize({ width: 320, height: 700 });
+    await page.goto('/');
+    await expect(page.getByRole('heading', { name: 'Department work' }).first()).toBeVisible();
+    const hodDashboard = await inspectMain(page, 'HOD dashboard at 320px');
+    await page.screenshot({ path: 'audit-evidence/2026-10-25/responsive-after-hod-phone.png', fullPage: true });
+    expect(hodDashboard.scrollWidth).toBeLessThanOrEqual(hodDashboard.clientWidth + 1);
+  });
+
+  for (const viewport of [{ width: 320, height: 700 }, { width: 768, height: 1024 }]) {
+    test(`keeps Boss dashboard table keyboard-scrollable at ${viewport.width}px`, async ({ page }) => {
+    await signInAs(page, 'Boss Koo');
+      await page.setViewportSize(viewport);
+      await page.goto('/');
+      await expect(page.locator('main')).toBeVisible();
+      await expect.poll(() => page.locator('main header').first().evaluate(header => header.scrollWidth <= header.clientWidth + 1)).toBe(true);
+      const clientTable = page.getByRole('region', { name: 'Client and project data' });
+      await expect(clientTable).toBeVisible();
+      expect(await clientTable.evaluate(element => element.scrollWidth > element.clientWidth)).toBe(true);
+      await expect(clientTable).toHaveAttribute('tabindex', '0');
+      await page.screenshot({ path: `audit-evidence/2026-10-25/responsive-after-boss-${viewport.width}.png`, fullPage: true });
+      await clientTable.focus();
+      await page.keyboard.press('ArrowRight');
+      expect(await clientTable.evaluate(element => element.scrollLeft)).toBeGreaterThan(0);
+      const axeResults = await new AxeBuilder({ page }).include('main').analyze();
+      expect(axeResults.violations, `Boss dashboard at ${viewport.width}px: ${axeResults.violations.map(item => item.id).join(', ')}`).toEqual([]);
+    });
+  }
+
+  for (const role of auditRoles) {
+    test(`covers ${role.id} across the responsive route matrix`, async ({ page }) => {
+      // Keep the original per-case budget while giving each role an independent
+      // run. The full matrix exceeded 180 seconds before reaching all roles.
+      test.setTimeout(180_000);
+      const mainOverflowCases: Array<{ viewport: string; route: string; main: string; scrollableDescendants: unknown[] }> = [];
       await signInAs(page, role.username);
-      for (const viewport of mobileViewports) {
+      for (const viewport of auditViewports) {
         await page.setViewportSize({ width: viewport.width, height: viewport.height });
         for (const route of role.routes) {
           await page.goto(route, { waitUntil: 'domcontentloaded' });
           await expect(page.locator('main'), `${role.id} ${viewport.name}px ${route} should render a main region`).toBeVisible({ timeout: 15_000 });
           await expectNoHorizontalOverflow(page, `${role.id} ${viewport.name}px ${route}`);
+          const mainMeasurement = await page.locator('main').evaluate(main => {
+            const describe = (element: Element) => {
+              const style = getComputedStyle(element);
+              const attributes = [element.getAttribute('aria-label'), element.getAttribute('aria-labelledby'), element.getAttribute('role')].filter(Boolean).join(' ');
+              return {
+                tag: element.tagName.toLowerCase(),
+                label: attributes || element.getAttribute('title') || '',
+                overflowX: style.overflowX,
+                tabIndex: (element as HTMLElement).tabIndex,
+                clientWidth: element.clientWidth,
+                scrollWidth: element.scrollWidth,
+              };
+            };
+            const scrollableDescendants = Array.from(main.querySelectorAll('*'))
+              .filter(element => element.scrollWidth > element.clientWidth + 1 && ['auto', 'scroll'].includes(getComputedStyle(element).overflowX))
+              .map(describe);
+            return {
+              clientWidth: main.clientWidth,
+              scrollWidth: main.scrollWidth,
+              scrollableDescendants,
+            };
+          });
+          if (mainMeasurement.scrollWidth > mainMeasurement.clientWidth + 1) {
+            mainOverflowCases.push({ viewport: viewport.name, route, main: `${mainMeasurement.scrollWidth}/${mainMeasurement.clientWidth}`, scrollableDescendants: mainMeasurement.scrollableDescendants });
+          }
           await assertMobileNavigation(page, `${role.id} ${viewport.name}px ${route}`);
           if (viewport.width === 390 && route === '/tasks') {
             const mainAxe = await new AxeBuilder({ page }).include('main').analyze();
@@ -106,8 +199,14 @@ test.describe('responsive role and route audit', () => {
           }
         }
       }
-    }
-  });
+      console.info(`[responsive audit] ${role.id} main-content overflow cases: ${JSON.stringify(mainOverflowCases)}`);
+      const uncontainedOverflow = mainOverflowCases.filter(item => {
+        const surfaces = item.scrollableDescendants as Array<{ overflowX: string; tabIndex: number; label: string }>;
+        return !surfaces.some(surface => ['auto', 'scroll'].includes(surface.overflowX) && surface.tabIndex >= 0 && Boolean(surface.label));
+      });
+      expect(uncontainedOverflow, `${role.id} main-content overflow must stay inside a labelled, keyboard-accessible scroller.`).toEqual([]);
+    });
+  }
 
   test('audits representative changed surfaces for accessibility across roles', async ({ page }) => {
     test.setTimeout(180_000);

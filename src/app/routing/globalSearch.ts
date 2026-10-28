@@ -25,7 +25,15 @@ export function searchWorkspace(snapshot: SearchSnapshot, query: string): Record
   const add = (type: RecordSearchResult['type'], rows: RecordSearchResult[]) => results.push(...rows.filter(row => matches(row.label)).slice(0, 5).map(row => ({ ...row, type })));
   if (canAccessPath(user, '/tasks', roles)) {
     add('Tasks', getVisibleTasks(user, tasks, roles, scope).map(task => ({ id: task.id, type: 'Tasks', label: task.title, path: `/tasks?taskId=${encodeURIComponent(task.id)}` })));
-    add('Projects', getVisibleProjects(user, projects, tasks, roles, scope).map(project => ({ id: project.id, type: 'Projects', label: project.projectName, path: `/tasks?projectId=${encodeURIComponent(project.id)}&project=${encodeURIComponent(project.projectName)}` })));
+    const canOpenProjectWorkspace = canAccessPath(user, '/projects', roles);
+    add('Projects', getVisibleProjects(user, projects, tasks, roles, scope).map(project => ({
+      id: project.id,
+      type: 'Projects',
+      label: project.projectName,
+      path: canOpenProjectWorkspace
+        ? `/projects/${encodeURIComponent(project.id)}`
+        : `/tasks?projectId=${encodeURIComponent(project.id)}&project=${encodeURIComponent(project.projectName)}`,
+    })));
   }
   if (canAccessPath(user, '/projects', roles)) {
     add('Companies', getVisibleClientNames(user, tasks, projects, roles, scope).map(name => ({ id: name, type: 'Companies', label: name, path: `/projects?search=${encodeURIComponent(name)}` })));

@@ -122,7 +122,7 @@ export const appNavigation: { label: string; path: AppPath }[] = [
   { label: 'Dashboard', path: '/' },
   { label: 'Calendar', path: '/calendar' },
   { label: 'Delivery tracker', path: '/clients' },
-  { label: 'Companies', path: '/projects' },
+  { label: 'Companies & projects', path: '/projects' },
   { label: 'Reports', path: '/reports' },
   { label: 'Approvals', path: '/approvals' },
 ];

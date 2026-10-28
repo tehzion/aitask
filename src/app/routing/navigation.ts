@@ -53,7 +53,7 @@ const staffPrimary: NavigationItem[] = [
 const staffSecondary: NavigationItem[] = [
   { path: '/tasks', label: 'All work', icon: CheckSquare },
   { path: '/clients', label: 'Delivery tracker', icon: ListChecks },
-  { path: '/projects', label: 'Companies', icon: FolderKanban },
+  { path: '/projects', label: 'Companies & projects', icon: FolderKanban },
   { path: '/reports', label: 'Reports', icon: BarChart3 },
   { path: '/settings', label: 'Settings', icon: Settings },
 ];
@@ -90,6 +90,7 @@ const navIcons = {
   Calendar: CalendarDays,
   'Delivery tracker': ListChecks,
   Companies: FolderKanban,
+  'Companies & projects': FolderKanban,
   Reports: BarChart3,
   Approvals: UserPlus,
 } as const;

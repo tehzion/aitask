@@ -6,12 +6,14 @@ import {
 	getClientDeliveryStage,
 	getClientDeliveryStageLabel,
 	getClientDeliveryStageTone,
+	getClientApprovalDisplayStatus,
 	getClientFocusTask,
 	getClientLatestUpdates,
 	getClientProgress,
 	getClientReviewReadyTasks,
 	getClientServicePlan,
 	getClientTaskStage,
+	getClientTaskStatusLabel,
 	getClientUpcomingDeliveries,
 	groupClientDeliveries,
 	isAwaitingClientReview,
@@ -50,6 +52,23 @@ describe('Client portal reporting', () => {
   it('treats completed but unapproved work as awaiting review', () => {
     const task = makeTask({ status: 'Completed', isCompleted: true, clientApprovalStatus: 'Pending' });
     expect(getClientTaskStage(task)).toBe('awaiting_review');
+  });
+
+  it('keeps internal review states out of client-facing status labels', () => {
+    expect(getClientTaskStatusLabel(makeTask({ status: 'Waiting Approval' }))).toBe('In progress');
+    expect(getClientTaskStatusLabel(makeTask({ status: 'Approved' }))).toBe('Awaiting your review');
+    expect(getClientTaskStatusLabel(makeTask({ status: 'Completed', isCompleted: true, clientApprovalStatus: 'Approved' }))).toBe('Approved');
+    expect(getClientTaskStatusLabel(makeTask({ status: 'Cancelled' }))).toBe('Cancelled');
+  });
+
+  it('does not show an internal revision as a client rejection without a client decision event', () => {
+    const internalRevision = makeTask({ status: 'In Progress', revisionCount: 1, clientApprovalStatus: 'Rejected' });
+    const clientRevision = makeTask({ status: 'In Progress', revisionCount: 1, clientApprovalStatus: 'Rejected', approvalHistory: [
+      { id: 'client-revision', userId: 'client-portal', status: 'Rejected', createdAt: '2026-08-08T10:00:00.000Z' },
+    ] });
+    expect(getClientApprovalDisplayStatus(internalRevision)).toBe('Pending');
+    expect(getClientApprovalDisplayStatus(clientRevision)).toBe('Rejected');
+    expect(getClientTaskStatusLabel(internalRevision)).toBe('In progress');
   });
 
   it('keeps internal and client review mutually exclusive', () => {

@@ -11,9 +11,11 @@ import { Badge, Button, SegmentedTabs } from '../../../shared/components/ui';
 import { useSaveAction } from '../../../app/hooks/useSaveAction';
 import { useUnsavedChanges } from '../../../shared/hooks/useUnsavedChanges';
 import { formatLocalizedDate } from '../../../shared/i18n/i18n';
+import { getLocalizedTaskStatus } from '../../../shared/i18n/localeLabels';
 import { canManageProjectLifecycle, effectiveMilestoneStatus, getProjectClosureWarnings, hasProjectClosureWarnings, milestoneTaskProgress, projectStatus } from '../../../shared/rules/projectManagement';
 import type { Project, ProjectMilestoneStatus } from '../../../shared/types/index';
 import { sameSavedValue } from '../../../shared/utils/saveConfirmation';
+import ContextualTutorialLink from '../../help/components/ContextualTutorialLink';
 import { assessProjectHealth } from '../../dashboard/domain/pmDashboard';
 
 const tabs = ['overview', 'tasks', 'team', 'milestones', 'settings'] as const;
@@ -160,7 +162,7 @@ export default function ProjectManagementPanel({ projectId, onClose, onEdit }: {
             {[[t('Open tasks'), health.openCount], [t('Overdue'), health.overdueCount], [t('Pending approvals'), health.pendingApprovalCount], [t('Milestones'), health.milestoneCount]].map(([label, value]) => <div key={String(label)} className="rounded-panel bg-inset p-4"><p className="text-xs font-medium text-muted">{label}</p><p className="mt-2 font-mono text-2xl font-semibold tabular-nums text-ink">{value}</p></div>)}
           </div>
           <section className="rounded-panel border border-line p-5">
-            <h3 className="font-semibold text-ink">{t('Project status')}</h3>
+            <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="font-semibold text-ink">{t('Project status')}</h3><ContextualTutorialLink tutorialId="manage-project-lifecycle" label={t('help.projectLifecycleGuide')} /></div>
             <p className="mt-1 text-sm leading-6 text-muted">{t('Active work can move to Completed, then Closed. Reopen a closed project before changing tasks or milestones.')}</p>
             {canManage && <div className="mt-4 flex flex-wrap gap-2">
               {status === 'Active' && <Button onClick={() => void changeStatus('Completed')} disabled={busy || hasPending}>{t('Mark completed')}</Button>}
@@ -176,7 +178,7 @@ export default function ProjectManagementPanel({ projectId, onClose, onEdit }: {
         </div>}
 
         {tab === 'tasks' && <div className="space-y-3">
-          {projectTasks.map(task => <article key={task.id} className="flex items-center justify-between gap-3 rounded-panel border border-line p-4"><div className="min-w-0"><p data-i18n-skip className="truncate font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{t(task.status)} · {task.dueDate ? formatLocalizedDate(new Date(`${task.dueDate}T00:00:00`), locale) : t('No due date')}</p></div><Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} aria-disabled={busy || hasPending} onClick={event => { if (busy || hasPending || dirty) { event.preventDefault(); requestClose(); } else onClose(); }} className="rounded-control p-2 text-accent hover:bg-accent-soft"><ArrowRight className="h-4 w-4" /></Link></article>)}
+          {projectTasks.map(task => <article key={task.id} className="flex items-center justify-between gap-3 rounded-panel border border-line p-4"><div className="min-w-0"><p data-i18n-skip className="truncate font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{getLocalizedTaskStatus(task.status, locale)} · {task.dueDate ? formatLocalizedDate(new Date(`${task.dueDate}T00:00:00`), locale) : t('No due date')}</p></div><Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} aria-disabled={busy || hasPending} onClick={event => { if (busy || hasPending || dirty) { event.preventDefault(); requestClose(); } else onClose(); }} className="rounded-control p-2 text-accent hover:bg-accent-soft"><ArrowRight className="h-4 w-4" /></Link></article>)}
           {!projectTasks.length && <p className="rounded-panel bg-inset px-5 py-10 text-center text-sm text-muted">{t('No tasks recorded')}</p>}
         </div>}
 

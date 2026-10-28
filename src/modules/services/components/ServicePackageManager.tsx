@@ -63,7 +63,7 @@ const ServicePackageManager = () => {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-5">
         <div>
           <h2 id="service-packages-title" className="font-semibold text-slate-950">{t('Service Packages')}</h2>
-          <p className="mt-1 text-sm text-slate-500">{t('Reusable plan templates. Saved client plans always keep their own snapshot.')}</p>
+          <p className="mt-1 text-sm text-slate-500">{t('Reuse a package for new client plans. Plans already created keep their saved services and prices.')}</p>
         </div>
         <Button variant="secondary" onClick={() => edit()} disabled={saving || hasPending}><PackagePlus className="h-4 w-4" />{t('New package')}</Button>
       </div>
@@ -132,7 +132,7 @@ const ServicePackageManager = () => {
         <ConfirmDialog
           labelledBy="delete-service-package-title"
           title={t(`Delete the "${packageToDelete.name}" package?`)}
-          description={t('Existing client plans keep their own snapshots and are unaffected.')}
+          description={t('Deleting this package will not change services or prices already saved in client plans.')}
           confirmLabel={t('Delete package')}
           busy={saving}
           onClose={() => setPackageToDelete(null)}

@@ -33,6 +33,25 @@ export const getClientTaskStage = (task: Task): ClientTaskStage => {
   return 'active';
 };
 
+/**
+ * Internal revision currently reuses the legacy Rejected field in hosted
+ * storage. Only an appended client decision may be shown as a client rejection.
+ */
+export const getClientApprovalDisplayStatus = (task: Task): Task['clientApprovalStatus'] => {
+  if (task.clientApprovalStatus !== 'Rejected') return task.clientApprovalStatus;
+  const latestDecision = [...(task.approvalHistory || [])]
+    .sort((left, right) => Date.parse(right.createdAt) - Date.parse(left.createdAt))[0];
+  return latestDecision?.status === 'Rejected' ? 'Rejected' : 'Pending';
+};
+
+/** Keep internal workflow states out of client-facing task status labels. */
+export const getClientTaskStatusLabel = (task: Task) => {
+  if (task.status === 'Cancelled') return 'Cancelled';
+  if (getClientApprovalDisplayStatus(task) === 'Approved') return 'Approved';
+  if (task.status === 'Approved' || task.status === 'Completed' || task.isCompleted) return 'Awaiting your review';
+  return 'In progress';
+};
+
 export const isAwaitingInternalReview = (task: Task) => task.status === 'Waiting Approval';
 
 export const isAwaitingClientReview = (task: Task) => (

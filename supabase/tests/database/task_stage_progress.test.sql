@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(24);
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000005501','authenticated','authenticated','stage-pm@aitask.local','',now(),'{}','{}',now(),now()),
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000005502','authenticated','authenticated','stage-hod@aitask.local','',now(),'{}','{}',now(),now()),
@@ -47,6 +47,7 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005502'
 set local role authenticated;
 select is((pg_temp.stage_update('{"status":"In Progress"}')->>'ok')::boolean,true,'HOD returns work for revision');
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where entity_id='stage-task'),50,'revision drops to 50 percent');
+select is((select (data->>'revisionCount')::integer from public.aitask_entities where entity_id='stage-task'),1,'internal return increments its own revision counter');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503',true);
 set local role authenticated;

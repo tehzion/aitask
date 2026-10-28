@@ -9,7 +9,7 @@ const openProfileSettings = async (page: import('@playwright/test').Page) => {
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => ['/', '/settings'].includes(url.pathname));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
   await page.goto('/settings');

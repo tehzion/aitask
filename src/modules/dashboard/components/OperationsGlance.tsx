@@ -5,7 +5,7 @@ import { useI18n } from '../../../shared/components/I18nProvider';
 import { cardBase } from '../../../shared/components/uiTokens';
 import { useLocalToday } from '../../../shared/hooks/useLocalToday';
 import { formatLocalizedDateTime, formatLocalizedWeekdayDate } from '../../../shared/i18n/i18n';
-import { getLocalizedDepartment, getLocalizedStatus } from '../../../shared/i18n/localeLabels';
+import { getLocalizedDepartment, getLocalizedTaskStatus } from '../../../shared/i18n/localeLabels';
 import type { Task, User } from '../../../shared/types/index';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../../../shared/utils/utils';
 import {
@@ -63,7 +63,7 @@ const TaskEntry = ({
     : getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale);
   const context = scope === 'agency'
     ? <><span data-i18n-skip>{task.clientName}</span> · <span data-i18n-skip>{usersById.get(task.assignedTo)?.name || t('Unassigned')}</span> · <span>{getLocalizedDepartment(task.department, locale)}</span></>
-    : <><span data-i18n-skip>{task.clientName}</span> · <span>{getLocalizedDepartment(task.department, locale)}</span> · <span>{getLocalizedStatus(task.status, locale)}</span></>;
+    : <><span data-i18n-skip>{task.clientName}</span> · <span>{getLocalizedDepartment(task.department, locale)}</span> · <span>{getLocalizedTaskStatus(task.status, locale)}</span></>;
 
   return (
     <Link

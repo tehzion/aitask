@@ -2,6 +2,7 @@ import { ArrowLeft, ArrowRight, BookOpen, CheckCircle2, CircleHelp, X } from 'lu
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../../../app/store/workspaceStore';
+import { getEffectivePermissions } from '../../../shared/authorization/access';
 import { useI18n } from '../../../shared/components/I18nProvider';
 import { cn } from '../../../shared/utils/utils';
 import {
@@ -42,8 +43,18 @@ const OnboardingExperience: React.FC = () => {
   const previousUserId = React.useRef<string | null>(null);
 
   const persona = React.useMemo(() => getOnboardingPersona(currentUser, rolePermissions), [currentUser, rolePermissions]);
-  const visibleTutorialIds = React.useMemo(() => new Set(getVisibleTutorials(persona).map(tutorial => tutorial.id)), [persona]);
-  const steps = React.useMemo(() => getOnboardingSteps(persona, locale), [locale, persona]);
+  const effectivePermissions = React.useMemo(
+    () => getEffectivePermissions(currentUser, rolePermissions),
+    [currentUser, rolePermissions],
+  );
+  const visibleTutorialIds = React.useMemo(
+    () => new Set(getVisibleTutorials(persona, effectivePermissions).map(tutorial => tutorial.id)),
+    [effectivePermissions, persona],
+  );
+  const steps = React.useMemo(
+    () => getOnboardingSteps(persona, locale, effectivePermissions),
+    [effectivePermissions, locale, persona],
+  );
   const ui = React.useMemo(() => getOnboardingUi(locale), [locale]);
   const welcome = React.useMemo(() => getOnboardingWelcome(persona, locale), [locale, persona]);
   const activeSteps = guidedTutorial?.steps || steps;
@@ -141,9 +152,13 @@ const OnboardingExperience: React.FC = () => {
     };
   }, [activeStep, location.pathname, location.search, mode]);
 
+  React.useLayoutEffect(() => {
+    if (!mode) return;
+    actionRef.current?.focus({ preventScroll: true });
+  }, [activeSteps, mode, stepIndex]);
+
   React.useEffect(() => {
     if (!mode) return;
-    const timer = window.setTimeout(() => actionRef.current?.focus(), 0);
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
         event.preventDefault();
@@ -159,7 +174,6 @@ const OnboardingExperience: React.FC = () => {
     };
     document.addEventListener('keydown', handleKeyDown);
     return () => {
-      window.clearTimeout(timer);
       document.removeEventListener('keydown', handleKeyDown);
     };
   }, [activeSteps.length, closeAndRemember, mode, stepIndex]);

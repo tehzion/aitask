@@ -10,7 +10,7 @@ const seedWorkspace = async (page: Page) => page.evaluate(async () => {
     const staff = state.users.find(user => user.name === 'Staff Demo')!;
     const readyStaff = { ...staff, mustResetPassword: false };
     enablePasswordResetBypass(staff.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${staff.id}`, 'acknowledged');
     const today = new Date();
     const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     useStore.setState({ currentUser: readyStaff, users: state.users.map(user => user.id === staff.id ? readyStaff : user),

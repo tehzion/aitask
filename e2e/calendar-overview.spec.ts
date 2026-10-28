@@ -4,7 +4,7 @@ import AxeBuilder from '@axe-core/playwright';
 const dismissOverlays = async (page: Page) => {
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   if (await continueButton.isVisible().catch(() => false)) await continueButton.click().catch(() => undefined);
-  const releaseClose = page.getByRole('button', { name: 'Happy working' });
+  const releaseClose = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseClose.waitFor({ state: 'visible', timeout: 15_000 }).then(() => releaseClose.click()).catch(() => undefined);
   if (await releaseClose.isVisible().catch(() => false)) {
     await releaseClose.click().catch(() => undefined);
@@ -39,6 +39,40 @@ const expectNoHorizontalOverflow = async (page: Page, context: string) => {
 };
 
 test.describe('Calendar overview and navigation', () => {
+  test('client calendar shows client-facing labels for internal review states', async ({ page }) => {
+    await signInAs(page, 'UrbanEats Client Demo');
+    await page.evaluate(async () => {
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
+      const state = useStore.getState();
+      const source = state.tasks[0];
+      if (!source || state.currentUser?.role !== 'Client') throw new Error('Client calendar fixture is unavailable.');
+      const now = new Date();
+      const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+      const task = {
+        ...source,
+        id: 'calendar-client-review-label',
+        title: 'Internal review status probe',
+        clientId: undefined,
+        clientName: state.currentUser.companyName || source.clientName,
+        visibility: 'client-visible' as const,
+        startDate: today,
+        dueDate: today,
+        assignedTo: '',
+        status: 'Waiting Approval',
+        isCompleted: false,
+        completedAt: undefined,
+        clientApprovalStatus: 'Pending' as const,
+      };
+      useStore.setState({ tasks: [task, ...state.tasks] });
+    });
+    await page.goto('/calendar');
+    await expect(page.getByRole('heading', { name: 'Delivery Schedule', level: 1 })).toBeVisible();
+    await expect(page.getByText('Internal review status probe', { exact: true })).toBeVisible();
+    const taskCard = page.getByRole('article').filter({ has: page.getByRole('link', { name: 'Internal review status probe', exact: true }) });
+    await expect(taskCard.getByText('In progress', { exact: true })).toBeVisible();
+    await expect(taskCard.getByText('Waiting Approval', { exact: true })).toHaveCount(0);
+  });
+
   test('keeps role-scoped calendar scanning usable across desktop and mobile', async ({ page }) => {
     test.setTimeout(180_000);
 

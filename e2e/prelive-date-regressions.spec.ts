@@ -9,7 +9,7 @@ const login = async (page: import('@playwright/test').Page, time: string) => {
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => ['/', '/settings'].includes(url.pathname));
   if (page.url().endsWith('/settings')) await page.getByRole('button', { name: 'Continue for now' }).click();
-  await page.getByRole('button', { name: 'Happy working' }).click();
+  await page.getByRole('button', { name: 'Continue to AiTask' }).click();
   await expect(page.getByRole('heading', { name: 'Agency operations' })).toBeVisible();
 };
 

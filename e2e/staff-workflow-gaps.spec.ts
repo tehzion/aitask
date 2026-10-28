@@ -10,7 +10,7 @@ const seedWorkspace = async (page: Page, isLinked = false) => page.evaluate(asyn
     const boss = s.users.find(user => user.isSuperAdmin)!;
     const readyStaff = { ...staff, mustResetPassword: false };
     enablePasswordResetBypass(staff.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${staff.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', 'en');
     const client = { id: 'workflow-company', clientName: 'Workflow Company', createdBy: boss.id, createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z' };
     const task = { ...s.tasks[0], generatedFromDeliverable: false, recurrenceFrequency: 'None', workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, reviewAccess: undefined, id: 'workflow-artwork', title: 'Staff workflow artwork', clientId: client.id, clientName: client.clientName, projectId: undefined, projectName: undefined, department: staff.department, assignedTo: staff.id, createdBy: boss.id, assignedBy: boss.id, status: 'Pending', isCompleted: false, completionPercentage: 0, revisionCount: 0, clientApprovalStatus: 'Pending', comments: [], approvalHistory: [], workHistory: [], workState: {}, predecessorTaskIds: [], serviceCycleId: undefined, deliverableId: linked ? 'workflow-output' : undefined, attachmentLink: undefined, attachmentName: undefined, startDate: '2026-10-01', dueDate: '', description: 'Create final artwork', notes: undefined };

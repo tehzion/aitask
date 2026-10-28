@@ -7,7 +7,7 @@ test('deferred navigation focus preserves a control the user already selected', 
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => url.pathname !== '/login');
   if (page.url().endsWith('/settings')) await page.getByRole('button', { name: 'Continue for now' }).click();
-  await page.getByRole('button', { name: 'Happy working' }).click();
+  await page.getByRole('button', { name: 'Continue to AiTask' }).click();
   await page.goto('/calendar');
   await expect(page.getByRole('heading', { name: 'Calendar', exact: true })).toBeVisible();
 

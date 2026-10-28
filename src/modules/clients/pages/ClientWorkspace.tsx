@@ -784,6 +784,7 @@ const OperationsClientWorkspace = () => {
                     >
                       {cycle.status}
                     </Badge>
+                    {!isClient && canManageCycles && <ContextualTutorialLink tutorialId="carry-forward-work" label={t('help.carryForwardGuide')} />}
                     {canManageCycles && cycle.status === "Draft" && (
                       <Button
                         onClick={() =>

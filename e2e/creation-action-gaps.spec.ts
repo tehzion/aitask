@@ -14,8 +14,8 @@ const seed = async (page: Page) => {
     const hod = { ...boss, id: 'creation-qa-hod', name: 'Creation QA HOD', role: 'HOD' as const, isSuperAdmin: false, department: 'Designer', departments: ['Designer'], mustResetPassword: false };
     enablePasswordResetBypass(boss.id);
     enablePasswordResetBypass(hod.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${hod.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${hod.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], projects: [], tasks: [],
       clientPlans: [], serviceCycles: [], deliverables: [], addons: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
@@ -32,7 +32,7 @@ const openTask = async (page: Page) => {
   await page.goto('/tasks');
   await page.getByRole('button', { name: 'New task', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Create task', exact: true });
-  await dialog.getByLabel(/Link to Company \/ Brand/).selectOption('creation-project');
+  await dialog.getByLabel(/^Project/).selectOption('creation-project');
   await dialog.getByLabel('Task Title').fill('Recoverable creation');
   await dialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
   return dialog;

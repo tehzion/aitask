@@ -41,7 +41,7 @@ const signIn = async (page: Page, username: string) => {
     const user = useStore.getState().users.find(member => member.name === name);
     if (!user) throw new Error(`Missing authorization fixture account: ${name}`);
     enablePasswordResetBypass(user.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${user.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${user.id}`, 'acknowledged');
   }, username);
   await page.getByLabel('Email or username').fill(username);
   await page.getByLabel('Password').fill('password123');

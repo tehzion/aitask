@@ -1,6 +1,6 @@
 import { isBossKoo, isHodUser } from '../../../shared/authorization/access';
 import type { AppLocale } from '../../../shared/i18n/i18n';
-import type { Role, User } from '../../../shared/types/index';
+import type { Role, RolePermissionKey, RolePermissions, User } from '../../../shared/types/index';
 
 export type OnboardingPersona = 'admin' | 'projectManager' | 'hod' | 'staff' | 'client';
 export type OnboardingStatus = 'skipped' | 'completed';
@@ -193,43 +193,83 @@ const localizedSteps = (
 
 const stepsByPersona: Record<OnboardingPersona, Array<[string, string, string, string, string, string]>> = {
   admin: [
-    ['dashboard', 'dashboard-overview', 'Start with the operations dashboard', '从运营仪表板开始', 'Use the dashboard to see workload, approvals, overdue work, and the health of the workspace.', '使用仪表板查看工作量、审批、逾期任务和工作区状态。'],
+    ['dashboard', 'dashboard-overview', 'Review organization activity', '查看机构运营情况', 'Use the dashboard to follow project activity, deadlines, reviews, and work that needs attention.', '通过仪表板跟进项目活动、截止日期、审核和需要关注的工作。'],
     ['companies', 'projects-overview', 'Set up companies and projects', '设置公司和项目', 'Companies hold the client relationship. Projects give the team a clear delivery scope and owner.', '公司记录客户关系。项目用于明确交付范围和负责人。'],
-    ['tasks', 'create-task', 'Create work with a clear handoff', '创建清晰的工作交接', 'Add the requirement, deadline, department, and accountable person before the work starts.', '开始工作前，填写要求、截止日期、部门和负责人。'],
-    ['approvals', 'approvals-overview', 'Keep access and approvals moving', '推进账号和审批', 'Review registrations and role permissions here. Access controls always remain in charge of what each person can see and do.', '在这里审核注册申请和角色权限。访问控制始终决定每个人可以查看和执行的内容。'],
-    ['reports', 'reports-overview', 'Use reports to spot risk early', '用报表尽早发现风险', 'Reports and service plans help you understand delivery progress and the work that needs attention.', '报表和服务方案帮助您了解交付进度以及需要关注的工作。'],
+    ['tasks', 'create-task', 'Set up a clear task handoff', '创建清晰的任务交接', 'Add the requirement, deadline, department, and next responsible person. AiTask applies the project’s assignment rules.', '填写任务要求、截止日期、部门和下一位负责人。AiTask 会依照项目分配规则处理。'],
+    ['approvals', 'approvals-overview', 'Manage members and access', '管理员工和访问权限', 'Review registrations and role permissions in Approvals. Each person’s access determines which information and actions are available.', '在“审批”中审核注册申请和角色权限。每个人的访问权限决定其可查看的信息和可执行的操作。'],
+    ['reports', 'reports-overview', 'Follow delivery and reports', '跟进交付和报表', 'Use available reports and service plans to review deadlines, monthly delivery, and work that needs attention.', '使用可访问的报表和服务方案查看截止日期、月度交付和需要关注的工作。'],
   ],
   projectManager: [
-    ['dashboard', 'dashboard-overview', 'Read your portfolio at a glance', '快速了解您的项目组合', 'The dashboard brings together deadlines, active companies, review risk, and commercial records in your portfolio.', '仪表板集中显示项目组合中的截止日期、活跃公司、审核风险和商业记录。'],
-    ['company', 'projects-overview', 'Create the company and project', '创建公司和项目', 'Start with the client company, then add a project with a named owner, service scope, and deadline.', '先创建客户公司，再添加项目并填写负责人、服务范围和截止日期。'],
-    ['task', 'create-task', 'Create a task for the right HOD', '为正确的部门主管创建任务', 'Write the requirement, set the deadline, choose the department, and assign the handoff to the appropriate HOD or eligible owner.', '填写任务要求和截止日期，选择部门，并分配给合适的部门主管或符合条件的负责人。'],
-    ['monitor', 'tasks-overview', 'Monitor delivery and review work', '监控交付和审核工作', 'Use Tasks to follow progress, open requirements, submitted work, and permitted revision requests without changing the underlying workflow.', '在任务页面跟进进度、要求、已提交成果，并在权限允许时请求修订，不改变既定工作流程。'],
-    ['reports', 'reports-overview', 'Check reports and service plans', '查看报表和服务方案', 'Reports show delivery patterns; service plans and cycles keep recurring client work visible and scheduled.', '报表显示交付情况；服务方案和周期让持续性的客户工作保持清晰并按计划进行。'],
-    ['workflow', 'help-overview', 'Keep the handoff sequence in mind', '记住交接顺序', 'The usual path is Project Manager → HOD → Staff → HOD review → Client review. Open Help any time for the status rules.', '通常的流程是项目经理 → 部门主管 → 员工 → 部门主管审核 → 客户审核。随时打开帮助中心查看状态规则。'],
+    ['dashboard', 'dashboard-overview', 'Review your portfolio', '查看您的项目组合', 'Use the dashboard to follow deadlines, review work, and delivery progress across projects in your scope.', '通过仪表板跟进您负责项目中的截止日期、待审核工作和交付进度。'],
+    ['company', 'projects-overview', 'Open a client company and project', '查看客户公司和项目', 'Companies hold the client relationship. Open a project to check its owner, service scope, and dates.', '公司记录客户关系。打开项目即可查看负责人、服务范围和日期。'],
+    ['task', 'create-task', 'Hand work to the right department', '将工作交接给合适的部门', 'Write the requirement, set the deadline, choose the department, and follow the project’s assignment rules for the next owner.', '填写任务要求和截止日期，选择部门，并依照项目分配规则确定下一位负责人。'],
+    ['monitor', 'tasks-overview', 'Follow progress and reviews', '跟进进度和审核', 'Track due work and submissions. Available review actions follow the project’s approval settings; client acceptance is a separate decision.', '跟进待办和提交内容。可用的审核操作取决于项目审批设置；客户验收是独立的决定。'],
+    ['reports', 'reports-overview', 'Plan recurring client work', '规划持续性的客户工作', 'Use available reports, service plans, and monthly cycles to follow delivery progress and upcoming renewals.', '使用可访问的报表、服务方案和月度周期跟进交付进度及即将到来的续约。'],
+    ['workflow', 'help-overview', 'Check the review steps', '查看审核步骤', 'The project settings decide whether internal review is required. Client acceptance is separate and applies to work shared for client review.', '项目设置决定是否需要内部审核。客户验收是独立步骤，仅适用于分享给客户审核的工作。'],
   ],
   hod: [
-    ['dashboard', 'dashboard-overview', 'Start with department work', '从部门工作开始', 'Your dashboard focuses on work assigned to you and work visible in your departments.', '您的仪表板聚焦于分配给您的工作和您部门可见的工作。'],
-    ['tasks', 'tasks-overview', 'Read the handoff before assigning', '分配前先阅读交接内容', 'Open a task to check its requirement, deadline, department, and the context supplied by the Project Manager.', '打开任务，检查项目经理提供的要求、截止日期、部门和背景。'],
-    ['assign', 'tasks-overview', 'Assign only eligible staff', '只分配给符合条件的员工', 'You can assign while a task is Pending, In Progress, or Revision. Assignment is locked for Waiting Approval, Approved, Completed, and Cancelled.', '任务处于待处理、进行中或修订状态时可以分配。等待审批、已批准、已完成和已取消时不能重新分配。'],
-    ['review', 'tasks-overview', 'Review submitted deliverables', '审核已提交的交付成果', 'When staff submit work, check the files and comments. Request a revision only when the current workflow and your permissions allow it.', '员工提交工作后，检查文件和评论。只有当前流程和您的权限允许时，才能请求修订。'],
-    ['workflow', 'help-overview', 'Use Help for status rules', '使用帮助中心查看状态规则', 'The Help Centre explains your review gate, revision path, and the handoff to client review.', '帮助中心说明您的审核关卡、修订路径以及交接到客户审核的流程。'],
+    ['dashboard', 'dashboard-overview', 'Start with department work', '从部门工作开始', 'Follow tasks assigned to you and work visible to your department.', '跟进分配给您的任务和您部门可见的工作。'],
+    ['tasks', 'tasks-overview', 'Read the handoff first', '先阅读交接内容', 'Check the requirement, deadline, department, and project before assigning work.', '分配工作前，先检查任务要求、截止日期、部门和项目。'],
+    ['assign', 'tasks-overview', 'Assign eligible staff', '分配给符合条件的员工', 'You can assign a task in Pending, In Progress, or Revision when the staff member is eligible for its department and project.', '任务处于“待处理”“进行中”或“修订”时，如果员工符合部门和项目条件，您可以分配任务。'],
+    ['review', 'tasks-overview', 'Review submitted work', '审核已提交的工作', 'Check the files and comments. Request a revision when allowed; an internal review decision is separate from client acceptance.', '检查文件和评论。在权限允许时请求修订；内部审核决定与客户验收不同。'],
+    ['workflow', 'help-overview', 'Check your review steps', '查看审核步骤', 'The project’s settings and your access determine which review actions are available and who receives the work next.', '项目设置和您的访问权限决定可执行哪些审核操作，以及下一步由谁处理。'],
   ],
   staff: [
-    ['dashboard', 'dashboard-overview', 'See what needs your attention', '查看需要您处理的工作', 'Your dashboard shows assigned work, deadlines, revision requests, and completed items for your workspace.', '您的仪表板显示分配给您的工作、截止日期、修订请求和已完成事项。'],
-    ['tasks', 'tasks-overview', 'Open the assigned task', '打开分配给您的任务', 'Read the requirement and deadline before accepting the assignment. Keep the task status and progress current as you work.', '接受任务前先阅读要求和截止日期。工作过程中及时更新任务状态和进度。'],
-    ['updates', 'tasks-overview', 'Keep the delivery record complete', '保持交付记录完整', 'Add comments, upload files or deliverables, and request assistance when context is missing. Submit completed work for approval.', '添加评论、上传文件或交付成果；缺少背景时请求协助。完成工作后提交审批。'],
-    ['revision', 'tasks-overview', 'Respond to revision requests', '回应修订请求', 'A revision brings the work back into progress. Read the reviewer’s note, make the change, and submit the updated work again.', '修订会让工作回到进行中。阅读审核意见，完成修改，然后再次提交更新后的工作。'],
-    ['workflow', 'help-overview', 'Use Help when a status is unclear', '不清楚状态时打开帮助中心', 'The Help Centre explains statuses, assignment boundaries, and how your work moves to department review.', '帮助中心说明任务状态、分配边界以及工作如何进入部门审核。'],
+    ['dashboard', 'dashboard-overview', 'Find work that needs you', '查找需要您处理的工作', 'My Work shows assigned tasks, deadlines, revision requests, and completed work in your scope.', '“我的工作”显示您负责范围内的任务、截止日期、修订请求和已完成工作。'],
+    ['tasks', 'tasks-overview', 'Start with the task brief', '先查看任务说明', 'Read the requirement and deadline, then start the task and keep its progress current as you work.', '先阅读任务要求和截止日期，再开始工作，并及时更新进度。'],
+    ['updates', 'tasks-overview', 'Share progress and submit work', '分享进度并提交工作', 'Add comments or files, ask for help when context is missing, and submit the work when it is ready for review.', '添加评论或文件；缺少背景时请求协助；工作准备好审核后再提交。'],
+    ['revision', 'tasks-overview', 'Respond to a revision request', '回应修订请求', 'Read the reviewer’s note, make the requested change, and submit the updated work again.', '阅读审核意见，完成所需修改，然后再次提交更新后的工作。'],
+    ['workflow', 'help-overview', 'Check what happens next', '查看下一步流程', 'The task status and review settings show who will receive your work after you submit it.', '任务状态和审核设置会说明提交后由谁接收您的工作。'],
   ],
   client: [
-    ['dashboard', 'dashboard-overview', 'Start from your client workspace', '从客户工作区开始', 'Your home view is limited to client-visible projects, tasks, updates, and deliveries for your company.', '首页只显示您公司可见的项目、任务、更新和交付成果。'],
-    ['deliveries', 'clients-overview', 'Review visible deliveries', '查看可见的交付成果', 'Open Deliveries to see submitted work, expected dates, and the files the team has shared with you.', '打开交付页面查看已提交的工作、预计日期以及团队与您分享的文件。'],
-    ['feedback', 'delivery-search', 'Give clear feedback', '提供清晰的反馈', 'Open a shared delivery to add comments, approve a final deliverable, or request revisions when the result needs changes.', '打开共享交付成果后，可添加评论；成果完成时批准；需要修改时请求修订。'],
-    ['visibility', 'help-overview', 'Keep internal work private', '保持内部工作私密', 'Client onboarding only covers client-visible information. Internal notes, assignments, and team-only workflow details stay with the operations team.', '客户引导只涵盖客户可见信息。内部备注、分配信息和团队内部流程仅供运营团队使用。'],
+    ['dashboard', 'dashboard-overview', 'Start from your client workspace', '从客户工作区开始', 'Home shows only the projects, deliveries, and updates your team has shared with your company.', '首页只显示团队与贵公司分享的项目、交付和更新。'],
+    ['deliveries', 'clients-overview', 'Review shared deliveries', '查看已分享的交付', 'Open Deliveries to see published work, expected dates, and files shared for your review.', '打开“交付”查看已发布的工作、预计日期和分享给您审核的文件。'],
+    ['feedback', 'delivery-search', 'Give feedback on shared work', '反馈已分享的工作', 'Comment, request changes, or record your acceptance when a delivery is ready for client review. This does not close the project.', '交付成果进入客户审核后，您可以评论、请求修改或记录验收。这不会关闭项目。'],
+    ['visibility', 'help-overview', 'See what is shared with you', '了解分享给您的内容', 'Internal notes, staff assignments, and team-only review steps stay with the operations team.', '内部备注、员工分配和团队内部审核步骤仅供运营团队查看。'],
   ],
 };
 
-export const getOnboardingSteps = (persona: OnboardingPersona, locale: AppLocale): OnboardingStep[] => localizedSteps(persona, locale, stepsByPersona[persona]);
+const onboardingTargetPermissions: Partial<Record<string, RolePermissionKey[]>> = {
+  'dashboard-overview': ['viewDashboard'],
+  'projects-overview': ['viewProjects'],
+  'create-task': ['viewTasks', 'createTasks'],
+  'tasks-overview': ['viewTasks'],
+  'approvals-overview': ['viewApprovals'],
+  'reports-overview': ['viewReports'],
+  'clients-overview': ['viewDeliveryTracker'],
+  'delivery-search': ['viewDeliveryTracker'],
+};
+
+const onboardingStepPermissions: Partial<Record<string, RolePermissionKey[]>> = {
+  approvals: ['manageUsers'],
+  assign: ['manageCreatedTasks'],
+  feedback: ['clientReview'],
+};
+
+export const getOnboardingSteps = (
+  persona: OnboardingPersona,
+  locale: AppLocale,
+  permissions?: RolePermissions,
+): OnboardingStep[] => {
+  const available = localizedSteps(persona, locale, stepsByPersona[persona]).filter(step => {
+    if (!permissions) return true;
+    const requiredPermissions = [
+      ...(onboardingTargetPermissions[step.target] || []),
+      ...(onboardingStepPermissions[step.id] || []),
+    ];
+    return requiredPermissions.every(permission => permissions[permission]);
+  });
+  if (available.length) return available;
+  return [{
+    id: 'help',
+    target: 'help-overview',
+    path: '/help',
+    title: locale === 'zh' ? '从帮助中心开始' : 'Start with Help & tutorials',
+    body: locale === 'zh'
+      ? '查看适用于您角色的说明，了解可用页面和下一步操作。'
+      : 'Find guidance for your role and learn which pages and actions are available to you.',
+  }];
+};
 
 export const getRoleLabel = (persona: OnboardingPersona, locale: AppLocale) => {
   const labels: Record<OnboardingPersona, [string, string]> = {
@@ -253,39 +293,96 @@ export const getOnboardingUi = (locale: AppLocale) => locale === 'zh'
   ? { step: '步骤', of: '共', back: '上一步', next: '下一步', skip: '跳过', finish: '完成', close: '关闭教程', fallback: '此界面元素目前不可用。您仍可继续查看教程，或稍后从帮助中心重新开始。', progress: '教程进度' }
   : { step: 'Step', of: 'of', back: 'Back', next: 'Next', skip: 'Skip', finish: 'Finish', close: 'Close tutorial', fallback: 'This interface element is not available right now. You can continue the guide or restart it later from Help.', progress: 'Tutorial progress' };
 
-export const getHelpCopy = (persona: OnboardingPersona, locale: AppLocale) => {
+export const getHelpCopy = (persona: OnboardingPersona, locale: AppLocale, permissions?: RolePermissions) => {
   const zh = locale === 'zh';
-  const roleGuides: Record<OnboardingPersona, { title: string; intro: string; steps: string[] }> = {
-    admin: { title: zh ? '超级管理员指南' : 'Super Admin guide', intro: zh ? '管理工作区、访问权限和运营节奏。' : 'Keep the workspace, access, and operating rhythm moving.', steps: zh ? ['查看运营仪表板和审批队列。', '创建公司、项目和任务，明确负责人和截止日期。', '在角色与权限中审核可用访问范围。', '使用报表和服务方案发现交付风险。'] : ['Read the operations dashboard and approval queue.', 'Create companies, projects, and tasks with clear owners and deadlines.', 'Review available access in Roles & Permissions.', 'Use reports and service plans to spot delivery risk.'] },
-    projectManager: { title: zh ? '项目经理指南' : 'Project Manager guide', intro: zh ? '管理您负责的客户项目，从清晰的任务要求开始。' : 'Manage the client projects in your portfolio, starting with a clear brief.', steps: zh ? ['创建公司和项目，设置负责人、服务范围和截止日期。', '创建任务，选择部门，并交接给合适的部门主管。', '跟进任务进度、审核提交内容，并在允许时请求修订。', '从报表和服务方案查看项目组合健康度。'] : ['Create companies and projects with an owner, service scope, and deadline.', 'Create tasks, choose the department, and hand off to the right HOD.', 'Monitor progress, review submissions, and request revisions when permitted.', 'Use reports and service plans to understand portfolio health.'] },
-    hod: { title: zh ? '部门主管指南' : 'HOD guide', intro: zh ? '把项目经理的要求转化为部门内清晰、可审核的工作。' : 'Turn the Project Manager handoff into clear, reviewable department work.', steps: zh ? ['查看项目经理分配的任务和要求。', '只在待处理、进行中或修订状态下分配给符合条件的部门员工。', '员工提交后审核交付成果，并在权限允许时请求修订。', '审核通过后，任务才会进入后续审批流程。'] : ['Open the tasks and requirements assigned by Project Managers.', 'Assign eligible department staff only in Pending, In Progress, or Revision.', 'Review submitted deliverables and request revisions when permitted.', 'Approve the work when it is ready for the next review stage.'] },
-    staff: { title: zh ? '员工指南' : 'Staff guide', intro: zh ? '把分配给您的任务推进到可审核的完成状态。' : 'Move assigned work to a complete, reviewable handoff.', steps: zh ? ['打开分配给您的任务，先阅读要求和截止日期。', '接受任务，更新进度，添加评论并上传成果。', '需要背景或资源时请求协助。', '完成后提交审批；收到修订请求时按意见更新并重新提交。'] : ['Open assigned tasks and read the requirements and deadlines first.', 'Accept the assignment, update progress, comment, and upload deliverables.', 'Request assistance when you need context or resources.', 'Submit for approval, then update and resubmit when revisions are requested.'] },
-    client: { title: zh ? '客户指南' : 'Client guide', intro: zh ? '只查看您公司可见的项目和交付成果，并提供反馈。' : 'Review the projects and deliverables your company can see, then give feedback.', steps: zh ? ['从客户工作区查看项目和任务。', '检查已提交的文件、预计日期和评论。', '成果符合要求时批准；需要调整时请求修订。', '内部备注、团队分配和内部流程不会显示给您。'] : ['Use the client workspace to view visible projects and tasks.', 'Check submitted files, expected dates, and comments.', 'Approve work that is ready or request revisions when it needs changes.', 'Internal notes, team assignments, and internal workflow stay private.'] },
+  const roleGuides: Record<OnboardingPersona, { title: string; intro: string; steps: Array<{ text: string; requiredPermissions?: RolePermissionKey[] }> }> = {
+    admin: { title: zh ? '超级管理员指南' : 'Super Admin guide', intro: zh ? '设置机构、管理成员访问权限，并跟进项目和运营情况。' : 'Set up the organization, manage member access, and follow project operations.', steps: zh ? [
+      { text: '查看项目活动和需要关注的工作。', requiredPermissions: ['viewDashboard'] },
+      { text: '在“审批”中管理成员、注册申请和角色权限。', requiredPermissions: ['viewApprovals', 'manageUsers'] },
+      { text: '设置公司和项目，并创建清晰的任务交接。', requiredPermissions: ['viewProjects', 'createClients', 'createProjects', 'viewTasks', 'createTasks'] },
+      { text: '使用报表和服务方案跟进交付。', requiredPermissions: ['viewReports', 'manageClientPlans'] },
+    ] : [
+      { text: 'Review project activity and work that needs attention.', requiredPermissions: ['viewDashboard'] },
+      { text: 'Manage members, registration requests, and role permissions in Approvals.', requiredPermissions: ['viewApprovals', 'manageUsers'] },
+      { text: 'Set up companies and projects, then create clear task handoffs.', requiredPermissions: ['viewProjects', 'createClients', 'createProjects', 'viewTasks', 'createTasks'] },
+      { text: 'Use reports and service plans to follow delivery.', requiredPermissions: ['viewReports', 'manageClientPlans'] },
+    ] },
+    projectManager: { title: zh ? '项目经理指南' : 'Project Manager guide', intro: zh ? '规划您负责的项目，协调团队，并跟进审核和交付进度。' : 'Plan projects in your portfolio, coordinate the team, and follow reviews and delivery.', steps: zh ? [
+      { text: '查看项目截止日期、审核和待跟进工作。', requiredPermissions: ['viewDashboard'] },
+      { text: '在权限范围内查看公司和项目。', requiredPermissions: ['viewProjects'] },
+      { text: '写清任务要求，并按项目规则交接给合适的部门。', requiredPermissions: ['viewTasks', 'createTasks'] },
+      { text: '使用报表和月度周期跟进交付及续约。', requiredPermissions: ['viewReports', 'viewDeliveryTracker'] },
+    ] : [
+      { text: 'Check project deadlines, reviews, and follow-ups.', requiredPermissions: ['viewDashboard'] },
+      { text: 'Review companies and projects within your access.', requiredPermissions: ['viewProjects'] },
+      { text: 'Write clear task requirements and use project rules for department handoffs.', requiredPermissions: ['viewTasks', 'createTasks'] },
+      { text: 'Use reports and monthly delivery views to follow progress and renewals.', requiredPermissions: ['viewReports', 'viewDeliveryTracker'] },
+    ] },
+    hod: { title: zh ? '部门主管指南' : 'HOD guide', intro: zh ? '协调部门任务、分配符合条件的员工，并审核提交内容。' : 'Coordinate department tasks, assign eligible staff, and review submitted work.', steps: zh ? [
+      { text: '查看分配给您和您部门的任务。', requiredPermissions: ['viewTasks'] },
+      { text: '在任务允许分配时交给符合条件的员工。', requiredPermissions: ['viewTasks', 'manageCreatedTasks'] },
+      { text: '检查员工提交的文件和评论；在允许时请求修订。', requiredPermissions: ['viewTasks'] },
+      { text: '根据项目审核设置将工作交给下一位审核人。', requiredPermissions: ['viewTasks'] },
+    ] : [
+      { text: 'Review tasks assigned to you and work visible to your department.', requiredPermissions: ['viewTasks'] },
+      { text: 'Assign eligible staff when the task allows a handoff.', requiredPermissions: ['viewTasks', 'manageCreatedTasks'] },
+      { text: 'Check submitted files and comments; request a revision when permitted.', requiredPermissions: ['viewTasks'] },
+      { text: 'Pass work to the next reviewer according to the project’s review settings.', requiredPermissions: ['viewTasks'] },
+    ] },
+    staff: { title: zh ? '员工指南' : 'Staff guide', intro: zh ? '查看分配给您的工作，更新进度，并按要求提交成果。' : 'Find assigned work, update progress, and submit deliverables when they are ready.', steps: zh ? [
+      { text: '打开任务，阅读要求和截止日期。', requiredPermissions: ['viewTasks'] },
+      { text: '开始工作并及时更新进度。', requiredPermissions: ['viewTasks'] },
+      { text: '添加评论或文件；需要帮助时联系任务负责人。', requiredPermissions: ['viewTasks'] },
+      { text: '提交工作供审核；收到修订请求后更新并重新提交。', requiredPermissions: ['viewTasks'] },
+    ] : [
+      { text: 'Open a task and read its requirements and deadline.', requiredPermissions: ['viewTasks'] },
+      { text: 'Start the work and keep its progress up to date.', requiredPermissions: ['viewTasks'] },
+      { text: 'Add comments or files; contact the task owner when you need help.', requiredPermissions: ['viewTasks'] },
+      { text: 'Submit work for review, then update and resubmit if revisions are requested.', requiredPermissions: ['viewTasks'] },
+    ] },
+    client: { title: zh ? '客户指南' : 'Client guide', intro: zh ? '查看团队分享的项目和交付，并在需要时提供反馈或验收。' : 'View projects and deliveries your team has shared, then give feedback or accept them when asked.', steps: zh ? [
+      { text: '从首页查看分享给贵公司的项目、交付和更新。', requiredPermissions: ['viewDashboard'] },
+      { text: '打开交付成果，查看文件、日期和评论。', requiredPermissions: ['viewDeliveryTracker'] },
+      { text: '在客户审核时提供反馈或记录验收；这不会关闭项目。', requiredPermissions: ['viewDeliveryTracker', 'clientReview'] },
+      { text: '内部备注、员工分配和团队审核步骤仅供内部团队查看。' },
+    ] : [
+      { text: 'Use Home to see projects, deliveries, and updates shared with your company.', requiredPermissions: ['viewDashboard'] },
+      { text: 'Open a delivery to review its files, dates, and comments.', requiredPermissions: ['viewDeliveryTracker'] },
+      { text: 'Give feedback or record acceptance during client review; this does not close the project.', requiredPermissions: ['viewDeliveryTracker', 'clientReview'] },
+      { text: 'Internal notes, staff assignments, and team review steps stay private.' },
+    ] },
   };
-  return roleGuides[persona];
+  const guide = roleGuides[persona];
+  const steps = guide.steps
+    .filter(step => !permissions || (step.requiredPermissions || []).every(permission => permissions[permission]))
+    .map(step => step.text);
+  return {
+    ...guide,
+    steps: steps.length ? steps : [zh ? '下方教程会根据您的访问权限显示可用功能。' : 'The guides below show features available with your current access.'],
+  };
 };
 
 export const getWorkflowCopy = (locale: AppLocale) => locale === 'zh'
   ? {
       title: '典型任务流程',
-      intro: 'AiTask 使用清晰的责任交接，让每个人知道下一步由谁处理。',
+      intro: '实际步骤取决于项目设置、任务范围和当前负责人。内部审核与客户验收是不同的决定。',
       stages: [
-        ['项目经理', '创建公司、项目和任务，写清要求、截止日期和部门交接。'],
-        ['部门主管', '查看要求，分配给本部门符合条件的员工，并审核提交内容。'],
-        ['员工', '接受任务、推进工作、添加评论、上传成果并提交审批。'],
-        ['部门主管审核', '审核交付成果；需要修改时请求修订，准备好后批准。'],
-        ['客户审核', '客户查看可见成果、评论、请求修订或批准最终交付。'],
+        ['项目经理', '在负责范围内创建任务，写清要求、截止日期和部门，并按项目规则安排交接。'],
+        ['部门主管', '如任务需要部门交接，查看要求并分配给符合条件的员工。'],
+        ['员工', '开始工作、更新进度、分享文件，并在准备好后提交审核。'],
+        ['内部审核', '如果项目要求内部审核，由当前指定的审核人检查提交内容并决定下一步。'],
+        ['客户审核', '交付成果分享给客户审核时，客户可以反馈或验收；这与内部审核和任务完成分开记录。'],
       ] as [string, string][],
     }
   : {
       title: 'Typical task workflow',
-      intro: 'AiTask keeps ownership clear so each person knows who takes the next step.',
+      intro: 'The route depends on project settings, task scope, and the current owner. Internal review and client acceptance are separate decisions.',
       stages: [
-        ['Project Manager', 'Creates the company, project, and task with a clear requirement, deadline, and department handoff.'],
-        ['HOD', 'Reads the brief, assigns eligible department staff, and reviews the submitted work.'],
-        ['Staff', 'Accepts the task, does the work, comments, uploads deliverables, and submits for approval.'],
-        ['HOD review', 'Checks the deliverable, requests a revision when needed, and approves when ready.'],
-        ['Client review', 'Reviews client-visible work, comments, requests changes, or approves the final deliverable.'],
+        ['Project Manager', 'Creates tasks within their scope, writes the requirement and deadline, and follows the project’s assignment rules.'],
+        ['HOD', 'When a department handoff is required, checks the brief and assigns an eligible staff member.'],
+        ['Staff', 'Starts the work, updates progress, shares files, and submits it when ready for review.'],
+        ['Internal review', 'If the project requires internal review, the assigned reviewer checks the submission and decides what happens next.'],
+        ['Client review', 'When work is shared for client review, the client can give feedback or accept it. This is separate from internal review and task completion.'],
       ] as [string, string][],
     };
 

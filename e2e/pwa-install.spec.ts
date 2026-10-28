@@ -29,8 +29,8 @@ test('a first-time offline Reports deep link renders the report shell and data f
   await page.waitForURL(url => url.pathname === '/' || url.pathname === '/settings');
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   if (page.url().endsWith('/settings')) await continueButton.click();
-  const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
-  await releaseNotice.waitFor({ state: 'visible', timeout: 5000 }).then(() => releaseNotice.getByRole('button', { name: 'Happy working' }).click()).catch(() => undefined);
+  const releaseNotice = page.getByRole('dialog', { name: 'Projects have clearer owners and next steps' });
+  await releaseNotice.waitFor({ state: 'visible', timeout: 5000 }).then(() => releaseNotice.getByRole('button', { name: 'Continue to AiTask' }).click()).catch(() => undefined);
   await page.evaluate(() => {
     const raw = window.localStorage.getItem('market-task-storage');
     if (!raw) throw new Error('Local workspace persistence was not initialized.');
@@ -91,13 +91,13 @@ test('a real service-worker replacement preserves a dirty form and enables refre
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => url.pathname === '/' || url.pathname === '/settings');
   if (new URL(page.url()).pathname === '/settings') await page.getByRole('button', { name: 'Continue for now' }).click();
-  const notice = page.getByRole('button', { name: 'Happy working' });
+  const notice = page.getByRole('button', { name: 'Continue to AiTask' });
   if (await notice.isVisible().catch(() => false)) await notice.click();
   await page.goto('/settings');
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   // Reload once while pristine so the application starts with a controller.
   await page.reload();
-  const release = page.getByRole('button', { name: 'Happy working' });
+  const release = page.getByRole('button', { name: 'Continue to AiTask' });
   await release.waitFor({ state: 'visible', timeout: 5000 }).then(() => release.click()).catch(() => undefined);
   const name = page.locator('#profile-name');
   await name.fill('PWA protected draft');

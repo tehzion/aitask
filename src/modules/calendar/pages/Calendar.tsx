@@ -38,6 +38,7 @@ import { useStore } from '../../../app/store/workspaceStore';
 import { isPendingMutationResolution } from '../../../infrastructure/commands/mutationGuard';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from '../../../infrastructure/persistence/workspaceSession';
 import { canCreateTasks, canEditTask as canEditTaskByRole, getVisibleTasks } from '../../../shared/authorization/access';
+import { getClientTaskStatusLabel } from '../../../shared/authorization/clientPortal';
 import { useI18n } from '../../../shared/components/I18nProvider';
 import ModalShell from '../../../shared/components/ModalShell';
 import SystemMessage from '../../../shared/components/SystemMessage';
@@ -47,6 +48,7 @@ import { acknowledgeActionFeedback, queueActionFeedback } from '../../../shared/
 import { useLocalToday } from '../../../shared/hooks/useLocalToday';
 import { useUnsavedChanges } from '../../../shared/hooks/useUnsavedChanges';
 import { formatLocalizedDate, formatLocalizedMonth, formatLocalizedWeekdayDate } from '../../../shared/i18n/i18n';
+import { getLocalizedTaskStatus } from '../../../shared/i18n/localeLabels';
 import { msg, type MessageDescriptor } from '../../../shared/i18n/messages';
 import type { Task } from '../../../shared/types/index';
 import { getHolidaysForDate, HOLIDAY_COLORS, type MalaysiaHoliday } from '../../../shared/utils/malaysiaHolidays';
@@ -1281,7 +1283,7 @@ const Calendar: React.FC = () => {
                         </span>
                         )}
                         <Badge tone={task.status === 'Completed' ? 'emerald' : task.status === 'Cancelled' ? 'slate' : 'blue'} className="px-1.5 py-0.5 text-[10px]">
-                          {task.status}
+                          {isClientUser ? t(getClientTaskStatusLabel(task)) : getLocalizedTaskStatus(task.status, locale)}
                         </Badge>
                       </div>
 

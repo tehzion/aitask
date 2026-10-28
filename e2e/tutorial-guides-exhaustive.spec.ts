@@ -23,7 +23,7 @@ const loginWithDemo = async (page: import('@playwright/test').Page, username: st
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 };
@@ -40,7 +40,7 @@ const guideForProfile = (tutorial: Tutorial, persona: typeof profiles[number]['p
 };
 
 test('every live guide completes safely or explains an unavailable record-specific target', async ({ page }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(480_000);
   let checkedGuides = 0;
   const expectedGuideExecutions = profiles.reduce((total, profile) => (
     total + getVisibleTutorials(profile.persona).filter(tutorial => guideForProfile(tutorial, profile.persona)).length

@@ -1,4 +1,5 @@
 import type { AppLocale } from '../../../shared/i18n/i18n';
+import type { RolePermissionKey, RolePermissions } from '../../../shared/types/index';
 import type { OnboardingPersona } from './onboarding';
 
 export type TutorialCategoryId =
@@ -38,6 +39,9 @@ export interface Tutorial {
   searchTerms?: LocalizedCopy[];
   /** Catalogue metadata for content review without requiring an editor UI. */
   updatedAt?: string;
+  /** Hide action guidance when a member's effective role permissions do not include the action. */
+  requiredPermission?: RolePermissionKey;
+  requiredPermissions?: RolePermissionKey[];
   guide?: TutorialGuideStep[];
 }
 
@@ -66,9 +70,9 @@ const guideStep = (id: string, target: string, path: string | undefined, enTitle
 const makeTutorial = (input: Tutorial): Tutorial => ({ updatedAt: '2026-10-18', ...input });
 
 export const learningTracks: Record<OnboardingPersona, string[]> = {
-  admin: ['understand-dashboard', 'create-company', 'create-project', 'create-task', 'review-completed-work', 'view-reports'],
-  projectManager: ['understand-dashboard', 'create-company', 'create-project', 'create-task', 'review-completed-work', 'view-reports'],
-  hod: ['understand-dashboard', 'receive-assigned-tasks', 'delegate-task-to-staff', 'monitor-staff-progress', 'review-submitted-work', 'request-revisions', 'approve-work'],
+  admin: ['understand-dashboard', 'create-company', 'create-project', 'create-task', 'review-completed-work', 'view-reports', 'manage-project-lifecycle', 'renew-service-plan', 'carry-forward-work'],
+  projectManager: ['understand-dashboard', 'create-company', 'create-project', 'create-task', 'review-completed-work', 'view-reports', 'manage-project-lifecycle', 'renew-service-plan', 'carry-forward-work'],
+  hod: ['understand-dashboard', 'receive-assigned-tasks', 'delegate-task-to-staff', 'monitor-staff-progress', 'review-submitted-work', 'request-revisions', 'approve-work', 'carry-forward-work'],
   staff: ['understand-dashboard', 'view-assigned-tasks', 'accept-task', 'update-task-progress', 'upload-deliverables', 'submit-work-for-approval', 'respond-to-revision-requests'],
   client: ['access-client-workspace', 'review-client-deliverables', 'leave-feedback', 'request-changes', 'approve-deliverables'],
 };
@@ -78,6 +82,7 @@ export const getLearningTrack = (persona: OnboardingPersona) => learningTracks[p
 export const tutorials: Tutorial[] = [
   makeTutorial({
     id: 'understand-dashboard', category: 'getting-started', roles: ['all'],
+    requiredPermission: 'viewDashboard',
     title: l('How to read your dashboard', '如何阅读仪表板'),
     summary: l('Use the dashboard to decide what needs attention first.', '使用仪表板判断下一步最需要关注的工作。'),
     outcome: l('You will know where to find your queue, deadlines, review work, and role-specific signals without opening every task.', '您将了解在哪里查看任务队列、截止日期、审核工作和角色相关提示，而不必逐一打开任务。'),
@@ -104,7 +109,7 @@ export const tutorials: Tutorial[] = [
     id: 'understand-roles', category: 'getting-started', roles: ['all'],
     title: l('How roles and access work', '角色和访问权限如何工作'),
     summary: l('Understand why two people may see different pages or actions.', '了解为什么不同用户会看到不同页面或操作。'),
-    outcome: l('You will be able to tell whether an unavailable action is a role boundary, a record scope issue, or a workflow rule.', '您将能够判断不可用操作是角色边界、记录范围还是工作流程规则造成的。'),
+    outcome: l('You will be able to tell whether an action is unavailable because of your role, the records in your work area, or the task’s review rules.', '您将了解操作不可用是因为角色权限、工作范围还是任务审核规则。'),
     before: [l('Know your assigned role and department, if applicable.', '了解您分配的角色和部门（如适用）。')],
     steps: [l('Use the role badge in Help to see the guide matched to your access.', '查看帮助中心中的角色标签，确认系统为您匹配的指南。'), l('Remember that Project Managers work within their portfolio, HODs work within department scope, and Staff work within assigned work.', '请记住：项目经理在项目组合范围内工作，部门主管在部门范围内工作，员工在分配给自己的工作范围内工作。'), l('Clients see client-visible projects, tasks, deliveries, and feedback surfaces only.', '客户只能看到客户可见的项目、任务、交付和反馈界面。'), l('Ask the administrator to review permissions when access does not match your responsibility.', '如果访问范围与职责不符，请管理员检查权限。')],
     rules: [l('A tutorial never grants permission. The same button may remain disabled after you read a guide.', '教程不会授予权限。阅读教程后，同一个按钮仍可能保持禁用。')],
@@ -118,7 +123,7 @@ export const tutorials: Tutorial[] = [
     outcome: l('You will know when assignment, review, completion, and revision actions are expected or locked.', '您将了解何时可以分配、审核、完成或请求修订，以及何时这些操作会被锁定。'),
     before: [l('Open a task you are allowed to view.', '打开您有权查看的任务。')],
     steps: [l('Check the status shown in the task header or task row.', '查看任务标题或任务行中显示的状态。'), l('Pending, In Progress, and Revision are assignable work states.', '“待处理”“进行中”和“修订”是可以分配的工作状态。'), l('Waiting Approval, Approved, Completed, and Cancelled lock reassignment by default.', '“等待审批”“已批准”“已完成”和“已取消”默认会锁定重新分配。'), l('Read the available action and its disabled explanation before asking for a change.', '在请求更改前，阅读当前可用操作及其禁用原因。'), l('Use Request Revision only when your role and the workflow permit it; never assume every locked state can be reopened.', '只有角色和工作流程允许时，才使用“请求修订”；不要认为所有锁定状态都可以重新打开。')],
-    rules: [l('Status transitions are checked by the application and again at the save boundary.', '应用界面和保存边界都会检查状态转换。'), l('A status label does not override review permissions or required evidence.', '状态标签不会覆盖审核权限或必要的交付证据。')],
+    rules: [l('AiTask checks whether a status change is allowed before saving it.', '保存状态更改前，AiTask 会检查该操作是否获准。'), l('A status label does not override review permissions or required evidence.', '状态标签不会覆盖审核权限或必要的交付证据。')],
     problems: [l('If an action is unavailable, read the reason in the task panel. It may require an HOD reviewer, completed evidence, or a responsible Project Manager.', '如果操作不可用，请阅读任务面板中的原因。可能需要部门主管审核人、完成证据或负责的项目经理。')],
     related: ['request-task-revision', 'approve-work', 'submit-work-for-approval'], keywords: [l('status pending progress revision approval completed cancelled', '状态 待处理 进行中 修订 审批 已完成 已取消')],
     guide: [guideStep('tasks', 'tasks-overview', '/tasks', 'Open Tasks to inspect status', '打开“任务”查看状态', 'Choose a task yourself and read the status control. This guide never changes it for you.', '自行选择任务并阅读状态控件。本教程不会替您修改状态。'), guideStep('help', 'help-overview', '/help', 'Return to status rules', '返回状态规则', 'Use the Help Centre when you need the assignment matrix again.', '需要再次查看分配规则时，返回帮助中心。')],
@@ -149,19 +154,21 @@ export const tutorials: Tutorial[] = [
   }),
   makeTutorial({
     id: 'manage-account-settings', category: 'getting-started', roles: ['all'],
+    requiredPermission: 'viewSettings',
     title: l('How to manage personal account settings', '如何管理个人账户设置'),
     summary: l('Update your own profile, password, theme, and language preferences safely.', '安全更新个人资料、密码、主题和语言偏好。'),
     outcome: l('You will know where to change personal settings without changing team permissions or business records.', '您将了解在哪里更改个人设置，而不会更改团队权限或业务记录。'),
     before: [l('You must be signed in.', '您必须登录。')],
     steps: [l('Open Settings from the navigation or account menu.', '从导航或账户菜单打开“设置”。'), l('Update profile fields only when they are yours and save the change.', '只更新属于您自己的个人资料字段，然后保存更改。'), l('Use the password section to choose a private password when the account requires setup or a change.', '账户要求设置或修改密码时，使用密码区域选择私人密码。'), l('Choose language and theme preferences where available, then reload or continue using the workspace.', '在可用的情况下选择语言和主题偏好，然后重新加载或继续使用工作区。')],
     rules: [l('Settings does not grant project, task, approval, or client access.', '设置不会授予项目、任务、审批或客户访问权限。')],
-    problems: [l('If a field is disabled, it is controlled by the workspace or account lifecycle. Ask an administrator rather than editing another user’s record.', '如果字段被禁用，它由工作区或账户生命周期控制。请联系管理员，不要修改其他用户的记录。')],
+    problems: [l('If a field is disabled, your role may not allow you to change it. Ask an administrator rather than editing another user’s record.', '如果字段被禁用，您的角色可能无权更改。请联系管理员，不要修改其他用户的资料。')],
     related: ['understand-roles', 'read-notifications'], keywords: [l('settings password language theme profile account', '设置 密码 语言 主题 资料 账户')],
     guide: [guideStep('settings', 'settings-overview', '/settings', 'Open Settings', '打开设置', 'Review your own profile and preferences here. Team permissions remain an administrator responsibility.', '在这里查看自己的资料和偏好。团队权限仍由管理员负责。')],
   }),
 
   makeTutorial({
     id: 'create-company', category: 'company-client', roles: ['admin', 'projectManager'],
+    requiredPermission: 'createClients',
     title: l('How to create a company', '如何创建公司'),
     summary: l('Create the company record that anchors client contacts, projects, tasks, and service work.', '创建连接客户联系人、项目、任务和服务工作的公司记录。'),
     outcome: l('You will have a saved company profile ready for a project or service plan.', '您将得到一个已保存的公司资料，可继续创建项目或服务方案。'),
@@ -198,6 +205,7 @@ export const tutorials: Tutorial[] = [
 
   makeTutorial({
     id: 'create-project', category: 'project-management', roles: ['admin', 'projectManager'],
+    requiredPermission: 'createProjects',
     title: l('How to create a project', '如何创建项目'),
     summary: l('Create a named project under an existing company with dates and required services.', '在现有公司下创建项目，并设置日期和所需服务。'),
     outcome: l('You will have a project that gives the team a clear delivery scope and deadline.', '您将拥有一个为团队明确交付范围和截止日期的项目。'),
@@ -220,7 +228,30 @@ export const tutorials: Tutorial[] = [
     related: ['create-project', 'create-task', 'monitor-task-progress'], keywords: [l('project deadline dates start date schedule', '项目 截止日期 日期 开始日期 计划')],
   }),
   makeTutorial({
+    id: 'manage-project-lifecycle', category: 'project-management', roles: ['admin', 'projectManager'],
+    requiredPermissions: ['viewProjects'],
+    title: l('How to complete and close a project', '如何完成并关闭项目'),
+    summary: l('Move a project through its status steps and check outstanding work before closure.', '按项目状态逐步推进，并在关闭前检查未完成工作。'),
+    outcome: l('You will know when to mark a project complete, close it, or reopen it for more work.', '您将了解何时标记项目已完成、关闭项目或重新开启项目以继续工作。'),
+    before: [l('You must be Super Admin or the Project Manager assigned to the project.', '您必须是超级管理员或该项目的负责人。')],
+    steps: [
+      l('Open Companies and choose the project you manage.', '打开“公司”，选择您负责的项目。'),
+      l('Review the project overview, open tasks, pending reviews, overdue work, and milestones.', '查看项目概览、未完成任务、待审核工作、逾期任务和里程碑。'),
+      l('When planned work is finished, choose Mark completed.', '计划工作完成后，选择“标记为已完成”。'),
+      l('Choose Close project and review any closure warnings. Confirm only when the project is ready to close.', '选择“关闭项目”并查看关闭提醒。确认前请确保项目已准备好关闭。'),
+      l('If more work is needed later, reopen the project before changing its tasks or milestones.', '之后如需继续工作，请先重新开启项目，再更改任务或里程碑。'),
+    ],
+    rules: [
+      l('A project moves from Active to Completed, then Closed. Project closure is separate from client acceptance of a delivery.', '项目依次从“进行中”变为“已完成”，再变为“已关闭”。关闭项目与客户验收交付成果是不同的操作。'),
+      l('Some projects require all tasks, reviews, deadlines, and milestones to be clear before closure; others allow an explicit confirmation with warnings.', '部分项目要求清除所有任务、审核、截止日期和里程碑后才能关闭；其他项目可在查看提醒后明确确认关闭。'),
+    ],
+    problems: [l('If a status action is missing, check that you manage this project and that it is at the previous status first.', '如果缺少状态操作，请确认您负责该项目，并检查项目是否处于前一个状态。')],
+    related: ['create-project', 'set-project-deadlines', 'monitor-task-progress'],
+    keywords: [l('complete close reopen project status closure milestones', '完成 关闭 重新开启 项目 状态 里程碑')],
+  }),
+  makeTutorial({
     id: 'create-task', category: 'task-management', roles: ['admin', 'projectManager', 'hod', 'staff'],
+    requiredPermission: 'createTasks',
     title: l('How to create a task', '如何创建任务'),
     summary: l('Create a task brief that gives the next owner enough context to act.', '创建包含足够背景的任务简报，让下一位负责人可以行动。'),
     outcome: l('You will create a task with a clear requirement, department, deadline, and accountable person.', '您将创建包含清晰要求、部门、截止日期和负责人的任务。'),
@@ -233,8 +264,9 @@ export const tutorials: Tutorial[] = [
   }),
   makeTutorial({
     id: 'write-clear-task-brief', category: 'task-management', roles: ['admin', 'projectManager', 'hod', 'staff'],
+    requiredPermission: 'createTasks',
     title: l('How to write a clear task brief', '如何编写清晰的任务简报'),
-    summary: l('Give the next owner the context, expected result, and boundary needed to start.', '为下一位负责人提供开始工作所需的背景、预期结果和边界。'),
+    summary: l('Give the next owner the context and expected result needed to start.', '为下一位负责人提供开始工作所需的背景和预期结果。'),
     outcome: l('You will reduce clarification loops and make review evidence easier to check.', '您将减少反复确认，并让审核证据更容易检查。'),
     before: [l('Know the intended deliverable and who will review it.', '明确预期交付成果和审核人。')],
     steps: [l('Use a title that describes the deliverable or decision, not only the activity.', '标题应描述交付成果或决定，不要只写活动名称。'), l('State the desired result, audience, source material, and acceptance condition in Description.', '在“描述”中写明目标结果、受众、参考材料和验收条件。'), l('Add the deadline, department, priority, and relevant client/project context.', '补充截止日期、部门、优先级和相关客户或项目背景。'), l('Use Notes or comments for changing context rather than silently replacing the original brief.', '使用备注或评论记录变化中的背景，不要静默替换原始简报。')],
@@ -244,6 +276,7 @@ export const tutorials: Tutorial[] = [
   }),
   makeTutorial({
     id: 'assign-task-to-hod', category: 'task-management', roles: ['admin', 'projectManager'],
+    requiredPermission: 'createTasks',
     title: l('How to assign a task to an HOD', '如何将任务分配给部门主管'),
     summary: l('Make the department handoff explicit before staff delegation begins.', '在员工分配开始前，明确完成部门交接。'),
     outcome: l('You will assign work to an eligible department HOD without bypassing the department review path.', '您将把工作分配给符合条件的部门主管，而不会绕过部门审核路径。'),
@@ -267,11 +300,11 @@ export const tutorials: Tutorial[] = [
   }),
   makeTutorial({
     id: 'review-completed-work', category: 'task-management', roles: ['admin', 'projectManager'],
-    title: l('How to review completed work', '如何审核已完成的工作'),
-    summary: l('Check the submitted evidence and review gate before finalising work.', '在完成工作前检查已提交证据和审核关卡。'),
-    outcome: l('You will know whether work is ready for internal approval, client review, or a revision request.', '您将知道工作是否可以进入内部审批、客户审核或请求修订。'),
+    title: l('How to review submitted work', '如何审核已提交的工作'),
+    summary: l('Check the submitted evidence and the project’s review settings before deciding what happens next.', '查看已提交的证据和项目审核设置，再决定下一步。'),
+    outcome: l('You will know when internal approval is needed and when a separate client review applies.', '您将了解何时需要内部批准，以及何时还需要客户另行审核。'),
     before: [l('The task must be visible and have submitted work or review evidence.', '任务必须可见，并且有已提交的工作或审核证据。'), l('You must be the responsible Project Manager, eligible reviewer, or administrator.', '您必须是负责的项目经理、符合条件的审核人或管理员。')],
-    steps: [l('Open the task and read the requirement, comments, files, and progress.', '打开任务，阅读要求、评论、文件和进度。'), l('Check whether the task is Waiting Approval or another review-ready state.', '检查任务是否处于“等待审批”或其他可审核状态。'), l('Use Approve only when the internal review gate and evidence are satisfied.', '只有内部审核关卡和证据满足时，才使用“批准”。'), l('If the result needs changes, use Request Revision and explain what must change.', '如果成果需要修改，使用“请求修订”并说明需要修改的内容。'), l('After approval, follow the client-visible review or completion step that your role is allowed to perform.', '批准后，继续执行您角色允许的客户可见审核或完成步骤。')],
+    steps: [l('Open the task and read the requirement, comments, files, and progress.', '打开任务，阅读要求、评论、文件和进度。'), l('Check the project’s approval settings and the action shown for this task.', '查看项目的审批设置，以及此任务当前显示的操作。'), l('If internal review is required, approve only when the evidence and review requirements are satisfied.', '如果项目要求内部审核，只有证据和审核要求都满足时才批准。'), l('If the result needs changes, use Request Revision when it is available and explain what must change.', '如果成果需要修改，并且可以使用“请求修订”，请说明需要修改的内容。'), l('Client acceptance is a separate step and applies only when the work has been shared for client review.', '客户验收是独立步骤，只有工作已分享给客户审核时才适用。')],
     rules: [l('The responsible Project Manager can approve work within their portfolio; an eligible department reviewer can also approve it. Boss Koo must give an audited reason when self-approving.', '负责的项目经理可以批准其项目范围内的工作；符合条件的部门审核人也可以批准。Boss Koo 自我批准时必须填写可审计的原因。')],
     problems: [l('If Approve is disabled, read the reason. You may not be the responsible Project Manager or eligible department reviewer, or the task may lack required evidence.', '如果“批准”被禁用，请阅读原因。您可能不是此任务的负责项目经理或符合条件的部门审核人，或者任务缺少必要证据。')],
     related: ['request-task-revision', 'approve-work', 'review-submitted-work'], keywords: [l('review completed work approve deliverable submission', '审核 已完成 工作 批准 交付 提交')], searchTerms: [l('review work inspect submission check output', '审核工作 检查提交 检查成果')],
@@ -291,6 +324,7 @@ export const tutorials: Tutorial[] = [
   }),
   makeTutorial({
     id: 'manage-service-plans', category: 'service-delivery', roles: ['admin', 'projectManager'],
+    requiredPermission: 'manageClientPlans',
     title: l('How to manage service plans', '如何管理服务方案'),
     summary: l('Set a recurring service scope that can produce visible cycles and deliverables.', '设置可生成可见周期和交付成果的持续服务范围。'),
     outcome: l('You will know where plan details, service items, dates, pricing visibility, and activation live.', '您将了解服务方案详情、服务项目、日期、价格可见性和启用位置。'),
@@ -303,6 +337,7 @@ export const tutorials: Tutorial[] = [
   }),
   makeTutorial({
     id: 'view-reports', category: 'reports-monitoring', roles: ['admin', 'projectManager', 'hod', 'staff', 'client'],
+    requiredPermission: 'viewReports',
     title: l('How to view reports', '如何查看报表'),
     summary: l('Read the four-week performance view to understand deadlines, completion, and delivery timing.', '通过四周绩效视图了解截止日期、完成情况和交付时间。'),
     outcome: l('You will compare due work, on-time work, late work, upcoming work, and overdue work within your allowed scope.', '您将能够在允许范围内比较应交工作、按时工作、逾期工作、即将到期工作和过期工作。'),
@@ -391,7 +426,7 @@ export const tutorials: Tutorial[] = [
     before: [l('The task is review-ready and Request Revision is available to you.', '任务已准备审核，并且您可以使用“请求修订”。')],
     steps: [l('Open the submitted task and inspect the output.', '打开已提交的任务并检查成果。'), l('Write what is missing, incorrect, or not yet ready in Revision Control.', '在“修订控制”中写明缺少、错误或尚未完成的内容。'), l('Choose Request Revision.', '选择“请求修订”。'), l('After the task returns to the working state, confirm the staff member can see the request.', '任务返回工作状态后，确认员工可以看到修订请求。')],
     rules: [l('Only the current workflow and your permission determine whether Request Revision is available.', '只有当前工作流程和您的权限决定“请求修订”是否可用。'), l('Cancelled work is not presented as generally reopenable.', '已取消的工作不会被描述为可以普遍重新打开。')],
-    problems: [l('If Request Revision is missing, ask the responsible Project Manager or configured reviewer to review the next transition.', '如果缺少“请求修订”，请负责的项目经理或配置的审核人检查下一次转换。')],
+    problems: [l('If Request Revision is missing, ask the responsible Project Manager or configured reviewer to check the next available action.', '如果没有“请求修订”，请负责的项目经理或指定审核人确认下一步可用操作。')],
     related: ['review-submitted-work', 'respond-to-revision-requests', 'understand-task-statuses'], keywords: [l('HOD request revision review changes note', '部门主管 请求修订 审核 修改 说明')],
   }),
   makeTutorial({
@@ -449,8 +484,8 @@ export const tutorials: Tutorial[] = [
     outcome: l('You will know where to read the brief and how to signal that the assignment is being worked on.', '您将知道在哪里阅读简报，以及如何表示任务正在处理。'),
     before: [l('The task must be assigned to you.', '任务必须分配给您。'), l('The task must offer the relevant status control.', '任务必须提供相关状态控件。')],
     steps: [l('Open the task from My work, Tasks, or Inbox.', '从“我的工作”“任务”或“收件箱”打开任务。'), l('Read the requirement, deadline, department, files, and comments.', '阅读要求、截止日期、部门、文件和评论。'), l('Use the available status control to move the work into the next allowed state, if the workflow offers it.', '如果工作流程提供，请使用可用状态控件将工作移动到下一允许状态。'), l('Confirm the status change and begin work only after the saved state is visible.', '确认状态更改，并在保存后的状态可见后开始工作。')],
-    rules: [l('The application decides which status transitions are available; Staff cannot bypass review gates.', '应用决定可用的状态转换；员工不能绕过审核关卡。')],
-    problems: [l('If no accept or progress action is available, read the task status and ask the HOD for the correct handoff.', '如果没有接受或进度操作，请查看任务状态，并向部门主管询问正确交接。')],
+    rules: [l('AiTask shows the status changes available for the task; Staff cannot skip required reviews.', 'AiTask 会显示任务可用的状态操作；员工不能跳过必要审核。')],
+    problems: [l('If no accept or progress action is available, read the task status and ask the HOD what to do next.', '如果没有接受或更新进度的操作，请查看任务状态，并向部门主管询问下一步。')],
     related: ['understand-task-requirements', 'update-task-progress', 'submit-work-for-approval'], keywords: [l('accept assignment start task in progress', '接受 分配 开始 任务 进行中')],
   }),
   makeTutorial({
@@ -472,7 +507,7 @@ export const tutorials: Tutorial[] = [
     before: [l('The task must be assigned to you and editable in the current state.', '任务必须分配给您，且当前状态允许编辑。')],
     steps: [l('Open the task and compare its current status with the work completed.', '打开任务，将当前状态与已完成工作进行比较。'), l('Update the progress field or allowed status control in the task details.', '在任务详情中更新进度字段或允许的状态控件。'), l('Add a comment when the number alone does not explain the situation.', '当数字不能说明情况时，添加评论。'), l('Save and confirm the updated progress is visible to the reviewer.', '保存并确认审核人可以看到更新后的进度。')],
     rules: [l('Progress cannot bypass submission, internal review, client review, or completion rules.', '进度不能绕过提交、内部审核、客户审核或完成规则。')],
-    problems: [l('If the status control is disabled, the task may be waiting for review or locked after approval. Ask the HOD for the next transition.', '如果状态控件被禁用，任务可能正在等待审核，或已在批准后锁定。请向部门主管询问下一次转换。')],
+    problems: [l('If the status control is disabled, the task may be waiting for review or locked after approval. Ask the HOD what should happen next.', '如果状态控件被禁用，任务可能正在等待审核，或已在批准后锁定。请向部门主管询问下一步安排。')],
     related: ['add-task-comments', 'submit-work-for-approval', 'respond-to-revision-requests'], keywords: [l('staff update progress percentage status', '员工 更新 进度 百分比 状态')],
   }),
   makeTutorial({
@@ -503,10 +538,10 @@ export const tutorials: Tutorial[] = [
     title: l('How to submit work for approval', '如何提交工作审批'),
     summary: l('Move finished work into the review path with the evidence the HOD needs.', '用部门主管需要的证据，将完成的工作提交到审核流程。'),
     outcome: l('You will know what must be ready before the task can enter internal review.', '您将知道任务进入内部审核前必须准备什么。'),
-    before: [l('The requirement is complete enough to review.', '任务要求已完成到可以审核的程度。'), l('Required files, links, comments, and progress are up to date.', '必要文件、链接、评论和进度已更新。'), l('The task status control offers the review transition.', '任务状态控件提供审核转换。')],
+    before: [l('The requirement is complete enough to review.', '任务要求已完成到可以审核的程度。'), l('Required files, links, comments, and progress are up to date.', '必要文件、链接、评论和进度已更新。'), l('The task shows an available action to submit the work for review.', '任务显示可用的送审操作。')],
     steps: [l('Open the assigned task and compare the output with the original brief.', '打开分配给您的任务，将成果与原始简报比较。'), l('Upload the deliverable and add a concise completion comment.', '上传交付成果并添加简洁的完成评论。'), l('Check that required evidence and progress are complete.', '确认必要证据和进度完整。'), l('Choose the available submit or review-ready status control.', '选择可用的提交或进入审核状态控件。'), l('Confirm that the task shows the review state and that the HOD can see it.', '确认任务显示审核状态，并且部门主管可以看到。')],
     rules: [l('The application may require a reviewer, evidence, or dependency completion before submission.', '提交前，应用可能要求审核人、证据或依赖任务完成。')],
-    problems: [l('If submission is blocked, read the transition explanation and ask the HOD or Project Manager to correct the missing prerequisite.', '如果提交被阻止，请阅读转换说明，并请部门主管或项目经理补齐缺少的前置条件。')],
+    problems: [l('If submission is blocked, read the message and ask the HOD or Project Manager to help with the missing requirement.', '如果无法提交，请阅读提示，并请部门主管或项目经理协助处理缺少的条件。')],
     related: ['upload-deliverables', 'review-submitted-work', 'respond-to-revision-requests'], keywords: [l('submit work approval review ready staff', '提交 工作 审批 审核 员工')], searchTerms: [l('submit work submit for approval send for review hand in', '提交工作 提交审批 送审 提交审核')],
     guide: [guideStep('tasks', 'tasks-overview', '/tasks', 'Open your assigned task', '打开分配给您的任务', 'Choose the task yourself. The walkthrough will not submit work or change its status.', '自行选择任务。教程不会提交工作或更改状态。'), guideStep('output', 'task-output', undefined, 'Check the output area', '检查成果区域', 'Review the evidence and submission requirements before taking the action yourself.', '先查看证据和提交要求，再自行决定是否操作。')],
   }),
@@ -516,9 +551,9 @@ export const tutorials: Tutorial[] = [
     summary: l('Turn reviewer feedback into a clear updated submission.', '将审核反馈转化为清晰的更新提交。'),
     outcome: l('You will address the requested change and return the task to review with a visible history.', '您将完成要求的修改，并带着可见历史将任务返回审核。'),
     before: [l('The task must show a revision request or Revision status.', '任务必须显示修订请求或“修订”状态。')],
-    steps: [l('Open the task and read the latest revision note and comments.', '打开任务，阅读最新修订说明和评论。'), l('Update the work and replace or add the relevant deliverable.', '更新工作，并替换或添加相关交付成果。'), l('Add a comment describing what changed.', '添加评论说明修改内容。'), l('Move the task through the available progress or review transition again.', '再次通过可用进度或审核转换推动任务。'), l('Confirm that the updated output is visible to the reviewer.', '确认审核人可以看到更新后的成果。')],
+    steps: [l('Open the task and read the latest revision note and comments.', '打开任务，阅读最新修订说明和评论。'), l('Update the work and replace or add the relevant deliverable.', '更新工作，并替换或添加相关交付成果。'), l('Add a comment describing what changed.', '添加评论说明修改内容。'), l('Use the available action to update progress or send the work for review again.', '使用可用操作更新进度，或再次将工作送审。'), l('Confirm that the updated output is visible to the reviewer.', '确认审核人可以看到更新后的成果。')],
     rules: [l('Revision returns work to a workable state; it does not remove the original review history.', '修订会将工作返回可处理状态，但不会删除原始审核历史。')],
-    problems: [l('If the task is still locked, the reviewer or Project Manager may need to make the next authorised transition.', '如果任务仍然锁定，审核人或项目经理可能需要执行下一次授权转换。')],
+    problems: [l('If the task is still locked, ask the reviewer or Project Manager to check which action is available next.', '如果任务仍被锁定，请审核人或项目经理确认下一步可用操作。')],
     related: ['upload-deliverables', 'submit-work-for-approval', 'understand-task-statuses'], keywords: [l('staff revision request update resubmit changes', '员工 修订 请求 更新 重新提交 修改')],
   }),
   makeTutorial({
@@ -527,7 +562,7 @@ export const tutorials: Tutorial[] = [
     summary: l('Make a blocked task visible with enough context for the HOD to help.', '让阻塞任务可见，并提供足够背景让部门主管协助。'),
     outcome: l('You will report the missing dependency, decision, or resource without silently changing the task.', '您将报告缺少的依赖、决定或资源，而不会静默更改任务。'),
     before: [l('Open the blocked task and identify what is preventing progress.', '打开被阻塞任务，明确阻碍进度的原因。')],
-    steps: [l('Add a comment in Comments & Updates that states the blocker, impact, and help needed.', '在“评论与更新”中说明阻塞、影响和需要的帮助。'), l('Use the task’s help or blocker action when it is available in your role-specific workbench.', '角色工作台提供时，使用任务中的求助或阻塞操作。'), l('Include a decision date or dependency owner when known.', '知道时，写明决策日期或依赖负责人。'), l('Watch Inbox for the response and keep the task progress honest.', '关注收件箱中的回复，并保持任务进度真实。')],
+    steps: [l('Add a comment in Comments & Updates that states the blocker, impact, and help needed.', '在“评论与更新”中说明阻塞、影响和需要的帮助。'), l('Use the task’s help or blocker action if it is available on your task page.', '如果任务页面提供求助或阻塞操作，请使用该操作。'), l('Include a decision date or dependency owner when known.', '知道时，写明决定日期或依赖负责人。'), l('Watch Inbox for the response and keep the task progress honest.', '关注收件箱中的回复，并如实更新任务进度。')],
     rules: [l('Reporting a blocker does not automatically change the status, deadline, or assignee.', '报告阻塞不会自动更改状态、截止日期或负责人。')],
     problems: [l('If the blocker is caused by an unclear brief, ask the HOD or Project Manager for clarification rather than editing the original requirement yourself.', '如果阻塞来自不清晰的简报，请向部门主管或项目经理请求澄清，不要自行修改原始要求。')],
     related: ['add-task-comments', 'update-task-progress', 'read-notifications'], keywords: [l('blocker help request dependency staff', '阻塞 求助 请求 依赖 员工')],
@@ -626,6 +661,7 @@ export const tutorials: Tutorial[] = [
   }),
   makeTutorial({
     id: 'track-delivery-progress', category: 'service-delivery', roles: ['admin', 'projectManager', 'hod', 'staff', 'client'],
+    requiredPermission: 'viewDeliveryTracker',
     title: l('How to track delivery progress', '如何跟踪交付进度'),
     summary: l('Follow client work across periods, tasks, deliverables, and visible statuses.', '按周期、任务、交付成果和可见状态跟进客户工作。'),
     outcome: l('You will understand whether a delivery is open, overdue, completed, or waiting for review.', '您将了解交付是开放、逾期、已完成还是等待审核。'),
@@ -647,13 +683,116 @@ export const tutorials: Tutorial[] = [
     problems: [l('If a cycle is missing, check the selected period and whether the plan or cycle has been published.', '如果缺少周期，请检查所选时间段，以及方案或周期是否已发布。')],
     related: ['manage-service-plans', 'track-delivery-progress', 'review-client-deliverables'], keywords: [l('service cycle planned deliverables published status', '服务周期 计划 交付成果 发布 状态')],
   }),
+  makeTutorial({
+    id: 'renew-service-plan', category: 'service-delivery', roles: ['admin', 'projectManager'],
+    requiredPermissions: ['viewProjects', 'manageClientPlans'],
+    title: l('How to prepare the next service plan', '如何准备下一期服务方案'),
+    summary: l('Review a plan revision before it takes effect in a future monthly cycle.', '检查服务方案的新版本，并确认其在未来月度周期生效。'),
+    outcome: l('You will prepare a reviewed plan for the next cycle while keeping previous plan periods available.', '您将为下一周期准备已审核的方案，同时保留以往周期记录。'),
+    before: [l('The source plan must be Active or Ended, and you need access to manage plans for that client.', '原方案必须处于“启用”或“已结束”状态，且您需要有权管理该客户的方案。')],
+    steps: [
+      l('Open the company’s Services workspace and go to its plan.', '打开公司的“服务”工作区，然后进入服务方案。'),
+      l('Choose Create Next Month’s Plan to start a draft based on the current or ended plan.', '选择“创建下月方案”，根据当前或已结束的方案建立草稿。'),
+      l('Review the services, quantities, dates, and other plan details. Update anything that should change.', '检查服务、数量、日期和其他方案详情，并更新需要调整的内容。'),
+      l('Review the effective date and schedule the draft only when the new scope is ready.', '确认生效日期，并仅在新服务范围准备好后安排方案。'),
+      l('Return to the plan schedule to check the next cycle and keep earlier cycles in history.', '回到方案日程查看下一周期；以往周期会保留在历史记录中。'),
+    ],
+    rules: [
+      l('A scheduled revision applies from its effective cycle. It does not rewrite completed or historical cycles.', '已安排的方案版本从其生效周期开始应用，不会改写已完成或历史周期。'),
+      l('Paused plans cannot be renewed until they are active or ended.', '已暂停的方案不能续约；只有启用或已结束的方案可以续约。'),
+    ],
+    problems: [l('If Create Next Month’s Plan is unavailable, check the plan status, client scope, and your plan-management access.', '如果无法选择“创建下月方案”，请检查方案状态、客户范围和方案管理权限。')],
+    related: ['manage-service-plans', 'review-service-cycles', 'carry-forward-work'],
+    keywords: [l('renew revise next month plan billing cycle service scope', '续约 修改 下月 方案 计费周期 服务范围')],
+  }),
+  makeTutorial({
+    id: 'carry-forward-work', category: 'service-delivery', roles: ['admin', 'projectManager', 'hod'],
+    requiredPermissions: ['viewProjects', 'manageServiceCycles', 'createTasks'],
+    title: l('How to carry unfinished work into a later cycle', '如何将未完成工作带入后续周期'),
+    summary: l('Keep an unresolved task visible in a later monthly cycle without changing its original record.', '在后续月度周期继续跟进未完成任务，同时保留原始记录。'),
+    outcome: l('You will know when work can move forward and how to confirm the new task.', '您将了解何时可以延续工作，以及如何确认新任务。'),
+    before: [l('You need permission to manage service cycles and create tasks for this client.', '您需要有权为该客户管理服务周期并创建任务。'), l('The task must belong to a service cycle with a later cycle available for the same client.', '该任务必须属于某个服务周期，且同一客户已有后续周期。')],
+    steps: [
+      l('Open the company’s Services workspace and select the cycle that contains the unfinished task.', '打开公司的“服务”工作区，并选择包含未完成任务的周期。'),
+      l('Find the unresolved task in its deliverable and choose Carry forward.', '在交付成果中找到未完成的任务，然后选择“延续至后续周期”。'),
+      l('Check the later cycle for the new task. Review its owner and due date before the work continues.', '在后续周期中确认新任务，并在继续工作前检查负责人和截止日期。'),
+      l('Keep the original cycle record for its history and progress.', '保留原周期记录，以便查看历史和进度。'),
+    ],
+    rules: [
+      l('Only unresolved work can be carried to a later cycle for the same client. A cancelled cycle or delivered target cannot receive it.', '只有未完成工作可以延续到同一客户的后续周期。已取消周期或已交付的目标不能接收该工作。'),
+      l('AiTask creates a new task for the later cycle; it does not move, delete, or complete the original task.', 'AiTask 会为后续周期创建新任务，不会移动、删除或完成原任务。'),
+    ],
+    problems: [l('If Carry forward is missing, check the task status, later cycle, client match, and your access to manage cycles and create tasks.', '如果没有“延续至后续周期”操作，请检查任务状态、后续周期、客户是否相同，以及您是否有权管理周期和创建任务。')],
+    related: ['review-service-cycles', 'track-delivery-progress', 'renew-service-plan'],
+    keywords: [l('carry forward unresolved unfinished task next month cycle', '延续 未完成 任务 下月 周期')],
+  }),
 ];
 
 export const getLocalizedCopy = (copy: LocalizedCopy, locale: AppLocale) => copy[locale === 'zh' ? 'zh' : 'en'];
 
 export const getTutorialCategory = (id: TutorialCategoryId) => tutorialCategories.find(category => category.id === id);
 
-export const getVisibleTutorials = (persona: OnboardingPersona) => tutorials.filter(tutorial => tutorial.roles.includes('all') || tutorial.roles.includes(persona));
+const tutorialPermissionRequirements: Record<string, RolePermissionKey[]> = {
+  'understand-dashboard': ['viewDashboard'],
+  'understand-task-statuses': ['viewTasks'],
+  'use-search-filters': ['viewTasks'],
+  'manage-account-settings': ['viewSettings'],
+  'create-company': ['viewProjects', 'createClients'],
+  'edit-company-information': ['viewProjects'],
+  'find-existing-companies': ['viewProjects'],
+  'create-project': ['viewProjects', 'createProjects'],
+  'set-project-deadlines': ['viewProjects'],
+  'manage-project-lifecycle': ['viewProjects'],
+  'create-task': ['viewTasks', 'createTasks'],
+  'write-clear-task-brief': ['viewTasks', 'createTasks'],
+  'assign-task-to-hod': ['viewTasks', 'createTasks'],
+  'monitor-task-progress': ['viewTasks'],
+  'review-completed-work': ['viewTasks'],
+  'request-task-revision': ['viewTasks'],
+  'manage-service-plans': ['viewProjects', 'manageClientPlans'],
+  'view-reports': ['viewReports'],
+  'identify-overdue-tasks': ['viewTasks'],
+  'receive-assigned-tasks': ['viewTasks'],
+  'review-task-requirements': ['viewTasks'],
+  'delegate-task-to-staff': ['viewTasks'],
+  'change-assigned-staff': ['viewTasks'],
+  'monitor-staff-progress': ['viewTasks'],
+  'review-submitted-work': ['viewTasks'],
+  'request-revisions': ['viewTasks'],
+  'approve-work': ['viewTasks'],
+  'manage-department-workload': ['viewTasks'],
+  'view-assigned-tasks': ['viewTasks'],
+  'accept-task': ['viewTasks'],
+  'understand-task-requirements': ['viewTasks'],
+  'update-task-progress': ['viewTasks'],
+  'add-task-comments': ['viewTasks'],
+  'upload-deliverables': ['viewTasks'],
+  'submit-work-for-approval': ['viewTasks'],
+  'respond-to-revision-requests': ['viewTasks'],
+  'report-a-blocker': ['viewTasks'],
+  'track-completed-tasks': ['viewTasks'],
+  'access-client-workspace': ['viewDeliveryTracker'],
+  'view-shared-projects': ['viewDeliveryTracker'],
+  'review-client-deliverables': ['viewDeliveryTracker'],
+  'download-deliverables': ['viewDeliveryTracker'],
+  'leave-feedback': ['viewDeliveryTracker', 'clientReview'],
+  'request-changes': ['viewDeliveryTracker', 'clientReview'],
+  'approve-deliverables': ['viewDeliveryTracker', 'clientReview'],
+  'track-delivery-progress': ['viewDeliveryTracker'],
+  'review-service-cycles': ['viewProjects'],
+};
+
+export const getVisibleTutorials = (persona: OnboardingPersona, permissions?: RolePermissions) => tutorials.filter(tutorial => {
+  if (!tutorial.roles.includes('all') && !tutorial.roles.includes(persona)) return false;
+  if (!permissions) return true;
+  const requiredPermissions = [
+    ...(tutorialPermissionRequirements[tutorial.id] || []),
+    ...(tutorial.requiredPermissions || []),
+    ...(tutorial.requiredPermission ? [tutorial.requiredPermission] : []),
+  ]
+    .filter((permission): permission is RolePermissionKey => Boolean(permission));
+  return [...new Set(requiredPermissions)].every(permission => permissions[permission]);
+});
 
 export const searchTutorials = (items: Tutorial[], query: string, locale: AppLocale) => {
   const normalized = query.trim().toLocaleLowerCase();

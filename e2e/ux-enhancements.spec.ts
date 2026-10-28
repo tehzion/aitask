@@ -6,13 +6,13 @@ async function login(page: Page, name = 'Project Manager Demo') {
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
-  const notice = page.getByRole('button', { name: 'Happy working' });
+  const notice = page.getByRole('button', { name: 'Continue to AiTask' });
   await notice.waitFor({ state: 'visible', timeout: 3000 }).catch(() => undefined);
   if (await notice.isVisible()) await notice.click();
 }
 
-for (const width of [320, 375, 390, 414, 768, 1024]) {
-  const role = width === 320 || width === 414 ? 'Project Manager' : width === 375 || width === 768 ? 'HOD' : 'Staff';
+for (const width of [320, 390, 768, 1024, 1440]) {
+  const role = width === 320 || width === 1440 ? 'Project Manager' : width === 768 ? 'HOD' : 'Staff';
   test(`quick creation for ${role} at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     await login(page);
@@ -29,7 +29,10 @@ for (const width of [320, 375, 390, 414, 768, 1024]) {
     }, role);
     await page.getByRole('button', { name: 'New task', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: /^Create task$/i });
-    await dialog.getByLabel(/Link to Company/).selectOption('ux-project');
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), {
+      message: `Task creation should not cause page overflow at ${width}px`,
+    }).toBe(true);
+    await dialog.getByLabel(/^Project/).selectOption('ux-project');
     await dialog.getByLabel('Task Title').fill(`UX creation ${width}`);
     await dialog.getByLabel('Assign to Position/Department').selectOption('Designer');
     await expect(dialog.getByLabel('Description', { exact: true })).toBeHidden();
@@ -115,7 +118,7 @@ test('Boss table and board preference stays URL-backed and persists per user', a
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     stopBackendAutoSync();
   });

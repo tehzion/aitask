@@ -499,6 +499,7 @@ export interface Task {
   projectId?: string;
   serviceCycleId?: string;
   deliverableId?: string;
+  supportingAttachments?: AttachmentRef[];
   outputAttachments?: AttachmentRef[];
   accountableLeadId?: string;
   requiresInternalApproval?: boolean; // Defaults to true; configured by the responsible PM.

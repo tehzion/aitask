@@ -28,7 +28,7 @@ try {
     await page.waitForURL(url => url.pathname === '/' || url.pathname === '/settings');
     if (new URL(page.url()).pathname === '/settings') await page.getByRole('button', { name: 'Continue for now' }).click();
     const notice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
-    await notice.waitFor({ state: 'visible', timeout: 5000 }).then(() => notice.getByRole('button', { name: 'Happy working' }).click()).catch(() => undefined);
+    await notice.waitFor({ state: 'visible', timeout: 5000 }).then(() => notice.getByRole('button', { name: 'Continue to AiTask' }).click()).catch(() => undefined);
     await page.locator('main h1').waitFor();
     const dashboardReadyMs = Date.now() - start;
     const loginLongTaskMs = await page.evaluate(() => window.__profileLongTasks.reduce((sum, duration) => sum + duration, 0));

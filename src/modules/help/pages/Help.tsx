@@ -1,7 +1,9 @@
-import { BookOpen, CheckCircle2, CircleHelp, Clock3, Filter, GitBranch, LockKeyhole, MessageSquareText, RefreshCw, Route, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { BookOpen, CheckCircle2, CircleHelp, Clock3, Filter, GitBranch, LockKeyhole, Megaphone, MessageSquareText, RefreshCw, Route, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { OPEN_RELEASE_NOTICE_EVENT } from '../../../app/lifecycle/releaseNotice';
 import { useStore } from '../../../app/store/workspaceStore';
+import { getEffectivePermissions } from '../../../shared/authorization/access';
 import { useI18n } from '../../../shared/components/I18nProvider';
 import { Badge, Button, PageHeader, StatusChip, Surface } from '../../../shared/components/ui';
 import TutorialFeedback from '../components/TutorialFeedback';
@@ -35,8 +37,12 @@ const Help: React.FC = () => {
   const rolePermissions = useStore(state => state.rolePermissions);
   const [searchParams, setSearchParams] = useSearchParams();
   const persona = getOnboardingPersona(currentUser, rolePermissions);
+  const effectivePermissions = React.useMemo(
+    () => getEffectivePermissions(currentUser, rolePermissions),
+    [currentUser, rolePermissions],
+  );
   const roleLabel = getRoleLabel(persona, locale);
-  const roleGuide = getHelpCopy(persona, locale);
+  const roleGuide = getHelpCopy(persona, locale, effectivePermissions);
   const workflow = getWorkflowCopy(locale);
   const statuses = getStatusCopy(locale);
   const [query, setQuery] = React.useState(searchParams.get('q') || '');
@@ -45,7 +51,10 @@ const Help: React.FC = () => {
   const [progressVersion, setProgressVersion] = React.useState(0);
   const zh = locale === 'zh';
 
-  const visibleTutorials = React.useMemo(() => getVisibleTutorials(persona), [persona]);
+  const visibleTutorials = React.useMemo(
+    () => getVisibleTutorials(persona, effectivePermissions),
+    [effectivePermissions, persona],
+  );
   const visibleTutorialIds = React.useMemo(() => new Set(visibleTutorials.map(tutorial => tutorial.id)), [visibleTutorials]);
   const filteredTutorials = React.useMemo(() => searchTutorials(visibleTutorials, query, locale).filter(item => category === 'all' || item.category === category), [category, locale, query, visibleTutorials]);
   const selected = React.useMemo(() => {
@@ -67,7 +76,10 @@ const Help: React.FC = () => {
     .map(id => getTutorialById(id))
     .filter((item): item is Tutorial => Boolean(item && visibleTutorials.some(visible => visible.id === item.id))), [persona, visibleTutorials]);
   const completedLearningCount = learningTutorials.filter(item => progress[item.id]?.completedAt).length;
-  const visibleWorkflowGuides = React.useMemo(() => persona === 'client' ? [] : workflowGuides, [persona]);
+  const visibleWorkflowGuides = React.useMemo(
+    () => persona === 'client' || !effectivePermissions.viewTasks ? [] : workflowGuides,
+    [effectivePermissions.viewTasks, persona],
+  );
 
   const updateQuery = (next: { q?: string; category?: TutorialCategoryId | 'all'; tutorial?: string }) => {
     const params = new URLSearchParams(searchParams);
@@ -102,6 +114,7 @@ const Help: React.FC = () => {
   };
 
   const restartOnboarding = () => window.dispatchEvent(new CustomEvent('aitask-start-onboarding'));
+  const openLatestUpdates = () => window.dispatchEvent(new Event(OPEN_RELEASE_NOTICE_EVENT));
 
   React.useEffect(() => {
     setQuery(searchParams.get('q') || '');
@@ -116,10 +129,16 @@ const Help: React.FC = () => {
         description={zh ? '按您的角色查找实际工作流程、操作说明和状态规则。' : 'Find practical workflows, action guides, and status rules matched to your role.'}
         onboardingTarget="help-overview"
         action={(
-          <Button onClick={restartOnboarding}>
-            <BookOpen className="h-4 w-4" aria-hidden="true" />
-            {t('Restart tutorial')}
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={restartOnboarding}>
+              <BookOpen className="h-4 w-4" aria-hidden="true" />
+              {t('Restart tutorial')}
+            </Button>
+            <Button onClick={openLatestUpdates}>
+              <Megaphone className="h-4 w-4" aria-hidden="true" />
+              {t('View latest updates')}
+            </Button>
+          </div>
         )}
       />
 

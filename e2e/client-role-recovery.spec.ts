@@ -11,7 +11,7 @@ const seed = async (page: Page) => {
     const client = { id: 'role-client', name: 'Customer', role: 'Client', companyName: 'Customer Co', department: 'Client', departments: ['Client'], mustResetPassword: false };
     const staff = { id: 'role-staff', name: 'Contact', role: 'Staff', department: 'Designer', departments: ['Designer'] };
     enablePasswordResetBypass(client.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${client.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${client.id}`, 'acknowledged');
     const base = { clientName: 'Customer Co', clientId: 'role-company', serviceType: 'Design', description: 'Shared brief', department: 'Designer', assignedTo: staff.id, createdBy: staff.id, startDate: '2026-10-01', dueDate: '2026-10-08', priority: 'Medium', status: 'Approved', isCompleted: false, completionPercentage: 80, clientApprovalStatus: 'Pending', revisionCount: 0, isRecurring: false, visibility: 'client-visible', comments: [], approvalHistory: [] };
     useStore.setState({ currentUser: client, users: [client, staff], tasks: [{ ...base, id: 'customer-a', title: 'Customer artwork A' }, { ...base, id: 'customer-b', title: 'Customer artwork B' }, { ...base, id: 'customer-private', title: 'Internal secret', visibility: 'internal' }, { ...base, id: 'customer-foreign', title: 'Foreign secret', clientName: 'Other Co' }], clients: [{ id: 'role-company', clientName: 'Customer Co', createdAt: '2026-10-01', updatedAt: '2026-10-01' }], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], rolePermissions: [], backend: { ...state.backend, mode: 'local', status: 'local', isSaving: false, isPulling: false, hasLocalChanges: false, pendingMutations: 0 } });
     useToastStore.setState({ toasts: [] });
@@ -111,7 +111,7 @@ test('Customer late approval acknowledgement cannot affect another account', asy
     const client = { ...current.currentUser!, id: 'other-customer' };
     const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
     enablePasswordResetBypass(client.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${client.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${client.id}`, 'acknowledged');
     useStore.setState({ currentUser: client, users: [client, ...current.users.filter(user => user.role !== 'Client')], tasks: current.tasks.map(task => ({ ...task, clientApprovalStatus: 'Pending', status: 'Approved', isCompleted: false, approvalHistory: [] })) });
   });
   const note = dialog.getByRole('textbox', { name: 'Decision note' });

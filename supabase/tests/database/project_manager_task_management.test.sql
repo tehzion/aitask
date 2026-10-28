@@ -26,10 +26,10 @@ insert into public.aitask_members(
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
   ('pgtap-pm-task-mgmt', 'client', 'pmtask-pm1-client', '{"id":"pmtask-pm1-client","clientName":"PM One Co","createdBy":"pgtap-pmtask-pm1"}'::jsonb),
-  ('pgtap-pm-task-mgmt', 'project', 'pmtask-pm1-project', '{"id":"pmtask-pm1-project","clientId":"pmtask-pm1-client","clientName":"PM One Co","projectName":"PM One Launch","createdBy":"pgtap-pmtask-pm1"}'::jsonb),
+  ('pgtap-pm-task-mgmt', 'project', 'pmtask-pm1-project', '{"id":"pmtask-pm1-project","clientId":"pmtask-pm1-client","clientName":"PM One Co","projectName":"PM One Launch","createdBy":"pgtap-pmtask-pm1","projectManagerIds":["pgtap-pmtask-pm1"],"hodMemberIds":[],"staffMemberIds":["pgtap-pmtask-staff"]}'::jsonb),
   ('pgtap-pm-task-mgmt', 'task', 'pmtask-pm1-staff-task', '{"id":"pmtask-pm1-staff-task","clientId":"pmtask-pm1-client","clientName":"PM One Co","projectId":"pmtask-pm1-project","title":"PM One Staff Task","department":"Designer","assignedTo":"pgtap-pmtask-staff","createdBy":"pgtap-pmtask-staff","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-pm-task-mgmt', 'client', 'pmtask-pm2-client', '{"id":"pmtask-pm2-client","clientName":"PM Two Co","createdBy":"pgtap-pmtask-pm2"}'::jsonb),
-  ('pgtap-pm-task-mgmt', 'project', 'pmtask-pm2-project', '{"id":"pmtask-pm2-project","clientId":"pmtask-pm2-client","clientName":"PM Two Co","projectName":"PM Two Launch","createdBy":"pgtap-pmtask-pm2"}'::jsonb),
+  ('pgtap-pm-task-mgmt', 'project', 'pmtask-pm2-project', '{"id":"pmtask-pm2-project","clientId":"pmtask-pm2-client","clientName":"PM Two Co","projectName":"PM Two Launch","createdBy":"pgtap-pmtask-pm2","projectManagerIds":["pgtap-pmtask-pm2"],"hodMemberIds":[],"staffMemberIds":["pgtap-pmtask-staff"]}'::jsonb),
   ('pgtap-pm-task-mgmt', 'task', 'pmtask-pm2-staff-task', '{"id":"pmtask-pm2-staff-task","clientId":"pmtask-pm2-client","clientName":"PM Two Co","projectId":"pmtask-pm2-project","title":"PM Two Staff Task","department":"Designer","assignedTo":"pgtap-pmtask-staff","createdBy":"pgtap-pmtask-staff","status":"Pending","visibility":"internal"}'::jsonb);
 
 -- Project Manager One: can view and edit portfolio tasks, including ones they

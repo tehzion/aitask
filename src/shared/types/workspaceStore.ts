@@ -189,6 +189,7 @@ export interface StoreState {
   updateTaskDueDate: (taskId: string, newDueDate: string) => MutationActionResult;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => MutationActionResult;
   attachTaskOutput: (taskId: string, attachment: AttachmentRef) => Promise<MutationActionResult>;
+  attachTaskSupportingFile: (taskId: string, attachment: AttachmentRef) => Promise<MutationActionResult>;
   setTaskReviewConfig: (taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string; requiresInternalApproval?: boolean; approvalMode?: Task['approvalMode'] }) => Promise<MutationActionResult>;
   updateTask: (taskId: string, data: TaskUpdateInput) => { ok: boolean; error?: string };
   deleteTask: (taskId: string) => { ok: boolean; error?: string };

@@ -81,7 +81,7 @@ try {
     // Hosted acknowledgements live on the server; a localStorage flag cannot
     // dismiss the authenticated release notice for these fresh test accounts.
     if (!acknowledgedAccounts.has(id)) {
-      const notice = page.getByRole('button', { name: 'Happy working', exact: true });
+      const notice = page.getByRole('button', { name: 'Continue to AiTask', exact: true });
       await expect(notice).toBeVisible();
       await notice.click();
       acknowledgedAccounts.add(id);
@@ -127,7 +127,7 @@ try {
   };
   const file = Buffer.from('%PDF-1.4\nReal worker output\n%%EOF');
   const focusUpload = await holdUpload();
-  await page.locator('input[type="file"]').setInputFiles({ name:'Artwork.pdf',mimeType:'application/pdf',buffer:file });
+  await page.getByRole('region', { name: 'Upload output' }).locator('input[type="file"]').setInputFiles({ name:'Artwork.pdf',mimeType:'application/pdf',buffer:file });
   await focusUpload.seen;
   await assertProtectedUpload();
   await expect(page.getByRole('button', { name: 'Full edit', exact: true })).toBeDisabled();
@@ -141,7 +141,7 @@ try {
   await expect(page.getByRole('button', { name: 'Close Upload artwork for review', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Full edit', exact: true }).click();
   const fullUpload = await holdUpload();
-  await page.locator('input[type="file"]').setInputFiles({ name: 'Full-edit.pdf', mimeType: 'application/pdf', buffer: file });
+  await page.getByRole('region', { name: 'Upload output' }).locator('input[type="file"]').setInputFiles({ name: 'Full-edit.pdf', mimeType: 'application/pdf', buffer: file });
   await fullUpload.seen;
   await assertProtectedUpload();
   fullUpload.release();

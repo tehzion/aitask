@@ -19,7 +19,7 @@ const seedStageWorkspace = async () => {
   const base = state.users.find(user => user.name === 'Staff Demo')!;
   const member = (id: string, role: 'Staff' | 'HOD' | 'Project Manager' | 'Client') => ({ ...base, id, name: id, role, departments: role === 'Client' ? ['Client'] : ['Designer'], department: role === 'Client' ? 'Client' : 'Designer', companyName: role === 'Client' ? 'Stage Company' : undefined, customRoleId: undefined, customRoleName: undefined, permissions: undefined, isSuperAdmin: false, mustResetPassword: false });
   const users = [member('stage-pm', 'Project Manager'), member('stage-hod', 'HOD'), member('stage-staff', 'Staff'), member('stage-client', 'Client')];
-  for (const user of users) { enablePasswordResetBypass(user.id); localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${user.id}`, 'acknowledged'); }
+  for (const user of users) { enablePasswordResetBypass(user.id); localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${user.id}`, 'acknowledged'); }
   localStorage.setItem('aitask:locale', 'en');
   useStore.setState({ currentUser: users[0], users, rolePermissions: [], projects: [], clientPlans: [], deliverables: [], serviceCycles: [], notifications: [], clients: [{ id: 'stage-company', clientName: 'Stage Company', createdBy: 'stage-pm', createdAt: '2026-10-01', updatedAt: '2026-10-01' }], tasks: [{ ...state.tasks[0], generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, id: 'stage-task', title: 'Stage artwork', clientId: 'stage-company', clientName: 'Stage Company', projectId: undefined, deliverableId: undefined, serviceCycleId: undefined, department: 'Designer', assignedTo: '', assignedBy: 'stage-pm', createdBy: 'stage-pm', status: 'Pending', isCompleted: false, completionPercentage: 0, revisionCount: 0, clientApprovalStatus: 'Pending', visibility: 'client-visible', predecessorTaskIds: [], workState: {}, workHistory: [], comments: [], approvalHistory: [] }], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   if (!useStore.getState().updateTaskAssignee('stage-task', 'stage-hod').ok) throw new Error('PM assignment failed');
@@ -139,6 +139,75 @@ test('responsible PM receives Designer review without a Designer HOD and approve
   await expect(page.getByRole('progressbar', { name: 'Task progress', exact: true })).toHaveAttribute('aria-valuenow', '100');
 });
 
+test('PM can create direct Staff work when the project has no eligible HOD', async ({ page }) => {
+  await page.goto('/login');
+  await waitForWorkspaceHydration(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { enablePasswordResetBypass } = await import('/src/modules/authentication/domain/auth.ts');
+    const state = useStore.getState();
+    const base = state.users.find(user => user.name === 'Staff Demo')!;
+    const makeMember = (id: string, role: 'Project Manager' | 'HOD' | 'Staff') => ({
+      ...base,
+      id,
+      name: id,
+      role,
+      departments: [role === 'Project Manager' ? 'Management' : 'Designer'],
+      department: role === 'Project Manager' ? 'Management' : 'Designer',
+      customRoleId: undefined,
+      customRoleName: undefined,
+      permissions: undefined,
+      isSuperAdmin: false,
+      hasLogin: true,
+      mustResetPassword: false,
+    });
+    const pm = makeMember('fallback-pm', 'Project Manager');
+    const outOfProjectHod = makeMember('fallback-unassigned-hod', 'HOD');
+    const staff = makeMember('fallback-staff', 'Staff');
+    enablePasswordResetBypass(pm.id);
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${pm.id}`, 'acknowledged');
+    localStorage.setItem('aitask:locale', 'en');
+    useStore.setState({
+      currentUser: pm,
+      users: [pm, outOfProjectHod, staff],
+      rolePermissions: [],
+      clients: [{ id: 'fallback-company', clientName: 'Fallback Co', createdBy: pm.id, createdAt: '2026-10-01', updatedAt: '2026-10-01' }],
+      projects: [{
+        id: 'fallback-project',
+        clientId: 'fallback-company',
+        clientName: 'Fallback Co',
+        projectName: 'Fallback Project',
+        createdBy: pm.id,
+        projectManagerIds: [pm.id],
+        hodMemberIds: [],
+        staffMemberIds: [staff.id],
+        services: ['Design'],
+        startDate: '2026-10-01',
+        deadline: '2026-12-31',
+      }],
+      tasks: [],
+      notifications: [],
+      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+    });
+  });
+  await page.goto('/tasks');
+  await waitForWorkspaceHydration(page);
+  await page.getByRole('button', { name: 'New task', exact: true }).click();
+  const createDialog = page.getByRole('dialog', { name: 'Create task', exact: true });
+  await createDialog.getByLabel(/Project/).selectOption('fallback-project');
+  await createDialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
+  await expect(createDialog.getByLabel('Assignee').locator('option[value="fallback-staff"]')).toHaveCount(1);
+  await createDialog.getByLabel('Assignee').selectOption('fallback-staff');
+  await createDialog.getByLabel('Task Title').fill('Direct fallback artwork');
+  await createDialog.getByRole('button', { name: 'Create & open task', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Direct fallback artwork', exact: true })).toBeVisible();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const task = useStore.getState().tasks.find(item => item.title === 'Direct fallback artwork');
+    return { assignedTo: task?.assignedTo, assignmentState: task?.assignmentState, responsibleHodId: task?.responsibleHodId };
+  })).toEqual({ assignedTo: 'fallback-staff', assignmentState: undefined, responsibleHodId: undefined });
+});
+
 for (const status of ['Waiting Approval', 'Approved', 'Completed']) {
   test(`Staff cannot delete ${status} work while the portfolio PM retains management`, async ({ page }) => {
     await seed(page);
@@ -201,7 +270,7 @@ for (const mobile of [false, true]) {
   });
 }
 
-test('a pending evidence download recovers after session reset and cannot start for another account', async ({ page }) => {
+test('a cancelled evidence download recovers after session reset and cannot start for another account', async ({ page }) => {
   await seed(page);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/app/store/workspaceStore.ts');
@@ -210,45 +279,46 @@ test('a pending evidence download recovers after session reset and cannot start 
   await openAs(page, 'stage-hod');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/app/store/workspaceStore.ts');
-    const attachment = { id: 'file', bucket: 'client-service-files', path: 'aitask-main/stage-company/evidence-cycle/output.pdf', fileName: 'output.pdf', mimeType: 'application/pdf', sizeBytes: 32, uploadedBy: 'stage-staff', uploadedAt: '2026-10-14T00:00:00.000Z' };
+    const attachment = { id: 'demo-service-file-urban-brief', bucket: 'local-service-demo', path: 'urban-eats/monthly-content-brief.txt', fileName: 'UrbanEats-monthly-content-brief.txt', mimeType: 'text/plain', sizeBytes: 303, uploadedBy: 'stage-staff', uploadedAt: '2026-10-14T00:00:00.000Z' };
     useStore.setState({ deliverables: [], tasks: useStore.getState().tasks.map(task => ({ ...task, reviewAccess: { actorId: 'stage-hod', canApprove: true }, reviewEvidence: { actorId: 'stage-hod', attachments: [attachment] } })) });
   });
-  let release!: () => void;
-  let reached!: () => void;
-  const hold = new Promise<void>(resolve => { release = resolve; });
-  const intercepted = new Promise<void>(resolve => { reached = resolve; });
-  await page.route('**/src/modules/services/data/serviceFiles.ts*', async route => {
-    const response = await route.fetch();
-    const body = await response.text();
-    const needle = 'const downloadServiceFile = async (attachment, options = {}) => {';
-    expect(body).toContain(needle);
-    reached();
-    await hold;
-    await route.fulfill({ response, body: body.replace(needle, needle + ' globalThis.__taskDownloadStarts = (globalThis.__taskDownloadStarts || 0) + 1;') + '\nglobalThis.__taskDownloadModuleReady = true;\n' });
-  });
   const files = page.getByRole('region', { name: 'Output files', exact: true });
-  const button = files.getByRole('button', { name: 'output.pdf Download', exact: true });
-  await button.click();
-  await intercepted;
-  await expect(files.getByRole('status')).toHaveText('Downloading…');
+  const button = files.getByRole('button', { name: 'UrbanEats-monthly-content-brief.txt Download', exact: true });
+  const downloads: string[] = [];
+  page.on('download', download => downloads.push(download.suggestedFilename()));
+
+  // Invalidate synchronously after the click starts. The download handler is
+  // suspended at its dynamic import, so this deterministically exercises the
+  // session guard without relying on a request for an already-cached module.
   await page.evaluate(async () => {
     const { invalidateWorkspaceSession } = await import('/src/infrastructure/persistence/workspaceSession.ts');
+    const button = document.querySelector<HTMLElement>('section[aria-label="Output files"] button');
+    if (!button) throw new Error('Output download button was not rendered');
+    button.click();
     invalidateWorkspaceSession();
   });
-  await expect(button).toBeEnabled();
+  await expect(files.getByRole('status')).toHaveCount(0);
+  expect(downloads).toEqual([]);
+
+  // A fresh attempt in the same HOD session succeeds after the reset.
+  const successfulDownload = page.waitForEvent('download');
   await button.click();
-  await expect(files.getByRole('status')).toHaveText('Downloading…');
+  expect((await successfulDownload).suggestedFilename()).toBe('UrbanEats-monthly-content-brief.txt');
+  await expect(button).toBeEnabled();
+
+  // Starting another attempt and switching the active identity in the same
+  // browser task must invalidate it before the file can be downloaded.
   await page.evaluate(async () => {
     const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { invalidateWorkspaceSession } = await import('/src/infrastructure/persistence/workspaceSession.ts');
+    const button = document.querySelector<HTMLElement>('section[aria-label="Output files"] button');
+    if (!button) throw new Error('Output download button was not rendered');
+    button.click();
+    invalidateWorkspaceSession();
     useStore.setState({ currentUser: useStore.getState().users.find(user => user.id === 'stage-pm') });
   });
-  const loaded = page.waitForResponse(response => response.url().includes('/src/modules/services/data/serviceFiles.ts'));
-  release();
-  await loaded;
   await expect(files).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => Reflect.get(globalThis, '__taskDownloadModuleReady'))).toBe(true);
-  expect(await page.evaluate(() => Reflect.get(globalThis, '__taskDownloadStarts') || 0)).toBe(0);
-  await expect(page.getByRole('dialog').getByRole('alert')).toHaveCount(0);
+  await expect.poll(() => downloads.length).toBe(1);
 });
 
 

@@ -48,7 +48,7 @@ const signIn = async (page: Page, role: QaRole) => {
   if (/\/settings$/.test(page.url())) {
     throw new Error(`${role} staging account requires a password reset and cannot be used for release verification.`);
   }
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 };

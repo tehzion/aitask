@@ -23,6 +23,7 @@ import { useSaveAction } from '../../../app/hooks/useSaveAction';
 import { useUnsavedChanges } from '../../../shared/hooks/useUnsavedChanges';
 import '../../../shared/i18n/actionFeedbackCopy';
 import { formatLocalizedDateTime } from '../../../shared/i18n/i18n';
+import { getLocalizedTaskStatus } from '../../../shared/i18n/localeLabels';
 import { msg } from '../../../shared/i18n/messages';
 import type { User } from '../../../shared/types/index';
 import { cn } from '../../../shared/utils/utils';
@@ -312,7 +313,7 @@ const Settings: React.FC = () => {
       detail: hasSupabaseKey ? 'Client key is configured.' : 'Set VITE_SUPABASE_PUBLISHABLE_KEY.',
     },
     {
-      label: 'Snapshot target',
+      label: 'Workspace data source',
       done: true,
       detail: `${backendStatus.stateTable} / ${backendStatus.stateId}`,
     },
@@ -321,7 +322,7 @@ const Settings: React.FC = () => {
       done: isSupabaseMode && backendStatus.ready && hasCheckedRemote && !backend.error,
       detail: isSupabaseMode
         ? hasCheckedRemote
-          ? 'Remote snapshot has been checked.'
+          ? 'Remote workspace data was checked.'
           : 'Use Check now after the Supabase table is ready.'
         : hostedLocalBuild
           ? 'Vercel must be rebuilt with Supabase env before remote checks work.'
@@ -887,7 +888,7 @@ const Settings: React.FC = () => {
             <div>
               <p className="calm-eyebrow">{t('Local development only')}</p>
               <h2 id="local-demo-title" className="mt-1 text-lg font-semibold text-slate-900">{t('Sample service workspace')}</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{t('UrbanEats, TechNova, and EcoLife demonstrate package modes, frozen plans, cycles, task chains, client-visible activity, add-ons, revisions, and role-specific workbenches. This data stays in this browser.')}</p>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{t('Try package options, monthly deliveries, task handoffs, client-visible updates, add-ons, and revisions with sample records. This demo data stays in your browser.')}</p>
             </div>
             <Button type="button" variant="secondary" onClick={handleResetLocalDemo}>
               <Database className="h-4 w-4" />
@@ -1028,7 +1029,7 @@ const Settings: React.FC = () => {
                           status === 'Cancelled' ? 'bg-red-500' :
                           'bg-slate-400'
                         }`} />
-                        <span className="text-sm font-semibold text-slate-700 truncate">{t(status)}</span>
+                        <span className="text-sm font-semibold text-slate-700 truncate">{getLocalizedTaskStatus(status, locale)}</span>
                         {isDefault ? (
                           <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold tracking-wide shrink-0">
                             <Lock className="w-2.5 h-2.5" /> {t('System')}
@@ -1154,7 +1155,7 @@ const Settings: React.FC = () => {
             <div>
               <p className="text-xs font-semibold text-slate-400">{t('Supabase Table')}</p>
               <p className="mt-1 font-semibold text-slate-900">{backendStatus.stateTable}</p>
-              <p className="mt-1 text-slate-500">{t('Snapshot ID')}: {backendStatus.stateId}</p>
+              <p className="mt-1 text-slate-500">{t('Workspace data ID')}: {backendStatus.stateId}</p>
             </div>
             <div>
               <p className="text-xs font-semibold text-slate-400">{t('Last Pull')}</p>

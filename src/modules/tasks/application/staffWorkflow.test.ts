@@ -70,6 +70,22 @@ describe('staff work lifecycle', () => {
     expect(serializeClientProjectedTask(updated)).not.toHaveProperty('workState');
     expect(serializeClientProjectedTask(updated)).not.toHaveProperty('workHistory');
   });
+  it('stores private supporting files separately from evidence and excludes them from Client views', async () => {
+    const attachment = {
+      id: 'supporting-file', bucket: 'task-supporting-files', path: `aitask-main/${task.id}/supporting-file-notes.pdf`,
+      fileName: 'notes.pdf', mimeType: 'application/pdf', sizeBytes: 1200, uploadedBy: staff.id, uploadedAt: '2026-10-26T00:00:00.000Z',
+    };
+    useStore.setState({ deliverables: [output] });
+    expect((await useStore.getState().attachTaskSupportingFile(task.id, attachment)).ok).toBe(true);
+    expect(useStore.getState().tasks[0].supportingAttachments).toEqual([attachment]);
+    expect(useStore.getState().tasks[0].workHistory?.at(-1)).toMatchObject({ userId: staff.id, fields: ['supportingAttachments'] });
+    expect(parseTask(useStore.getState().tasks[0])?.supportingAttachments).toEqual([attachment]);
+    expect(serializeClientProjectedTask(useStore.getState().tasks[0])).not.toHaveProperty('supportingAttachments');
+    expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(false);
+
+    useStore.setState({ currentUser: { id: 'client', name: 'Client', role: 'Client', companyName: 'Company', departments: [] } });
+    expect((await useStore.getState().attachTaskSupportingFile(task.id, { ...attachment, id: 'client-file', path: `aitask-main/${task.id}/client-file-notes.pdf`, uploadedBy: 'client' })).ok).toBe(false);
+  });
   it('blocks help actions on closed work and requires nonempty bounded reasons', () => {
     expect(useStore.getState().updateTaskWork(task.id, { kind: 'block', reason: ' ' }).ok).toBe(false);
     expect(useStore.getState().updateTaskWork(task.id, { kind: 'block', reason: 'x'.repeat(2001) }).ok).toBe(false);

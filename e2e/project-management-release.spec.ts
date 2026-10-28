@@ -11,7 +11,7 @@ for (const mobile of [false, true]) {
       const state = useStore.getState();
       const pm = { id: 'release-pm', name: 'Release PM', role: 'Project Manager', department: 'Management', departments: ['Management'], mustResetPassword: false };
       enablePasswordResetBypass(pm.id);
-      localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${pm.id}`, 'acknowledged');
+      localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${pm.id}`, 'acknowledged');
       useStore.setState({
         currentUser: pm, users: [pm], rolePermissions: [], tasks: [], notifications: [],
         clients: [{ id: 'release-company', clientName: 'Release company', createdBy: pm.id, createdAt: '2026-10-01', updatedAt: '2026-10-01' }],
@@ -30,7 +30,9 @@ for (const mobile of [false, true]) {
       await page.getByRole('button', { name: 'More actions', exact: true }).click();
       await page.getByRole('menuitem', { name: 'Details', exact: true }).click();
     }
-    await page.getByRole('button', { name: 'Open project', exact: true }).click();
+    await page.getByRole('link', { name: 'Open project', exact: true }).click();
+    await expect(page).toHaveURL('/projects/release-project');
+    await page.getByRole('button', { name: 'Manage project', exact: true }).click();
     const panel = page.getByRole('dialog', { name: 'Release launch', exact: true });
     await expect(panel).toBeVisible();
     await panel.getByRole('tab', { name: 'Settings', exact: true }).click();

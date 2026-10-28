@@ -11,7 +11,7 @@ const seedAdminAndPackage = async (page: Page) => {
     const boss = state.users.find(user => user.isSuperAdmin)!;
     const readyBoss = { ...boss, mustResetPassword: false };
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: readyBoss,
       users: state.users.map(user => user.id === boss.id ? readyBoss : user),
@@ -52,7 +52,7 @@ const seedProjectManager = async (page: Page) => {
     if (!pm) throw new Error('Project Manager demo account is missing.');
     const readyPm = { ...pm, mustResetPassword: false };
     enablePasswordResetBypass(pm.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${pm.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${pm.id}`, 'acknowledged');
     useStore.setState({
       currentUser: readyPm,
       users: state.users.map(user => user.id === pm.id ? readyPm : user),
@@ -134,7 +134,7 @@ test('creates a client profile first, then a named project', async ({ page }) =>
 
   await page.getByRole('button', { name: 'New task' }).click();
   const taskDialog = page.getByRole('dialog', { name: 'Create task' });
-  await taskDialog.getByLabel(/Link to Company \/ Brand/).selectOption(project!.id);
+  await taskDialog.getByLabel(/^Project/).selectOption(project!.id);
   await taskDialog.getByLabel('Task Title').fill('Launch creative brief');
   await taskDialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
   await taskDialog.getByRole('button', { name: 'Create & open task' }).click();

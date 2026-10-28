@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(12);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -10,7 +10,8 @@ insert into auth.users (
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000009901', 'authenticated', 'authenticated', 'pm-routing@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000009902', 'authenticated', 'authenticated', 'hod-routing@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
   ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000009903', 'authenticated', 'authenticated', 'staff-routing@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000009904', 'authenticated', 'authenticated', 'foreign-staff-routing@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
+  ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000009904', 'authenticated', 'authenticated', 'foreign-staff-routing@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000009905', 'authenticated', 'authenticated', 'foreign-pm-routing@aitask.local', '', now(), '{}'::jsonb, '{}'::jsonb, now(), now());
 
 insert into public.aitask_workspaces(id, name)
 values ('pgtap-pm-hod-staff-routing', 'PM HOD Staff routing');
@@ -21,11 +22,13 @@ insert into public.aitask_members(
   ('routing-pm', 'pgtap-pm-hod-staff-routing', '00000000-0000-0000-0000-000000009901', 'Routing PM', 'pm-routing@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, false),
   ('routing-hod', 'pgtap-pm-hod-staff-routing', '00000000-0000-0000-0000-000000009902', 'Routing HOD', 'hod-routing@aitask.local', 'HOD', 'Designer', array['Designer'], '{}'::jsonb, false),
   ('routing-staff', 'pgtap-pm-hod-staff-routing', '00000000-0000-0000-0000-000000009903', 'Routing Staff', 'staff-routing@aitask.local', 'Staff', 'Designer', array['Designer'], '{}'::jsonb, false),
-  ('foreign-staff', 'pgtap-pm-hod-staff-routing', '00000000-0000-0000-0000-000000009904', 'Foreign Staff', 'foreign-staff-routing@aitask.local', 'Staff', 'Designer', array['Designer'], '{}'::jsonb, false);
+  ('foreign-staff', 'pgtap-pm-hod-staff-routing', '00000000-0000-0000-0000-000000009904', 'Foreign Staff', 'foreign-staff-routing@aitask.local', 'Staff', 'Designer', array['Designer'], '{}'::jsonb, false),
+  ('foreign-pm', 'pgtap-pm-hod-staff-routing', '00000000-0000-0000-0000-000000009905', 'Foreign PM', 'foreign-pm-routing@aitask.local', 'Project Manager', 'Management', array['Management'], '{}'::jsonb, false);
 
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data) values
   ('pgtap-pm-hod-staff-routing', 'client', 'routing-client', '{"id":"routing-client","clientName":"Routing Co","createdBy":"routing-pm"}'::jsonb),
-  ('pgtap-pm-hod-staff-routing', 'project', 'routing-project', '{"id":"routing-project","clientId":"routing-client","clientName":"Routing Co","projectName":"Routing Project","createdBy":"routing-pm","projectManagerIds":["routing-pm"],"hodMemberIds":["routing-hod"],"staffMemberIds":["routing-staff"],"services":["Design"],"startDate":"2026-10-01","deadline":"2026-10-30"}'::jsonb);
+  ('pgtap-pm-hod-staff-routing', 'project', 'routing-project', '{"id":"routing-project","clientId":"routing-client","clientName":"Routing Co","projectName":"Routing Project","createdBy":"routing-pm","projectManagerIds":["routing-pm"],"hodMemberIds":["routing-hod"],"staffMemberIds":["routing-staff"],"services":["Design"],"startDate":"2026-10-01","deadline":"2026-10-30"}'::jsonb),
+  ('pgtap-pm-hod-staff-routing', 'project', 'routing-no-hod-project', '{"id":"routing-no-hod-project","clientId":"routing-client","clientName":"Routing Co","projectName":"No HOD Project","createdBy":"routing-pm","projectManagerIds":["routing-pm"],"hodMemberIds":[],"staffMemberIds":["routing-staff"],"services":["Design"],"startDate":"2026-10-01","deadline":"2026-10-30"}'::jsonb);
 
 create function pg_temp.route_task(p_action text, p_id text, p_data jsonb) returns jsonb
 language sql as $$
@@ -69,6 +72,18 @@ select is((pg_temp.route_task('update', 'routing-task', (select data from public
 ))->>'ok')::boolean, false, 'Staff cannot self-assign or switch to a foreign project member');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000009901', true);
+select is((pg_temp.route_task('insert', 'routing-no-hod-foreign-staff', jsonb_build_object(
+  'id', 'routing-no-hod-foreign-staff', 'clientId', 'routing-client', 'clientName', 'Routing Co',
+  'projectId', 'routing-no-hod-project', 'projectName', 'No HOD Project', 'title', 'Reject foreign project Staff',
+  'department', 'Designer', 'assignedTo', 'foreign-staff', 'createdBy', 'routing-pm', 'status', 'Pending',
+  'visibility', 'internal', 'isCompleted', false
+))->>'ok')::boolean, false, 'direct fallback assignment cannot target Staff outside project membership when no HOD is assigned');
+select is((pg_temp.route_task('insert', 'routing-no-hod-foreign-pm', jsonb_build_object(
+  'id', 'routing-no-hod-foreign-pm', 'clientId', 'routing-client', 'clientName', 'Routing Co',
+  'projectId', 'routing-no-hod-project', 'projectName', 'No HOD Project', 'title', 'Reject foreign project PM',
+  'department', 'Designer', 'assignedTo', 'foreign-pm', 'createdBy', 'routing-pm', 'status', 'Pending',
+  'visibility', 'internal', 'isCompleted', false
+))->>'ok')::boolean, false, 'assignee Project Manager must be listed in explicit projectManagerIds');
 select is((pg_temp.route_task('update', 'routing-task', (select data from public.aitask_entities where workspace_id = 'pgtap-pm-hod-staff-routing' and entity_type = 'task' and entity_id = 'routing-task') || jsonb_build_object(
   'assignedTo', 'foreign-staff', 'assignmentState', 'assigned_staff', 'responsibleHodId', 'routing-hod'
 ))->>'ok')::boolean, false, 'PM cannot bypass project Staff scope');

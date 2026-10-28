@@ -10,8 +10,9 @@ import type { WorkspaceSessionToken } from '../../../infrastructure/persistence/
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../../../infrastructure/persistence/workspaceSession';
 import { safeHttpsUrl } from '../../../infrastructure/serialization/security';
 import { canReviewTaskAsClient, canViewTask, getTaskAccess, getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../../../shared/authorization/access';
+import { getClientApprovalDisplayStatus, getClientTaskStatusLabel } from '../../../shared/authorization/clientPortal';
 import { assignableDepartments } from '../../../shared/authorization/departments';
-import { assignableTaskAssignees, canRequestTaskRevision, eligibleTaskStaff, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../../../shared/authorization/taskWorkflowAccess';
+import { assignableTaskAssignees, canRequestTaskRevision, eligibleTaskHods, eligibleTaskStaff, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../../../shared/authorization/taskWorkflowAccess';
 import ConfirmDialog from '../../../shared/components/ConfirmDialog';
 import { useI18n } from '../../../shared/components/I18nProvider';
 import ModalShell from '../../../shared/components/ModalShell';
@@ -41,6 +42,7 @@ import { getTaskStatusControls } from '../domain/taskStatusControls';
 import { announceTaskStatusSaved } from '../application/taskStatusFeedback';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import TaskOutputFiles, { type OutputUploadState } from './TaskOutputFiles';
+import TaskSupportingFiles from './TaskSupportingFiles';
 
 interface Props {
   isOpen: boolean;
@@ -257,6 +259,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
   const outputLocked = task.status === 'Approved' || task.status === 'Completed';
   const assignee = users.find(u => u.id === task.assignedTo);
+  const hasEligibleHod = eligibleTaskHods(task.department, projects.find(project => project.id === task.projectId), users, rolePermissions).length > 0;
   const creator = users.find(u => u.id === task.createdBy);
   const assignedByMember = users.find(u => u.id === task.assignedBy);
   const taskAccess = getTaskAccess(currentUser, task, rolePermissions, { users, clients, projects });
@@ -268,6 +271,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const canClientReview = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canView && canReviewTaskAsClient(currentUser, task, rolePermissions);
   const isClientTaskViewer = currentUser?.role === 'Client';
   const taskProgress = getTaskProgress(task, users, isClientTaskViewer);
+  const clientApprovalDisplayStatus = getClientApprovalDisplayStatus(task);
   const statusOptions = getTaskStatusControls(currentUser, task, taskStatuses, rolePermissions, { users, clients, projects }, { tasks, cycles: workflow.cycles, deliverables: workflow.deliverables });
   const guidedAction = getStaffGuidedAction(task, taskStatuses, currentUser, rolePermissions, { users, clients, projects });
   const guidedActionError = guidedAction.targetStatus
@@ -311,16 +315,16 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const clientReviewUnavailableReason = isClientTaskViewer && task.visibility !== 'internal' && !canClientReview
     ? 'Client review actions are available when the agency publishes this task for review.'
     : undefined;
+  const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) : undefined;
   const assigneeOptions = canAssignOthers
     ? (() => {
-        const options = assignableTaskAssignees(currentUser, editForm.department, users, rolePermissions);
+        const options = assignableTaskAssignees(currentUser, editForm.department, users, rolePermissions, { project: taskProject });
         const currentAssignee = editForm.assignedTo ? users.find(user => user.id === editForm.assignedTo) : undefined;
         return currentAssignee && !options.some(user => user.id === currentAssignee.id)
           ? [currentAssignee, ...options]
           : options;
       })()
     : users.filter(user => user.id === editForm.assignedTo);
-  const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) : undefined;
   const delegationOptions = eligibleTaskStaff(task.department, taskProject, users, rolePermissions)
     .filter(user => user.id !== currentUser?.id);
 
@@ -712,7 +716,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t('Current Status')}</label>
                   <span className={`inline-flex min-h-11 items-center text-sm px-3 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
-                    {currentUser?.role === 'Client' ? t(task.status) : getLocalizedTaskStatus(task.status, locale)}
+                    {currentUser?.role === 'Client' ? t(getClientTaskStatusLabel(task)) : getLocalizedTaskStatus(task.status, locale)}
                   </span>
                 </div>
                 <div className="text-right">
@@ -844,7 +848,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                             // Default to a stage-eligible assignee so a Project
                             // Manager switching into an HOD department never lands
                             // on a staff member the dropdown/HOD-first rule forbids.
-                            const eligible = assignableTaskAssignees(currentUser, nextDepartment, users, rolePermissions);
+                            const eligible = assignableTaskAssignees(currentUser, nextDepartment, users, rolePermissions, { project: taskProject });
                             const keep = eligible.find(user => user.id === editForm.assignedTo);
                             setEditForm({
                               ...editForm,
@@ -948,17 +952,17 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t('Client Approval')}</label>
                   <span className={`inline-flex text-xs px-2 py-1 rounded-md font-semibold ${
-                    task.clientApprovalStatus === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
-                    task.clientApprovalStatus === 'Rejected' ? 'bg-red-100 text-red-700' :
+                    clientApprovalDisplayStatus === 'Approved' ? 'bg-emerald-100 text-emerald-700' :
+                    clientApprovalDisplayStatus === 'Rejected' ? 'bg-red-100 text-red-700' :
                     'bg-slate-100 text-slate-700'
                   }`}>
                     {isClientTaskViewer
-                      ? task.clientApprovalStatus === 'Approved'
+                      ? clientApprovalDisplayStatus === 'Approved'
                         ? t('Approved')
-                        : task.clientApprovalStatus === 'Rejected'
+                        : clientApprovalDisplayStatus === 'Rejected'
                           ? t('Changes requested')
                           : t('Not reviewed')
-                      : t(task.clientApprovalStatus)}
+                      : t(clientApprovalDisplayStatus)}
                   </span>
                 </div>
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
@@ -974,7 +978,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     <div>
                       <p className="font-semibold">{t('Your task status and feedback')}</p>
                       <p className="mt-1 leading-6 text-blue-800">
-                        {t('This task is currently')} <strong>{currentUser?.role === 'Client' ? t(task.status) : getLocalizedTaskStatus(task.status, locale)}</strong>. {t('You can leave feedback anytime in the comments panel.')}
+                        {t('This task is currently')} <strong>{currentUser?.role === 'Client' ? t(getClientTaskStatusLabel(task)) : getLocalizedTaskStatus(task.status, locale)}</strong>. {t('You can leave feedback anytime in the comments panel.')}
                         {canClientReview
                           ? ` ${t('Approval and revision actions are available below.')}`
                           : ` ${t('Approval actions appear when the task is completed or waiting for your review.')}`}
@@ -1016,12 +1020,14 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   <div className="flex items-center gap-2">
                     {assignee?.avatar ? (
                       <img src={assignee.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
-                    ) : (
+                    ) : assignee ? (
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
-                        {(assignee?.name || 'A').charAt(0)}
+                        {assignee.name.charAt(0)}
                       </span>
-                    )}
-                    <span data-i18n-skip className="text-sm font-medium text-slate-800">{assignee?.name || 'Agency team'}</span>
+                    ) : null}
+                    {assignee
+                      ? <span data-i18n-skip className="text-sm font-medium text-slate-800">{assignee.name}</span>
+                      : <span className="text-sm font-medium text-slate-800">{t(isClientTaskViewer ? 'Agency team' : 'Unassigned')}</span>}
                   </div>
                 </div>
                 {!isClientTaskViewer && task.responsibleHodId && <div>
@@ -1030,7 +1036,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </div>}
                 {!isClientTaskViewer && task.assignmentState && <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t('Assignment state')}</label>
-                  <span className="text-sm font-medium text-slate-800">{t(task.assignmentState === 'pending_hod' ? 'Pending HOD Assignment' : task.assignmentState === 'assigned_staff' ? 'Assigned to Staff' : 'Awaiting HOD')}</span>
+                  <span className="text-sm font-medium text-slate-800">{t(task.assignmentState === 'pending_hod' ? 'Pending HOD Assignment' : task.assignmentState === 'assigned_staff' ? 'Assigned to Staff' : hasEligibleHod ? 'Awaiting HOD' : 'Unassigned')}</span>
                 </div>}
                 {!isClientTaskViewer && <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">{t('Created By')}</label>
@@ -1122,6 +1128,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </form>
               )}
 
+              {!isClientTaskViewer && <TaskSupportingFiles task={task} />}
               <div data-onboarding-target="task-output"><TaskOutputFiles task={task} onUploadStateChange={setOutputUpload} /></div>
 
               {(task.facebookPage || task.website || task.attachmentLink || canEditTask) && (

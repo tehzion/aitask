@@ -34,6 +34,7 @@ import { getStaffGuidedAction, getTaskBlockers, getUnavailableTaskDependencyCoun
 import { getTaskStatusControls } from '../domain/taskStatusControls';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import TaskOutputFiles, { type OutputUploadState } from './TaskOutputFiles';
+import TaskSupportingFiles from './TaskSupportingFiles';
 
 interface StaffTaskFocusProps {
   isOpen: boolean;
@@ -191,7 +192,29 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         : saved.status === submitted.status);
       if (result.ok && applied) finishSave(submitted);
       else {
-        setPendingSave({ ...submitted, failed: true, rejected: ['FORBIDDEN', 'VALIDATION', 'NOT_FOUND'].includes(result.code || useStore.getState().backend.errorCode || '') });
+        const rejectionCode = result.code || useStore.getState().backend.errorCode || '';
+        const rejected = ['FORBIDDEN', 'VALIDATION', 'NOT_FOUND'].includes(rejectionCode);
+        // A rejected quick status action has no draft content to preserve. Reload
+        // its canonical task immediately so Staff are not left on an optimistic
+        // status with every action disabled until they discover Restore saved data.
+        if (rejected && submitted.status) {
+          const rejectionMessage = result.error || 'This task status could not be saved.';
+          await useStore.getState().discardMutation();
+          if (!isCurrent()) return;
+          const refreshedState = useStore.getState();
+          const refreshedTask = refreshedState.tasks.find(item => item.id === submitted.taskId);
+          if (refreshedState.backend.status === 'live' && refreshedTask?.status === submitted.status) {
+            finishSave(submitted);
+            return;
+          }
+          if (refreshedState.backend.status === 'live') {
+            setPendingSave(null);
+            observedResolution.current = false;
+            setError(rejectionMessage);
+            return;
+          }
+        }
+        setPendingSave({ ...submitted, failed: true, rejected });
         observedResolution.current = isPendingMutationResolution(useStore.getState().backend);
         setError(result.error || 'This update is waiting to sync. Use the workspace retry controls to continue.');
       }
@@ -389,7 +412,9 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         {(error || pendingResolution) && (
           <div role="alert" aria-live="assertive" className="rounded-control bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">
             <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
+            {pendingSave?.rejected && <p className="mt-2 text-sm font-normal"><SystemMessage message="Restore saved data, correct the rejected change or check your access, then save again." /></p>}
             {pendingResolution && <BackendFreshness compact className="mt-3" onRetry={async () => { const submitted = pendingSaveRef.current; if (submitted && !isSaving) await performSave(submitted, true); else await useStore.getState().retryPendingSave(); }} onDiscard={pendingSave ? () => requestExit(() => undefined) : undefined} />}
+            {pendingSave?.rejected && !pendingResolution && <Button variant="secondary" className="mt-3" disabled={isSaving} onClick={() => requestExit(() => undefined)}>{t('Restore saved data')}</Button>}
             {pendingSave?.failed && !pendingSave.rejected && !pendingResolution && <Button variant="secondary" className="mt-3" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button>}
           </div>
         )}
@@ -468,6 +493,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         </section>
         {linkedOutput && <p className="rounded-control bg-inset px-4 py-3 text-sm text-muted">{t(evidenceAvailable ? 'Output evidence is attached. Client approval is tracked separately from task completion.' : 'This linked task needs an output link or deliverable file before review or completion. Add it through Full edit or the delivery workspace.')}</p>}
 
+        <TaskSupportingFiles task={liveTask} />
         <TaskOutputFiles task={liveTask} onUploadStateChange={setOutputUpload} />
 
         <section aria-labelledby="staff-delivery-context">

@@ -66,7 +66,7 @@ const expectNoOverflow = async (page: Page) => {
 };
 
 const dismissReleaseNotice = async (page: Page) => {
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 5_000 }).then(() => releaseNotice.click()).catch(() => undefined);
 };
 

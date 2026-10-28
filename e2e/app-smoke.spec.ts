@@ -9,7 +9,7 @@ const switchDemoAccount = async (page: import('@playwright/test').Page, username
   await page.getByRole('button', { name: 'Access Dashboard' }).click();
   await expect(page).toHaveURL(/\/(?:settings)?$/);
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
+  const releaseNotice = page.getByRole('button', { name: 'Continue to AiTask' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
 };
@@ -81,9 +81,9 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.getByRole('button', { name: 'Continue for now' }).click();
   await expect(page).toHaveURL(/\/$/);
-  const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
+  const releaseNotice = page.getByRole('dialog', { name: 'Project and team work are easier to follow' });
   await expect(releaseNotice).toBeVisible();
-  await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
+  await releaseNotice.getByRole('button', { name: 'Continue to AiTask' }).click();
 
   await expect(page.getByRole('region', { name: /Company operations/ })).toBeVisible();
   await expect(page.getByText('Contracted monthly value', { exact: true })).toBeVisible();
@@ -702,7 +702,7 @@ test('first login reaches the app and critical responsive routes remain usable',
       approvalHistory: [],
       updatedAt: '2026-08-02T04:00:00.000Z',
     };
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${client.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${client.id}`, 'acknowledged');
     useStore.setState({
       users: current.users.some(user => user.id === contact.id) ? current.users : [...current.users, contact],
       tasks: [...current.tasks.filter(task => task.id !== clientTask.id), clientTask],
@@ -799,7 +799,7 @@ test('first login reaches the app and critical responsive routes remain usable',
       users: [...state.users.filter(user => user.id !== restrictedUser.id), restrictedUser],
     }));
     localStorage.setItem(
-      'aitask:release-notice:2026-08-service-operations:e2e-task-only-role',
+      'aitask:release-notice:2026-10-project-workflows:e2e-task-only-role',
       'acknowledged',
     );
     window.sessionStorage.clear();

@@ -32,7 +32,6 @@ import { getTaskProgress } from '../../../shared/rules/taskProgress';
 import { isWorkflowTask, workflowTransitionError } from '../../../shared/rules/workflowReview';
 import {
   type AppNotification,
-  type ClientApprovalStatus,
   type Task,
   type TaskApprovalEvent,
   type TaskComment,
@@ -46,7 +45,7 @@ import { deriveServiceProgress } from '../../services/application/serviceProgres
 import { deliverableLinkError } from '../../services/domain/deliveryLinks';
 import { applyTaskWorkIntent, recordTaskWorkTransition, taskEvidenceError } from '../domain/staffWorkflow';
 import { allowedDepartments, allowedPriorities, HOD_RESTRICTED_TASK_FIELDS, resolveTaskStatus } from './taskRules';
-export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<StoreState, "setCreateTaskModalOpen" | "openCreateTaskForDeliverable" | "updateTaskWork" | "updateTaskStatus" | "updateTaskPriority" | "updateTaskAssignee" | "overrideTaskAssignee" | "updateTaskAttachment" | "updateTaskDueDate" | "attachTaskOutput" | "setTaskReviewConfig" | "updateTask" | "deleteTask" | "reviewClientApproval" | "requestRevision" | "addTask" | "addComment" | "addTaskStatus" | "deleteTaskStatus"> => ({
+export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<StoreState, "setCreateTaskModalOpen" | "openCreateTaskForDeliverable" | "updateTaskWork" | "updateTaskStatus" | "updateTaskPriority" | "updateTaskAssignee" | "overrideTaskAssignee" | "updateTaskAttachment" | "updateTaskDueDate" | "attachTaskOutput" | "attachTaskSupportingFile" | "setTaskReviewConfig" | "updateTask" | "deleteTask" | "reviewClientApproval" | "requestRevision" | "addTask" | "addComment" | "addTaskStatus" | "deleteTaskStatus"> => ({
   setCreateTaskModalOpen: (open) => set((state) => ({
     isCreateTaskModalOpen: open,
     createTaskInitialDate: open ? state.createTaskInitialDate : undefined,
@@ -136,13 +135,6 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
             : t.completionPercentage;
 
         const returningForRevision = ['In Progress', 'Revision'].includes(nextStatus) && ['Waiting Approval', 'Approved', 'Completed'].includes(t.status);
-        const clientApprovalStatus = returningForRevision ? 'Rejected' : isReadyForClientReview
-          ? isCompleted
-            ? t.visibility !== 'internal' ? (t.clientApprovalStatus === 'Approved' ? 'Approved' : t.clientApprovalStatus === 'Rejected' ? 'Rejected' : 'Pending') : (nextStatus !== t.status ? 'Approved' : t.clientApprovalStatus)
-            : 'Pending'
-          : t.clientApprovalStatus === 'Approved' || wasCompleted
-            ? 'Pending'
-            : t.clientApprovalStatus;
 
         const updated = recordTaskWorkTransition(t, {
           ...t,
@@ -150,7 +142,9 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
           isCompleted,
           completedAt: resolveTaskCompletedAt(t, isCompleted, now),
           completionPercentage,
-          clientApprovalStatus,
+          // Internal work transitions never record or clear the Client's
+          // separate delivery decision.
+          clientApprovalStatus: t.clientApprovalStatus,
           revisionCount: returningForRevision ? t.revisionCount + 1 : t.revisionCount,
           updatedAt: now,
         }, currentUser!.id, now);
@@ -280,6 +274,10 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
         result = { ok: false, error: 'Choose a valid internal assignee.' };
         return state;
       }
+      if (assigneeUser?.hasLogin === false) {
+        result = { ok: false, error: 'Choose an active internal assignee.' };
+        return state;
+      }
       const project = task.projectId ? state.projects.find(item => item.id === task.projectId) : undefined;
       const responsibleHodId = task.responsibleHodId
         || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions)
@@ -303,6 +301,21 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
           return state;
         }
       }
+      if (assigneeUser && project && !isBossKoo(currentUser)) {
+        const eligibleProjectAssignee = isHodUser(assigneeUser, state.rolePermissions)
+          ? eligibleHods.some(user => user.id === assigneeUser.id)
+          : assigneeUser.role === 'Staff'
+            ? eligibleTaskStaff(task.department, project, state.users, state.rolePermissions).some(user => user.id === assigneeUser.id)
+            : assigneeUser.role === 'Project Manager'
+              ? (project.projectManagerIds !== undefined
+                ? project.projectManagerIds.includes(assigneeUser.id)
+                : project.createdBy === assigneeUser.id)
+              : false;
+        if (!eligibleProjectAssignee) {
+          result = { ok: false, error: 'Choose a member assigned to this project and department.' };
+          return state;
+        }
+      }
       if (!assignedTo && isHodUser(currentUser, state.rolePermissions) && responsibleHodId) {
         assignedTo = responsibleHodId;
       }
@@ -314,7 +327,7 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
         result = { ok: false, error: `${assigneeUser.name} is not in the ${task.department} department.` };
         return state;
       }
-      const stageError = taskAssignmentStageError(currentUser, task, assignedTo, state.users, state.rolePermissions);
+      const stageError = taskAssignmentStageError(currentUser, task, assignedTo, state.users, state.rolePermissions, { project });
       if (stageError) {
         useToastStore.getState().addToast(stageError, 'warning');
         result = { ok: false, error: stageError };
@@ -346,7 +359,7 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
           responsibleHodId: nextResponsibleHodId,
           assignmentState: nextAssignmentState,
           status: ['Completed', 'Cancelled'].includes(t.status) ? t.status : 'Pending',
-          clientApprovalStatus: ['Completed', 'Cancelled'].includes(t.status) ? t.clientApprovalStatus : 'Pending',
+          clientApprovalStatus: t.clientApprovalStatus,
           // The database trigger stamps the authoritative assignment actor
           // and time. HOD route updates must not send a client-controlled
           // timestamp through the HOD permission boundary; keep the local
@@ -418,7 +431,7 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
         assignedAt: now,
         assignmentOverride: { actorId: currentUser.id, reason: trimmedReason, createdAt: now },
         status: 'Pending',
-        clientApprovalStatus: 'Pending',
+        clientApprovalStatus: task.clientApprovalStatus,
         updatedAt: now,
       }, currentUser.id, now);
       const newTasks = state.tasks.map(item => item.id === taskId
@@ -527,6 +540,12 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
     if (!isWorkspaceSessionCurrent(session)) return { ok: false, error: 'Your session changed. Sign in again.' };
     return actions.attachTaskOutput(get(), set, pendingMutationMessage, taskId, attachment);
   },
+  attachTaskSupportingFile: async (taskId, attachment) => {
+    const session = captureWorkspaceSession();
+    const actions = await import('./taskReviewActions');
+    if (!isWorkspaceSessionCurrent(session)) return { ok: false, error: 'Your session changed. Sign in again.' };
+    return actions.attachTaskSupportingFile(get(), set, pendingMutationMessage, taskId, attachment);
+  },
   setTaskReviewConfig: async (taskId, config) => {
     const session = captureWorkspaceSession();
     if (get().backend.mode === 'supabase' && config.requiresInternalApproval !== undefined) {
@@ -589,12 +608,25 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
     const assignee = nextAssigneeId ? state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client') : undefined;
     if (nextAssigneeId && !assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
     const assignmentChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
+    if (assignmentChanged && assignee?.hasLogin === false) return { ok: false, error: 'Choose an active internal assignee.' };
     if (assignmentChanged && assignee && !isEligibleTaskAssignee(assignee, nextDepartment)) {
       return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
     }
     const nextProjectForAssignment = (data.projectId ?? task.projectId)
       ? state.projects.find(item => item.id === (data.projectId ?? task.projectId))
       : undefined;
+    if (assignmentChanged && assignee && nextProjectForAssignment && !isBossKoo(currentUser)) {
+      const eligibleProjectAssignee = isHodUser(assignee, state.rolePermissions)
+        ? eligibleTaskHods(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions).some(user => user.id === assignee.id)
+        : assignee.role === 'Staff'
+          ? eligibleTaskStaff(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions).some(user => user.id === assignee.id)
+          : assignee.role === 'Project Manager'
+            ? (nextProjectForAssignment.projectManagerIds !== undefined
+              ? nextProjectForAssignment.projectManagerIds.includes(assignee.id)
+              : nextProjectForAssignment.createdBy === assignee.id)
+            : false;
+      if (!eligibleProjectAssignee) return { ok: false, error: 'Choose a member assigned to this project and department.' };
+    }
     const nextEligibleHods = eligibleTaskHods(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions);
     const currentResponsibleHodId = task.responsibleHodId
       || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions) ? task.assignedTo : undefined)
@@ -624,7 +656,7 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
       // Stage 1 must also hold when the department changes into one with an
       // HOD while the current assignee stays a staff member; otherwise a PM
       // could route work around the HOD checkpoint by editing the department.
-      const stageError = taskAssignmentStageError(currentUser, { department: nextDepartment }, nextAssigneeId, state.users, state.rolePermissions);
+      const stageError = taskAssignmentStageError(currentUser, { department: nextDepartment }, nextAssigneeId, state.users, state.rolePermissions, { project: nextProjectForAssignment });
       if (stageError) return { ok: false, error: stageError };
     }
 
@@ -760,15 +792,9 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
           : statusChanged && (wasCompleted || task.completionPercentage === 100)
             ? 90
             : task.completionPercentage,
-      clientApprovalStatus: statusChanged
-        ? isReadyForClientReview
-          ? isCompleted
-            ? task.visibility !== 'internal' ? (task.clientApprovalStatus === 'Approved' ? 'Approved' : task.clientApprovalStatus === 'Rejected' ? 'Rejected' : 'Pending') : (status !== task.status ? 'Approved' : task.clientApprovalStatus)
-            : 'Pending'
-          : task.clientApprovalStatus === 'Approved' || wasCompleted
-            ? 'Pending'
-            : task.clientApprovalStatus
-        : task.clientApprovalStatus,
+      // Status/revision history is internal workflow state. Client acceptance
+      // is written only by reviewClientApproval.
+      clientApprovalStatus: task.clientApprovalStatus,
       attachmentLink: safeAttachmentLink || undefined,
       attachmentName: data.attachmentName !== undefined ? data.attachmentName.trim() || undefined : task.attachmentName,
       notes: data.notes !== undefined ? data.notes.trim() || undefined : task.notes,
@@ -776,10 +802,10 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
     };
 
     if (assignmentChanged && !['Completed', 'Cancelled'].includes(task.status) && (data.status === undefined || data.status === task.status)) {
-      updatedTask.status = 'Pending'; updatedTask.clientApprovalStatus = 'Pending';
+      updatedTask.status = 'Pending';
     }
     if (['In Progress', 'Revision'].includes(updatedTask.status) && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status)) {
-      updatedTask.clientApprovalStatus = 'Rejected'; updatedTask.revisionCount = task.revisionCount + 1;
+      updatedTask.revisionCount = task.revisionCount + 1;
     }
     if (state.backend.mode === 'local' && updatedTask.status === 'Waiting Approval' && task.status !== updatedTask.status && !getDepartmentReviewers(state.users, { ...updatedTask, workState: { ...updatedTask.workState, reviewRequestedBy: currentUser.id } }, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) return { ok: false, error: TASK_HOD_REQUIRED };
     const evidenceError = taskEvidenceError(task, updatedTask, state.deliverables, state.tasks);
@@ -1026,6 +1052,10 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
         result = { ok: false, error: 'Request a revision only after work has been submitted for review.' };
         return state;
       }
+      if (!task.assignedTo?.trim()) {
+        result = { ok: false, error: 'Assign a responsible person before requesting a revision.' };
+        return state;
+      }
 
       const revisionComment: TaskComment | null = note?.trim()
         ? {
@@ -1043,7 +1073,8 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
         const updated = recordTaskWorkTransition(t, {
           ...t,
           revisionCount: t.revisionCount + 1,
-          clientApprovalStatus: 'Rejected' as ClientApprovalStatus,
+          // Internal revision requests do not create a Client rejection.
+          clientApprovalStatus: t.clientApprovalStatus,
           status: 'In Progress' as TaskStatus,
           isCompleted: false,
           completedAt: undefined,
@@ -1102,7 +1133,10 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
       // remain compatible when no HOD has ever been configured.
       if (!projectHods.length && (taskData.assignmentState !== undefined || taskData.responsibleHodId !== undefined)) return '';
       if (!projectHods.length) {
-        resolvedAssignmentState = taskData.assignmentState || 'needs_hod';
+        // No project HOD means the legacy direct-to-Staff route remains valid.
+        // Do not label an assigned task needs_hod: that route requires an
+        // empty assignee and would contradict the actual owner.
+        resolvedAssignmentState = resolvedAssigneeId ? undefined : taskData.assignmentState;
       } else {
         if (projectHods.length > 1 && !requestedHodId) return '';
         if (requestedHodId && !projectHods.some(user => user.id === requestedHodId)) return '';
@@ -1113,11 +1147,24 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
     }
     const assignee = resolvedAssigneeId ? state.users.find(user => user.id === resolvedAssigneeId && user.role !== 'Client') : undefined;
     if (resolvedAssigneeId && !assignee) return '';
+    if (assignee?.hasLogin === false) return '';
     if (assignee && !canAssignTasksToOthers(currentUser, state.rolePermissions, undefined, { users: state.users, clients: state.clients, projects: state.projects }) && assignee.id !== currentUser.id) return '';
     if (assignee && !isEligibleTaskAssignee(assignee, taskData.department)) return '';
+    if (assignee && project && !isBossKoo(currentUser)) {
+      const eligibleProjectAssignee = isHodUser(assignee, state.rolePermissions)
+        ? projectHods.some(user => user.id === assignee.id)
+        : assignee.role === 'Staff'
+          ? eligibleTaskStaff(taskData.department, project, state.users, state.rolePermissions).some(user => user.id === assignee.id)
+          : assignee.role === 'Project Manager'
+            ? (project.projectManagerIds !== undefined
+              ? project.projectManagerIds.includes(assignee.id)
+              : project.createdBy === assignee.id)
+            : false;
+      if (!eligibleProjectAssignee) return '';
+    }
     // Creating a task already submitted for review is the PM handing work to
     // the reviewer directly, so the HOD-first assignment rule does not apply.
-    const stageError = taskAssignmentStageError(currentUser, taskData, resolvedAssigneeId, state.users, state.rolePermissions, { allowDirectStaff: resolveTaskStatus(taskData.status, state.taskStatuses) === 'Waiting Approval' });
+    const stageError = taskAssignmentStageError(currentUser, taskData, resolvedAssigneeId, state.users, state.rolePermissions, { allowDirectStaff: resolveTaskStatus(taskData.status, state.taskStatuses) === 'Waiting Approval', project });
     if (stageError) { useToastStore.getState().addToast(stageError, 'warning'); return ''; }
 
     if (taskData.projectId) {
@@ -1161,7 +1208,7 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
 
     if (state.backend.mode === 'local' && status === 'Waiting Approval' && !getDepartmentReviewers(state.users, taskData, state.rolePermissions, { clients: state.clients, projects: state.projects }).length) { useToastStore.getState().addToast(TASK_HOD_REQUIRED, 'warning'); return ''; }
     const taskId = nowId('T');
-    const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, status, isCompleted: status === 'Completed' }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
+    const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, assignedTo: resolvedAssigneeId || '', status, isCompleted: status === 'Completed' }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
     if (transitionError) { useToastStore.getState().addToast(transitionError, 'warning'); return ''; }
     if (taskEvidenceError(undefined, { ...taskData, id: taskId, status, isCompleted: status === 'Completed', revisionCount: 0, clientApprovalStatus: 'Pending' }, state.deliverables)) {
       useToastStore.getState().addToast(msg('staff.evidenceRequired'), 'warning');

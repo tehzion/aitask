@@ -14,7 +14,7 @@ const seedCompany = async (page: Page) => {
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
     const baseTask = state.tasks[0];
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
       clients: [], projects: [], tasks: [], notifications: [], clientPlans: [], serviceCycles: [],

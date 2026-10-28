@@ -10,6 +10,8 @@ import { useI18n } from '../../../shared/components/I18nProvider';
 import { CountLabel, DataRow, ProgressBar, StatGroup, StatusChip, Surface } from '../../../shared/components/ui';
 import { useLocalToday } from '../../../shared/hooks/useLocalToday';
 import { formatLocalizedDate } from '../../../shared/i18n/i18n';
+import { getLocalizedTaskStatus } from '../../../shared/i18n/localeLabels';
+import { eligibleTaskHods } from '../../../shared/authorization/taskWorkflowAccess';
 import { isTaskCompleted } from '../../../shared/rules/taskCompletion';
 import { parseOptionalDate } from '../../../shared/utils/utils';
 import { isTaskOpen } from '../../reports/domain/taskReporting';
@@ -64,7 +66,7 @@ const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: Works
           meta={task.responsibleHodId
             ? `${t('Responsible HOD')}: ${users.find(user => user.id === task.responsibleHodId)?.name || t('Unavailable member')} · ${t(task.assignmentState === 'assigned_staff' ? 'Assigned to Staff' : task.assignmentState === 'pending_hod' ? 'Pending HOD Assignment' : 'Awaiting HOD')}${assignmentOverdue ? ` · ${t('Overdue assignment')}` : ''}`
             : task.assignedTo ? t('Assigned') : t('Unassigned')}
-          action={<StatusChip tone={task.isCompleted ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(task.status)}</StatusChip>}
+          action={<StatusChip tone={task.isCompleted ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{getLocalizedTaskStatus(task.status, locale)}</StatusChip>}
         />;
       })}
       {tasks.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">{empty}</p>}
@@ -146,8 +148,16 @@ const ServiceRoleDashboard = () => {
   const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
   const waitingInternal = portfolioReviews.internal;
   const waitingClient = portfolioReviews.client;
-  const awaitingHod = scopeTasks.filter(task => isTaskOpen(task)
-    && (task.assignmentState === 'needs_hod' || (!task.assignmentState && !task.assignedTo)));
+  const unassignedOpenTasks = scopeTasks.filter(task => isTaskOpen(task) && !task.assignedTo
+    && (task.assignmentState === 'needs_hod' || !task.assignmentState));
+  const hasEligibleHod = (task: WorkspaceTask) => eligibleTaskHods(
+    task.department,
+    store.projects.find(project => project.id === task.projectId),
+    store.users,
+    store.rolePermissions,
+  ).length > 0;
+  const awaitingHod = unassignedOpenTasks.filter(hasEligibleHod);
+  const unassignedTasks = unassignedOpenTasks.filter(task => !hasEligibleHod(task));
   const awaitingStaffAssignment = scopeTasks.filter(task => isTaskOpen(task) && task.assignmentState === 'pending_hod');
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && isTaskOpen(task));
   const completed = scopeTasks.filter(isTaskCompleted);
@@ -204,6 +214,7 @@ const ServiceRoleDashboard = () => {
       <TaskQueue title={t('Ready to finalize')} tasks={portfolioReviews.completion} empty={t('No tasks awaiting final completion.')} />
       <TaskQueue title={t('Client review (optional)')} tasks={portfolioReviews.client} empty={t('No client review is pending.')} />
       <TaskQueue title={t('Awaiting HOD Assignment')} tasks={awaitingHod} empty={t('No tasks are waiting for HOD assignment.')} />
+      <TaskQueue title={t('Unassigned tasks')} tasks={unassignedTasks} empty={t('No tasks are unassigned.')} />
       <TaskQueue title={t('Awaiting Staff Assignment')} tasks={awaitingStaffAssignment} empty={t('No tasks are waiting for Staff assignment.')} />
     </div>
     <Surface className="overflow-hidden" aria-labelledby="project-health-title">
@@ -221,7 +232,7 @@ const ServiceRoleDashboard = () => {
             .filter((name): name is string => Boolean(name));
           return <div key={project.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(230px,0.9fr)] sm:items-center sm:px-5">
             <div className="min-w-0">
-              <Link to={`/tasks?projectId=${encodeURIComponent(project.id)}`} className="truncate text-sm font-semibold text-ink hover:text-accent"><span data-i18n-skip>{project.projectName}</span></Link>
+              <Link to={`/projects/${encodeURIComponent(project.id)}`} className="truncate text-sm font-semibold text-ink hover:text-accent"><span data-i18n-skip>{project.projectName}</span></Link>
               <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{project.clientName}</span> · {t('Next deadline')}: {health.nextDueDate ? formatLocalizedDate(parseOptionalDate(health.nextDueDate)!, locale) : t('No deadline')}</p>
               <p className="mt-1 truncate text-xs text-muted">{t('Assigned team')}: {teamNames.length ? <span data-i18n-skip>{teamNames.join(', ')}</span> : t('No staff assigned')}</p>
             </div>

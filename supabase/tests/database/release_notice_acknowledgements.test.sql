@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(25);
+select plan(28);
 
 select has_table(
   'public',
@@ -153,6 +153,21 @@ select is(
   public.aitask_get_backend_capabilities('aitask-main') ->> 'code',
   'FORBIDDEN',
   'an authenticated member cannot validate another workspace backend'
+);
+select is(
+  (public.aitask_get_release_notice_acknowledgement('pgtap-capability-workspace', '2026-10-project-workflows') ->> 'ok')::boolean,
+  true,
+  'current release notice ID is accepted by the authenticated status RPC'
+);
+select is(
+  (public.aitask_acknowledge_release_notice('pgtap-capability-workspace', '2026-10-project-workflows') ->> 'acknowledged')::boolean,
+  true,
+  'current release notice ID is accepted by the authenticated write RPC'
+);
+select is(
+  (public.aitask_get_release_notice_acknowledgement('pgtap-capability-workspace', '2026-10-project-workflows') ->> 'acknowledged')::boolean,
+  true,
+  'current notice acknowledgement is returned on the next status check'
 );
 
 reset role;

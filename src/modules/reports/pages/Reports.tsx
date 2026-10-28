@@ -1,5 +1,6 @@
 import { AlertCircle, CheckCircle2, Clock, Download, Users } from 'lucide-react';
 import React, { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useColorTheme } from '../../../app/lifecycle/useColorTheme';
 import { useStore } from '../../../app/store/workspaceStore';
 import { getVisibleTasks } from '../../../shared/authorization/access';
@@ -23,10 +24,15 @@ const ReportsDepartmentChart = React.lazy(() => import('../components/ReportsCha
 const Reports: React.FC = () => {
   const { tasks: allTasks, currentUser, rolePermissions, clients, projects, users } = useStore();
   const { locale, t } = useI18n();
+  const [searchParams] = useSearchParams();
+  const projectIdFilter = searchParams.get('projectId') || '';
   const today = useLocalToday();
   const tasks = useMemo(
-    () => getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects }),
-    [allTasks, clients, currentUser, projects, rolePermissions]
+    () => {
+      const visible = getVisibleTasks(currentUser, allTasks, rolePermissions, { clients, projects });
+      return projectIdFilter ? visible.filter(task => task.projectId === projectIdFilter) : visible;
+    },
+    [allTasks, clients, currentUser, projectIdFilter, projects, rolePermissions]
   );
   const { resolvedTheme } = useColorTheme();
   const chartColors: ReportChartColors = useMemo(() => {
@@ -135,13 +141,15 @@ const Reports: React.FC = () => {
     <div className={pageShell}>
       <PageHeader
         title={t('Four-Week Performance Report')}
-        description={t(isClientUser
-          ? 'Review delivery timing across the latest four Monday-to-Saturday weeks.'
-          : 'Review due work across the latest four Monday-to-Saturday weeks.')}
+        description={t(projectIdFilter
+          ? 'projectReport.scopeDescription'
+          : isClientUser
+            ? 'Review delivery timing across the latest four Monday-to-Saturday weeks.'
+            : 'Review due work across the latest four Monday-to-Saturday weeks.')}
         onboardingTarget="reports-overview"
         meta={(
           <>
-            <span>{t('Scope')}: {t(isClientUser ? 'Client workspace' : currentUser?.role === 'Project Manager' && !currentUser?.isSuperAdmin ? 'Portfolio' : 'Internal workspace')}</span>
+            <span>{t('Scope')}: {t(projectIdFilter ? 'Project' : isClientUser ? 'Client workspace' : currentUser?.role === 'Project Manager' && !currentUser?.isSuperAdmin ? 'Portfolio' : 'Internal workspace')}</span>
             <span aria-hidden="true">•</span>
             <span>{reportRangeLabel}</span>
             <span aria-hidden="true">•</span>
@@ -159,12 +167,19 @@ const Reports: React.FC = () => {
         )}
       />
 
-      {!isClientUser && <MonthlyOperationalReport />}
+      {!isClientUser && !projectIdFilter && <MonthlyOperationalReport />}
 
       {isClientUser && <section className="rounded-panel bg-surface p-4 ring-1 ring-line/80 sm:p-5" aria-labelledby="client-report-timing-title">
         <h2 id="client-report-timing-title" className="font-semibold text-ink">{t('clientReport.timingTitle')}</h2>
         <p className="mt-2 text-sm leading-6 text-muted">{t('clientReport.timingDescription')}</p>
-        {dueTasks.length > 0 && <div className="mt-4 overflow-x-auto" tabIndex={0} role="region" aria-label={t('clientReport.timingTitle')}>
+        {dueTasks.length > 0 && <>
+          <p id="client-report-timing-scroll-help" className="mt-3 text-xs text-muted">{t('clientReport.timingScrollHelp')}</p>
+          <div className="mt-2 overflow-x-auto" tabIndex={0} role="group" aria-label={t('clientReport.timingTable')} aria-describedby="client-report-timing-scroll-help" onKeyDown={event => {
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
+              event.currentTarget.scrollBy({ left: event.key === 'ArrowRight' ? 96 : -96, behavior: 'auto' });
+              event.preventDefault();
+            }
+          }}>
           <table className="w-full min-w-[600px] text-left text-sm">
             <thead><tr>{[t('Task'), t('clientReport.agencyDate'), t('clientReport.approvalDate'), t('clientReport.stage')].map(label => <th key={label} scope="col" className="px-3 py-2 font-semibold">{label}</th>)}</tr></thead>
             <tbody className="divide-y divide-line/70">{dueTasks.map(task => {
@@ -178,7 +193,8 @@ const Reports: React.FC = () => {
               </tr>;
             })}</tbody>
           </table>
-        </div>}
+          </div>
+        </>}
       </section>}
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">

@@ -12,7 +12,7 @@ for (const refresh of ['midnight', 'resume'] as const) {
     await page.getByRole('button', { name: 'Access Dashboard' }).click();
     await page.waitForURL(url => url.pathname !== '/login');
     if (page.url().endsWith('/settings')) await page.getByRole('button', { name: 'Continue for now' }).click();
-    await page.getByRole('button', { name: 'Happy working' }).click();
+    await page.getByRole('button', { name: 'Continue to AiTask' }).click();
     await expect(page.getByRole('heading', { name: 'Agency operations' })).toBeVisible();
     await page.evaluate(async () => {
       const { useStore, stopBackendAutoSync } = await import('/src/app/store/workspaceStore.ts');

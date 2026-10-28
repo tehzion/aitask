@@ -6,7 +6,9 @@ export const getTaskProgress = (task: Task, users: readonly Pick<User, 'id' | 'r
   if (task.status === 'Approved') return 80;
   if (task.status === 'Completed' || task.isCompleted) return clientView && task.clientApprovalStatus !== 'Approved' ? 60 : 100;
   if (task.status === 'Waiting Approval') return 60;
-  if (task.clientApprovalStatus === 'Rejected' || task.status === 'Revision') return 50;
+  // Revision is an internal work state. Do not overload the client decision
+  // field to display its progress milestone.
+  if (task.status === 'Revision' || (task.status === 'In Progress' && task.revisionCount > 0) || task.clientApprovalStatus === 'Rejected') return 50;
   if (task.status === 'In Progress' || (task.assignedTo && task.workState?.acceptedBy === task.assignedTo)) return 30;
   if (!task.assignedTo?.trim()) return clientView && [10, 20, 30].includes(task.completionPercentage) ? task.completionPercentage : 0;
   const assignee = users.find(user => user.id === task.assignedTo);
