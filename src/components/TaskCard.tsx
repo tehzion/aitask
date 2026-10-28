@@ -123,7 +123,7 @@ export const TaskWorkflowSteps: React.FC<{ task: Task; progress: number; label: 
         {workflow.steps.map((step, index) => <li key={step} className={cn('h-1.5 flex-1 rounded-full', index <= workflow.current ? 'bg-accent' : 'bg-line')} />)}
       </ol>
       <p className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs text-muted" aria-hidden="true">
-        <span><span className="font-semibold text-ink">{currentLabel}</span></span>
+        <span className="font-semibold text-ink sm:invisible">{currentLabel}</span>
         <span>{t('Step {current} of {total}', { current: workflow.current + 1, total: workflow.steps.length })}</span>
       </p>
       <ol className="mt-1 hidden gap-1 text-[11px] leading-4 text-muted sm:flex" aria-hidden="true">

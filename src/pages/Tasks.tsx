@@ -633,8 +633,8 @@ const TasksWorkspace: React.FC = () => {
       <div className={`${tableShell} flex flex-col`}>
         <div className="space-y-4 border-b border-slate-200 bg-slate-50/70 p-4">
           {!isClientUser && (
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="no-scrollbar -mx-4 overflow-x-auto px-4 lg:mx-0 lg:px-0">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div className="no-scrollbar -mx-4 min-w-0 overflow-x-auto px-4 xl:mx-0 xl:px-0">
                 <div className="flex w-max gap-1 border-b border-line" role="group" aria-label={t('Task stages')}>
                   {TASK_STAGE_FILTERS.map(value => {
                     const isActive = applyListScope && listScope === value;
@@ -656,7 +656,7 @@ const TasksWorkspace: React.FC = () => {
                   })}
                 </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('Deadline filters')}>
+              <div className="flex shrink-0 flex-wrap items-center gap-2" role="group" aria-label={t('Deadline filters')}>
                 {([
                   ['today', t('Due today'), periodRouteFilter === 'today' || (!routeFocus && dateFrom === format(today, 'yyyy-MM-dd') && dateTo === format(today, 'yyyy-MM-dd'))],
                   ['overdue', t('Overdue'), routeFocus === 'overdue'],
