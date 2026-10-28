@@ -46,7 +46,7 @@ test('Staff cannot complete internal review in either editor', async ({ page }) 
   await expect(dialog).toBeVisible();
   await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Approve internal review', exact: true })).toHaveCount(0);
-  await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Edit task', exact: true }).click();
   await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
 });

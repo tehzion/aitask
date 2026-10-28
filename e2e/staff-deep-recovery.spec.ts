@@ -97,7 +97,7 @@ for (const sessionChange of [false, true]) {
 
 test('Staff Full edit preserves a newer details draft when earlier details save completes', async ({ page }) => {
   await seed(page, `/tasks?taskId=${id}`);
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await hold(page);
   await page.getByLabel('Task Title', { exact: true }).fill('Submitted title');
@@ -163,7 +163,7 @@ test('Staff date recovery catches retry and reload exceptions and can use latest
 
 test('Staff Full edit catches save exceptions and retries the original details while keeping newer input', async ({ page }) => {
   await seed(page, `/tasks?taskId=${id}`);
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -185,7 +185,7 @@ test('Staff Full edit catches save exceptions and retries the original details w
 
 test('Staff cancelling Full edit asks before resetting the details draft', async ({ page }) => {
   await seed(page, `/tasks?taskId=${id}`);
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByLabel('Task Title', { exact: true }).fill('Unsaved title');
   page.once('dialog', prompt => prompt.dismiss());
@@ -199,7 +199,7 @@ test('Staff cancelling Full edit asks before resetting the details draft', async
 
 test('Staff Full edit retry preserves a draft whose original command was discarded', async ({ page }) => {
   await seed(page, `/tasks?taskId=${id}`);
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.setState({
     commitPendingMutation: async () => ({ ok: false, error: 'Confirmation missing.' }), retryPendingSave: async () => ({ ok: true }),

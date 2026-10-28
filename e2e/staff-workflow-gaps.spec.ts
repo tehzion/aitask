@@ -162,14 +162,14 @@ test('mobile staff ownership/help controls remain accessible', async ({ page }) 
 
 test('Full edit recovery merges newer untouched fields and confirms overlapping changes', async ({ page }) => {
   await seed(page);
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByLabel('Task Title', { exact: true }).fill('Recovered artwork title');
   await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter(key => key.includes('staff-full-edit')).length)).toBe(1);
   // Simulate a manager's independent edit while Staff has an unsent title.
   await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.setState(s => ({ tasks: s.tasks.map(task => ({ ...task, notes: 'New manager instructions' })) })));
   await page.reload();
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(page.getByLabel('Task Title', { exact: true })).toHaveValue('Recovered artwork title');
   await expect(page.getByRole('textbox', { name: 'Internal Notes', exact: true })).toHaveValue('New manager instructions');
@@ -180,12 +180,12 @@ test('Full edit recovery merges newer untouched fields and confirms overlapping 
 
 test('Full edit recovery requires a choice for overlapping manager changes', async ({ page }) => {
   await seed(page);
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   await page.getByLabel('Task Title', { exact: true }).fill('My recovered title');
   await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.setState(s => ({ tasks: s.tasks.map(task => ({ ...task, title: 'Manager updated title' })) })));
   await page.reload();
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   page.once('dialog', dialog => dialog.dismiss());
   await page.getByRole('button', { name: 'Restore draft' }).click();
   await expect(page.getByLabel('Task Title', { exact: true })).toHaveCount(0);

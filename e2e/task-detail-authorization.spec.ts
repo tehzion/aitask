@@ -119,7 +119,7 @@ test.describe('task detail authorization matrix', () => {
       department: 'Designer',
     });
     const portfolioFocus = await openTask(page, portfolioTask, ['Owned Portfolio Co']);
-    await portfolioFocus.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await portfolioFocus.getByRole('button', { name: 'Edit task', exact: true }).click();
     const portfolioDialog = page.getByRole('dialog', { name: portfolioTask.title });
     await expect(portfolioDialog.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await expect(portfolioDialog.getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
@@ -138,8 +138,8 @@ test.describe('task detail authorization matrix', () => {
     });
     await signIn(page, 'Project Manager Demo');
     const pmDialog = await openTask(page, pmCreatedTask);
-    await expect(pmDialog.getByRole('button', { name: 'Full edit', exact: true })).toBeVisible();
-    await pmDialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await expect(pmDialog.getByRole('button', { name: 'Edit task', exact: true })).toBeVisible();
+    await pmDialog.getByRole('button', { name: 'Edit task', exact: true }).click();
     const pmEditor = page.getByRole('dialog', { name: pmCreatedTask.title });
     await expect(pmEditor.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await expect(pmEditor.getByPlaceholder('Write a comment or update...')).toBeVisible();
@@ -156,8 +156,8 @@ test.describe('task detail authorization matrix', () => {
     await page.getByRole('button', { name: 'Logout' }).click();
     await signIn(page, 'HOD Demo');
     const hodDialog = await openTask(page, hodDepartmentTask);
-    await expect(hodDialog.getByRole('button', { name: 'Full edit', exact: true })).toBeVisible();
-    await hodDialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await expect(hodDialog.getByRole('button', { name: 'Edit task', exact: true })).toBeVisible();
+    await hodDialog.getByRole('button', { name: 'Edit task', exact: true }).click();
     const hodEditor = page.getByRole('dialog', { name: hodDepartmentTask.title });
     await expect(hodEditor.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await hodEditor.getByRole('button', { name: 'Edit', exact: true }).click();
@@ -175,8 +175,8 @@ test.describe('task detail authorization matrix', () => {
     await page.getByRole('button', { name: 'Logout' }).click();
     await signIn(page, 'Staff Demo');
     const staffDialog = await openTask(page, staffAssignedTask);
-    await expect(staffDialog.getByRole('button', { name: 'Full edit', exact: true })).toBeVisible();
-    await staffDialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await expect(staffDialog.getByRole('button', { name: 'Edit task', exact: true })).toBeVisible();
+    await staffDialog.getByRole('button', { name: 'Edit task', exact: true }).click();
     const staffEditor = page.getByRole('dialog', { name: staffAssignedTask.title });
     await expect(staffEditor.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await staffEditor.getByRole('button', { name: 'Edit', exact: true }).click();

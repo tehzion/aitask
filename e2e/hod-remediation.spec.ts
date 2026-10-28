@@ -29,6 +29,8 @@ test('HOD-owned review uses an independent PM and retains accountable ownership'
   await page.goto('/tasks?taskId=independent-review');
   await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ users: useStore.getState().users.filter(user => ['hod','staff','pm','boss'].includes(user.id)) }); });
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toBeEnabled();
+  // Review settings are a secondary disclosure for a PM.
+  await page.locator('summary', { hasText: 'Review settings' }).click();
   const settings = page.getByRole('region', { name: 'Review responsibility' });
   await settings.getByRole('combobox', { name: 'Accountable lead', exact: true }).selectOption('hod');
   await settings.getByRole('combobox', { name: 'Temporary review cover', exact: true }).selectOption('pm');

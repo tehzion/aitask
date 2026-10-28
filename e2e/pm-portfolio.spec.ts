@@ -79,7 +79,7 @@ test('PM sees completion in both task views while review is pending', async ({ p
   await expect(dialog.getByRole('button', { name: 'Confirm completion', exact: true })).toHaveCount(0);
   await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Edit task', exact: true }).click();
   await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveCount(0);
   const result = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -131,7 +131,7 @@ test('PM saves a routine edit to a task in an inherited project', async ({ page 
   await seedPM(page);
   await page.goto('/tasks?taskId=pm-edit');
   const guided = page.getByRole('dialog', { name: 'Inherited editable work' });
-  await guided.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await guided.getByRole('button', { name: 'Edit task', exact: true }).click();
   const editor = page.getByRole('dialog', { name: 'Inherited editable work' });
   await editor.getByRole('button', { name: 'Edit', exact: true }).click();
   await editor.getByRole('combobox', { name: 'Priority', exact: true }).selectOption('High');
@@ -154,7 +154,7 @@ test('PM delegates assigned work to the department HOD through the full editor',
   });
   await page.goto('/tasks?taskId=pm-direct');
   let editor = page.getByRole('dialog', { name: 'Directly assigned PM work' });
-  await editor.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await editor.getByRole('button', { name: 'Edit task', exact: true }).click();
   editor = page.getByRole('dialog', { name: 'Directly assigned PM work' });
   await editor.getByRole('button', { name: 'Edit', exact: true }).click();
   await expect(editor.getByRole('combobox', { name: 'Assignee', exact: true })).toBeEnabled();
@@ -180,7 +180,7 @@ test('PM company edits reject foreign scope and save the accessible company ID',
   });
   await page.goto('/tasks?taskId=pm-edit');
   const editor = page.getByRole('dialog', { name: 'Inherited editable work' });
-  await editor.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await editor.getByRole('button', { name: 'Edit task', exact: true }).click();
   await editor.getByRole('button', { name: 'Edit', exact: true }).click();
   await editor.getByRole('textbox', { name: 'Client / Brand', exact: true }).fill('Foreign Company');
   await editor.getByRole('button', { name: 'Save Changes', exact: true }).click();

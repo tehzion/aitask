@@ -54,7 +54,7 @@ export default function TaskReviewSettings({ task }: { task: Task }) {
       return { ok: true };
     }, result => { if (result.ok) { setMessage(t(isOverride ? 'Review override saved with your reason.' : approvalMode !== savedApprovalMode ? 'Review responsibility saved.' : 'Review cover and lead saved.')); setReason(''); } else setError(result.error || 'The change is waiting to be saved.'); });
   };
-  return <section aria-label={t('Review responsibility')} className="space-y-3 rounded-control border border-line p-4">
+  return <section aria-label={t('Review responsibility')} className="space-y-3">
     <h3 className="text-sm font-semibold text-ink">{t('Review responsibility')}</h3>
     <label className="block text-sm font-medium text-ink">{t('Approval workflow')}
       <select value={approvalMode} onChange={event => setApprovalMode(event.target.value as TaskApprovalMode)} disabled={locked || task.workflowStepKind === 'internal_review' || ['Completed', 'Cancelled'].includes(task.status)} aria-describedby={approvalHintId} className="mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3">

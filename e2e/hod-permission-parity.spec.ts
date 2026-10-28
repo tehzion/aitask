@@ -29,7 +29,7 @@ const openDetails = async (page: Page, id: string, title: string) => {
   await page.goto(`/tasks?taskId=${id}`);
   const sheet = page.getByRole('dialog', { name: title });
   await expect(sheet).toBeVisible();
-  const fullEdit = sheet.getByRole('button', { name: 'Full edit', exact: true });
+  const fullEdit = sheet.getByRole('button', { name: 'Edit task', exact: true });
   if (await fullEdit.isVisible()) await fullEdit.click();
   return page.getByRole('dialog', { name: title });
 };
@@ -167,7 +167,7 @@ test('HOD keeps delegated task details open in the personal scope', async ({ pag
   await seedHod(page);
   await page.goto('/tasks?scope=mine&taskId=hod-assigned');
   let dialog = page.getByRole('dialog', { name: 'Assigned delegation work' });
-  await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Edit task', exact: true }).click();
   dialog = page.getByRole('dialog', { name: 'Assigned delegation work' });
   await dialog.getByRole('combobox', { name: 'Choose a team member' }).selectOption('audit-editor');
   await dialog.getByRole('button', { name: 'Assign Task', exact: true }).click();
@@ -211,7 +211,7 @@ test('HOD sees an unavailable dependency warning without hidden task details', a
   const dialog = page.getByRole('dialog', { name: 'Assigned delegation work' });
   await expect(dialog.getByRole('region', { name: 'Dependency status unavailable' })).toContainText('1 earlier step');
   await expect(dialog.getByText('Foreign department work')).toHaveCount(0);
-  await dialog.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Edit task', exact: true }).click();
   const fullEditor = page.getByRole('dialog', { name: 'Assigned delegation work' });
   await expect(fullEditor.getByRole('region', { name: 'Dependency status unavailable' })).toContainText('1 earlier step');
   await expect(fullEditor.getByText('Foreign department work')).toHaveCount(0);

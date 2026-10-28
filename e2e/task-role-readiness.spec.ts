@@ -33,7 +33,7 @@ test('legacy HOD can delegate and approve through the full editor without comple
     useStore.setState({ users: useStore.getState().users.map(user => user.id === 'stage-hod' ? { ...user, role: 'Staff' as const, customRoleId: 'builtin-hod' } : user) });
   });
   await openAs(page, 'stage-hod');
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('combobox', { name: 'Choose a team member', exact: true }).selectOption('stage-staff');
   await page.getByRole('button', { name: 'Assign Task', exact: true }).click();
   await expect(page.getByRole('progressbar', { name: 'Task progress', exact: true })).toHaveAttribute('aria-valuenow', '20');
@@ -41,7 +41,7 @@ test('legacy HOD can delegate and approve through the full editor without comple
   await page.getByRole('button', { name: 'Start work', exact: true }).click();
   await page.getByRole('button', { name: 'Send for review', exact: true }).click();
   await openAs(page, 'stage-hod');
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
   await expect(page.getByRole('progressbar', { name: 'Task progress', exact: true })).toHaveAttribute('aria-valuenow', '80');
   await expect(page.getByRole('button', { name: 'Confirm completion', exact: true })).toHaveCount(0);
@@ -138,10 +138,10 @@ for (const status of ['Waiting Approval', 'Approved', 'Completed']) {
       useStore.setState({ tasks: useStore.getState().tasks.map(task => ({ ...task, assignedTo: 'stage-staff', status, isCompleted: status === 'Completed' })) });
     }, status);
     await openAs(page, 'stage-staff');
-    await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit task', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Stage artwork', exact: true }).getByRole('button', { name: 'Delete', exact: true })).toHaveCount(0);
     await openAs(page, 'stage-pm');
-    await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit task', exact: true }).click();
     await expect(page.getByRole('dialog', { name: 'Stage artwork', exact: true }).getByRole('button', { name: 'Delete', exact: true })).toBeVisible();
   });
 }
@@ -187,7 +187,7 @@ for (const mobile of [false, true]) {
       await page.setViewportSize({ width: 375, height: 844 });
     }
     if (mobile) await page.screenshot({ path: testInfo.outputPath('hod-evidence-mobile.png') });
-    await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit task', exact: true }).click();
     await expect(page.getByRole('region', { name: 'Output files', exact: true })).toBeVisible();
   });
 }
@@ -252,7 +252,7 @@ test('PM assignments remain available across departments and signed output field
       currentUser: { ...state.currentUser!, departments: ['Management'], department: 'Management' } });
   });
   await openAs(page, 'stage-pm');
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const assignee = page.getByRole('combobox', { name: 'Assignee', exact: true });
   await expect(assignee.locator('option[value="stage-pm"]')).toHaveCount(1);

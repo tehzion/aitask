@@ -41,7 +41,7 @@ for (const role of ['Staff', 'HOD'] as const) {
       useToastStore.setState({ toasts: [] });
       useStore.setState({ commitPendingMutation: () => new Promise(resolve => { (window as unknown as { finishUiSave: () => void }).finishUiSave = () => resolve({ ok: true }); }) });
     });
-    await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+    await page.getByRole('button', { name: 'Edit task', exact: true }).click();
     await page.getByRole('button', { name: 'Edit', exact: true }).click();
     await page.getByLabel('Task Title', { exact: true }).fill('Submitted artwork');
     await page.getByRole('button', { name: 'Save Changes', exact: true }).click();

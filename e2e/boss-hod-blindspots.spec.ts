@@ -61,7 +61,7 @@ test('HOD department oversight has edit controls without deletion; delegation re
     await page.goto(`/tasks?taskId=${id}`);
     const dialog = page.getByRole('dialog', { name: title });
     await expect(dialog).toBeVisible();
-    const fullEdit = dialog.getByRole('button', { name: 'Full edit', exact: true });
+    const fullEdit = dialog.getByRole('button', { name: 'Edit task', exact: true });
     if (await fullEdit.isVisible()) await fullEdit.click();
     return page.getByRole('dialog', { name: title });
   };

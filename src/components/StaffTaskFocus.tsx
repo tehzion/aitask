@@ -1,4 +1,4 @@
-import TaskOutputFiles, { type OutputUploadState } from './TaskOutputFiles';
+import TaskOutputFiles, { ReviewSettingsDisclosure, type OutputUploadState } from './TaskOutputFiles';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import { acknowledgeActionFeedback, dismissActionFeedback, queueActionFeedback } from '../lib/actionFeedback';
@@ -8,29 +8,28 @@ import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
 import React from 'react';
-import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, MessageSquare, RotateCcw, Send, UsersRound } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Clock3, ExternalLink, RotateCcw, Send } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task, TaskStatus } from '../types';
 import { isPendingMutationResolution, useStore } from '../store';
 import { getStaffGuidedAction, getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { safeHttpsUrl } from '../lib/security';
-import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
+import { getRelativeDueDateString } from '../lib/utils';
 import { inputBase } from './uiTokens';
 import { Button, ProgressBar, StatusChip } from './ui';
 import SideSheet from './SideSheet';
 import BackendFreshness from './BackendFreshness';
 import { useI18n } from './I18nProvider';
-import { formatLocalizedDate } from '../lib/i18n';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { getVisibleTasks, getTaskAccess } from '../lib/access';
-import { canRequestTaskRevision } from '../lib/taskWorkflowAccess';
+import { canRequestTaskRevision, getDepartmentReviewers, getInternalReviewLane } from '../lib/taskWorkflowAccess';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import ConfirmDialog from './ConfirmDialog';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
-import { hasTaskEvidence, isTaskLinkedToDeliverable, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
-import { isTaskOpen } from '../lib/taskReporting';
+import { hasTaskEvidence, isTaskLinkedToDeliverable, TASK_EVIDENCE_REQUIRED, taskWorkContactId, type TaskWorkIntent } from '../lib/staffWorkflow';
+import { isTaskOpen, isTaskOverdue } from '../lib/taskReporting';
 import { canApproveInternalReview, getWorkflowStepKind, INTERNAL_REVIEW_PERMISSION_MESSAGE, isWorkflowTaskSatisfied, workflowTransitionError } from '../lib/workflowReview';
 
 interface StaffTaskFocusProps {
@@ -83,6 +82,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const [pendingSave, setPendingSave] = React.useState<{ taskId: string; commentId?: string; text?: string; status?: TaskStatus; workIntent?: TaskWorkIntent; reviewUpdate?: boolean; revisionRequest?: boolean; revisionCount?: number; revisionNote?: string; failed?: boolean; rejected?: boolean } | null>(null);
   const [helpReason, setHelpReason] = React.useState('');
   const [revisionNote, setRevisionNote] = React.useState('');
+  const [revisionNoteOpen, setRevisionNoteOpen] = React.useState(false);
   const [helpOpen, setHelpOpen] = React.useState(false);
   const [helpMode, setHelpMode] = React.useState<'help' | 'review'>('help');
   const commentRef = React.useRef(comment); commentRef.current = comment;
@@ -111,7 +111,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     setPendingSave(null);
     setExitAction(null);
     setIsDiscarding(false);
-    setRevisionNote('');
+    setRevisionNote(''); setRevisionNoteOpen(false);
     setHelpReason(''); setHelpOpen(false); setHelpMode('help');
     operationGeneration.current++;
   }, [task?.id, currentUser?.id]);
@@ -160,7 +160,6 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const reviewAction = workflowKind === 'internal_review' && liveTask.status === 'Waiting Approval' && canApproveInternalReview(currentUser, liveTask, rolePermissions, { users, clients, projects }) && !isWorkflowTaskSatisfied(liveTask, tasks);
   const deliverable = deliverables.find(item => item.id === liveTask.deliverableId);
   const cycle = serviceCycles.find(item => item.id === liveTask.serviceCycleId);
-  const dueDate = parseOptionalDate(liveTask.dueDate);
   const attachment = safeHttpsUrl(liveTask.attachmentLink);
   const pendingResolution = isPendingMutationResolution(backend);
   const mutationLocked = backend.upgradeRequired === true || pendingResolution || backend.isSaving || backend.isPulling || outputUpload.busy;
@@ -169,6 +168,21 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const canEdit = taskAccess.canEdit;
   const canComment = taskAccess.canComment;
   const contact = users.find(member => member.id === taskWorkContactId(liveTask));
+  const assignee = users.find(member => member.id === liveTask.assignedTo);
+  const responsibleHod = liveTask.responsibleHodId && liveTask.responsibleHodId !== liveTask.assignedTo
+    ? users.find(member => member.id === liveTask.responsibleHodId)
+    : undefined;
+  const overdue = isTaskOverdue(liveTask);
+  // Name the reviewer in the lane that will decide, using the existing routing rules.
+  const reviewerNames = liveTask.status === 'Waiting Approval' ? (() => {
+    const scope = { users, clients, projects };
+    const lane = getInternalReviewLane(liveTask, users, rolePermissions, scope);
+    const candidates = getDepartmentReviewers(users, liveTask, rolePermissions, scope);
+    const inLane = lane === 'projectManager'
+      ? candidates.filter(member => member.role === 'Project Manager')
+      : candidates.filter(member => member.role !== 'Project Manager' || member.id === liveTask.reviewCover?.reviewerId);
+    return (inLane.length ? inLane : candidates).map(member => member.name).join(', ');
+  })() : '';
   const linkedOutput = isTaskLinkedToDeliverable(liveTask, deliverables);
   const evidenceAvailable = hasTaskEvidence(liveTask, deliverables, tasks);
 
@@ -300,8 +314,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     && ['Waiting Approval', 'Approved', 'Completed'].includes(liveTask.status)
     && canRequestTaskRevision(currentUser, liveTask, rolePermissions, { users, clients, projects });
 
-  const submitRevision = async (event: React.FormEvent) => {
-    event.preventDefault();
+  const requestRevisionNow = async (event?: React.FormEvent) => {
+    event?.preventDefault();
     if (!revisionAvailable || isSaving || pendingSave || mutationLocked) return;
     const note = revisionNote.trim();
     const localResult = requestRevision(liveTask.id, note);
@@ -313,19 +327,34 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
     await performSave({ taskId: liveTask.id, revisionRequest: true, revisionCount: updatedTask?.revisionCount, revisionNote: note });
   };
 
+  // Only a genuinely missing requirement gets a footer message; evidence is
+  // required solely for delivery-linked work.
+  const footerHint = guidedActionError === TASK_EVIDENCE_REQUIRED ? 'Add the required output before submitting.' : guidedActionError;
+
   const footer = canEdit ? (
     <div className="space-y-2">
-      {guidedActionError && <p id={completionHintId} className="text-sm text-muted">{t(guidedActionError)}</p>}
-      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-        {canEdit && onOpenFullEditor && <Button variant="secondary" disabled={isSaving || outputUpload.busy || Boolean(pendingSave)} onClick={() => requestExit(onOpenFullEditor)}>{t('Full edit')}</Button>}
+      {footerHint && <p id={completionHintId} className="text-sm text-amber-800 dark:text-[#fff2c2]">{t(footerHint)}</p>}
+      {revisionAvailable && revisionNoteOpen && <form onSubmit={event => void requestRevisionNow(event)} data-onboarding-target="task-review">
+        <label className="block text-xs font-medium text-muted">{t('Revision note (optional)')}
+          <textarea value={revisionNote} onChange={event => setRevisionNote(event.target.value)} rows={2} maxLength={2000} className={`${inputBase} mt-1.5 resize-none px-3 py-2`} />
+        </label>
+      </form>}
+      <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-wrap items-center gap-2">
+          {onOpenFullEditor && <Button variant="secondary" disabled={isSaving || outputUpload.busy || Boolean(pendingSave)} onClick={() => requestExit(onOpenFullEditor)}>{t('Edit task')}</Button>}
+          {revisionAvailable && <Button variant="secondary" data-onboarding-target={revisionNoteOpen ? undefined : 'task-review'} disabled={mutationLocked || isSaving || Boolean(pendingSave)} onClick={() => void requestRevisionNow()}>
+            <RotateCcw className="h-4 w-4" />{isSaving ? t('Requesting...') : t('Request revision')}
+          </Button>}
+          {revisionAvailable && !revisionNoteOpen && <Button variant="quiet" onClick={() => setRevisionNoteOpen(true)}>{t('Add note')}</Button>}
+        </div>
         {reviewAction ? <Button
-          className="sm:min-w-44"
+          className="sm:min-w-40"
           disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || Boolean(transitionError('Approved')) || pendingStatus !== null}
           onClick={() => void persistStatus('Approved')}
         >
           <CheckCircle2 className="h-4 w-4" />{isSaving ? t('Saving…') : t('Approve internal review')}
         </Button> : guidedAction.kind === 'advance' && guidedAction.targetStatus ? <Button
-          className="sm:min-w-44"
+          className="sm:min-w-40"
           disabled={mutationLocked || !canEdit || isSaving || Boolean(pendingSave) || guidedAction.disabled || Boolean(guidedActionError) || pendingStatus !== null}
           aria-describedby={guidedActionError ? completionHintId : undefined}
           onClick={() => void persistStatus(guidedAction.targetStatus!)}
@@ -333,8 +362,6 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           <CheckCircle2 className="h-4 w-4" />{isSaving ? t('Saving…') : t(guidedAction.label)}
         </Button> : guidedAction.kind === 'waiting' ? <span role="status" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-line bg-inset px-4 py-2 text-sm font-semibold text-muted">
           <Clock3 className="h-4 w-4" />{t(liveTask.status === 'Waiting Approval' ? 'Awaiting Review' : guidedAction.label)}
-        </span> : guidedAction.kind === 'terminal' ? <span role="status" className="inline-flex min-h-11 items-center gap-2 rounded-control border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
-          <CheckCircle2 className="h-4 w-4" />{t(guidedAction.label)}
         </span> : guidedAction.kind === 'picker' ? <div className="flex flex-wrap gap-2" role="group" aria-label={t('Available task actions')}>
           {statusOptions.filter(option => option.status !== liveTask.status).map(option => <Button
             key={option.status}
@@ -345,22 +372,6 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           >{getLocalizedTaskStatus(option.status, locale)}</Button>)}
         </div> : null}
       </div>
-      {revisionAvailable && <form onSubmit={submitRevision} className="space-y-2 border-t border-line pt-3" data-onboarding-target="task-review">
-        <label className="block text-xs font-medium text-muted">
-          {t('Revision Control')}
-          <textarea
-            value={revisionNote}
-            onChange={event => setRevisionNote(event.target.value)}
-            rows={2}
-            maxLength={2000}
-            placeholder={t('Optional revision note...')}
-            className={`${inputBase} mt-2 resize-none px-3 py-2`}
-          />
-        </label>
-        <Button type="submit" variant="secondary" disabled={mutationLocked || isSaving || Boolean(pendingSave)}>
-          <RotateCcw className="h-4 w-4" />{isSaving ? t('Requesting...') : t('Request Revision')}
-        </Button>
-      </form>}
     </div>
   ) : null;
 
@@ -414,25 +425,15 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           </div>
         )}
 
-        <section aria-labelledby="staff-task-state" className="calm-raised p-4 sm:p-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <p id="staff-task-state" className="calm-eyebrow">{t('Status')}</p>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <StatusChip tone={liveTask.status === 'Waiting Approval' ? 'amber' : liveTask.isCompleted ? 'emerald' : 'blue'}>{getLocalizedTaskStatus(liveTask.status, locale)}</StatusChip>
-                <span className="text-xs font-semibold text-muted">{t(liveTask.priority)} {t('priority')}</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="calm-number text-2xl font-semibold text-ink">{taskProgress}%</p>
-              <p className="text-xs text-muted">{t('progress')}</p>
-            </div>
+        <section aria-labelledby="staff-task-state" className="space-y-3">
+          <h3 id="staff-task-state" className="sr-only">{t('Status')}</h3>
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+            <StatusChip tone={liveTask.status === 'Waiting Approval' ? 'amber' : liveTask.isCompleted ? 'emerald' : liveTask.status === 'Cancelled' ? 'slate' : 'blue'}>{getLocalizedTaskStatus(liveTask.status, locale)}</StatusChip>
+            <span className="text-muted">{t(liveTask.priority)} {t('priority')}</span>
+            <span className={overdue ? 'font-semibold text-red-700' : 'text-muted'}>{getRelativeDueDateString(liveTask.dueDate, liveTask.isCompleted, liveTask.status, locale)}</span>
+            {liveTask.revisionCount > 0 && <span className="font-medium text-amber-700">{t('Revision')} {liveTask.revisionCount}</span>}
           </div>
-          <ProgressBar className="mt-4" label={t('Task progress')} value={taskProgress} />
-          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium text-muted">
-            <span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" />{getRelativeDueDateString(liveTask.dueDate, liveTask.isCompleted, liveTask.status, locale)}</span>
-            {liveTask.revisionCount > 0 && <span className="text-amber-700">{t('Revision')} {liveTask.revisionCount}</span>}
-          </div>
+          {liveTask.status !== 'Cancelled' && <ProgressBar label={t('Task progress')} value={taskProgress} />}
         </section>
 
         {incompletePredecessors.length > 0 && (
@@ -454,81 +455,75 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           <p className="mt-1 text-muted">{liveTask.internalReview ? t('Reviewed by {name}', { name: users.find(user => user.id === liveTask.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
           {!liveTask.internalReview && !canApproveInternalReview(currentUser, liveTask, rolePermissions, { users, clients, projects }) && <p className="mt-2 text-muted">{t(transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
         </section>}
-        <section aria-labelledby="staff-task-brief">
-          <h3 id="staff-task-brief" className="flex items-center gap-2 font-semibold text-ink"><FileText className="h-4 w-4 text-accent" />{t('Brief')}</h3>
-          <div className="mt-3 rounded-panel bg-inset p-4 text-sm leading-6 text-ink">
-            <p className="whitespace-pre-wrap">{liveTask.description ? <span data-i18n-skip>{liveTask.description}</span> : t('No task brief has been added.')}</p>
-            {liveTask.notes && <p data-i18n-skip className="mt-3 border-t border-line pt-3 text-muted">{liveTask.notes}</p>}
-          </div>
-        </section>
-
-        <section aria-labelledby="staff-work-ownership" className="rounded-panel bg-inset p-4 text-sm">
-          <h3 id="staff-work-ownership" className="font-semibold text-ink">{t('Work ownership')}</h3>
+        <section aria-labelledby="staff-work-ownership" className="text-sm">
+          <h3 id="staff-work-ownership" className="sr-only">{t('People')}</h3>
+          <dl className="grid grid-cols-[minmax(0,auto)_minmax(0,1fr)] gap-x-4 gap-y-1.5">
+            <dt className="text-muted">{t('Assigned')}</dt>
+            <dd className="min-w-0 break-words font-medium text-ink"><span data-i18n-skip>{assignee?.name || t('Unassigned')}</span></dd>
+            {responsibleHod && <><dt className="text-muted">{t('Responsible HOD')}</dt><dd className="min-w-0 break-words text-ink"><span data-i18n-skip>{responsibleHod.name}</span></dd></>}
+            {!responsibleHod && contact && !(liveTask.status === 'Waiting Approval' && reviewerNames === contact.name) && <><dt className="text-muted">{t('Task contact')}</dt><dd className="min-w-0 break-words text-ink"><span data-i18n-skip>{contact.name}</span></dd></>}
+            {liveTask.status === 'Waiting Approval' && <><dt className="text-muted">{t('Reviewer')}</dt><dd className="min-w-0 break-words text-ink">{reviewerNames ? <span data-i18n-skip>{reviewerNames}</span> : t('Not assigned')}{liveTask.workState?.reviewRequestedAt && <span className="text-muted"> · {t('Sent for review')} {formatLocalizedDistanceToNow(new Date(liveTask.workState.reviewRequestedAt), locale)}</span>}</dd></>}
+          </dl>
           {pendingSave?.workIntent && <p className="mt-2 text-muted" role="status">{t('Awaiting save confirmation')}</p>}
-          <p className="mt-2 text-muted">{t('Assigned')}: <span data-i18n-skip>{users.find(member => member.id === liveTask.assignedTo)?.name || t('Unassigned')}</span></p>
-          <p className="mt-1 text-muted">{t('Task contact')}: <span data-i18n-skip>{contact?.name || t('No task contact is recorded. Confirm with your team lead.')}</span></p>
-          {liveTask.workState?.acceptedBy === liveTask.assignedTo ? <p className="mt-2 text-ink">{t('Assignment accepted')}{liveTask.workState.acceptedAt && <> · {formatLocalizedDistanceToNow(new Date(liveTask.workState.acceptedAt), locale)}</>}</p>
-            : isTaskOpen(liveTask) && <p className="mt-2 text-muted">{t('Assignment acceptance is not recorded.')}</p>}
-          {liveTask.status === 'Waiting Approval' && <div className="mt-3 border-t border-line pt-3">
-            <p className="font-medium text-ink">{t('Waiting for review')}</p>
-            <p className="mt-1 text-muted">{liveTask.workState?.reviewRequestedAt ? <>{t('Sent for review')} · {formatLocalizedDistanceToNow(new Date(liveTask.workState.reviewRequestedAt), locale)}</> : t('Review submission time is not recorded.')}</p>
-            <p className="mt-1 text-muted">{t('Ask the task contact for a review update. Completion and client approval are tracked separately.')}</p>
-          </div>}
-          {liveTask.workState?.blocker && <div className="mt-3 border-t border-line pt-3" role="status"><p className="font-semibold text-ink">{t('Help requested')}</p><p data-i18n-skip className="mt-1 whitespace-pre-wrap text-ink">{liveTask.workState.blocker.reason}</p><p className="mt-1 text-muted">{formatLocalizedDistanceToNow(new Date(liveTask.workState.blocker.openedAt), locale)}</p></div>}
+          {liveTask.workState?.blocker && <div className="mt-3 rounded-control bg-amber-50 px-3 py-2 text-amber-950 ring-1 ring-amber-200 dark:bg-[#31240f] dark:text-[#fff2c2] dark:ring-[#765d22]" role="status"><p className="font-semibold">{t('Help requested')} · <span className="font-normal">{formatLocalizedDistanceToNow(new Date(liveTask.workState.blocker.openedAt), locale)}</span></p><p data-i18n-skip className="mt-1 whitespace-pre-wrap">{liveTask.workState.blocker.reason}</p></div>}
           {canEdit && isTaskOpen(liveTask) && <div className="mt-3 flex flex-wrap gap-2">
-            {liveTask.assignedTo === currentUser?.id && liveTask.workState?.acceptedBy !== currentUser.id && <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => void saveWork({ kind: 'accept' })}>{t('Accept assignment')}</Button>}
-            <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => { setHelpMode(liveTask.status === 'Waiting Approval' ? 'review' : 'help'); setHelpOpen(true); }}>{t(liveTask.status === 'Waiting Approval' ? 'Request review update' : 'Request help or handover')}</Button>
-            {liveTask.workState?.blocker && <Button variant="secondary" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => void saveWork({ kind: 'unblock' })}>{t('Clear blocker')}</Button>}
+            {liveTask.assignedTo === currentUser?.id && liveTask.workState?.acceptedBy !== currentUser.id && <Button variant="secondary" className="min-h-10 px-3 py-1.5" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => void saveWork({ kind: 'accept' })}>{t('Accept assignment')}</Button>}
+            <Button variant="quiet" className="min-h-10" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => { setHelpMode(liveTask.status === 'Waiting Approval' ? 'review' : 'help'); setHelpOpen(true); }}>{t(liveTask.status === 'Waiting Approval' ? 'Request review update' : 'Request help or handover')}</Button>
+            {liveTask.workState?.blocker && <Button variant="quiet" className="min-h-10" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => void saveWork({ kind: 'unblock' })}>{t('Clear blocker')}</Button>}
           </div>}
           {helpOpen && canEdit && <form className="mt-3" onSubmit={event => void submitHelp(event)}>
             <label className="block font-medium text-ink">{t(helpMode === 'review' ? 'feedback.reviewPrompt' : 'What do you need to continue?')}<textarea value={helpReason} onChange={event => setHelpReason(event.target.value)} maxLength={2000} rows={3} className={`${inputBase} mt-2 px-3 py-2`} /></label>
             <p className="mt-2 text-xs text-muted">{t(helpMode === 'review' ? 'feedback.reviewHelp' : 'feedback.helpPrompt')}</p>
-            <Button className="mt-3" type="submit" disabled={!helpReason.trim() || isSaving || Boolean(pendingSave) || mutationLocked}>{t(helpMode === 'review' ? 'Request review update' : 'Send help request')}</Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button type="submit" disabled={!helpReason.trim() || isSaving || Boolean(pendingSave) || mutationLocked}>{t(helpMode === 'review' ? 'Request review update' : 'Send help request')}</Button>
+              <Button type="button" variant="ghost" onClick={() => { setHelpOpen(false); setHelpReason(''); }}>{t('common.cancel')}</Button>
+            </div>
           </form>}
         </section>
-        {linkedOutput && <p className="rounded-control bg-inset px-4 py-3 text-sm text-muted">{t(evidenceAvailable ? 'Output evidence is attached. Client approval is tracked separately from task completion.' : 'This linked task needs an output link or deliverable file before review or completion. Add it through Full edit or the delivery workspace.')}</p>}
 
-        <TaskOutputFiles task={liveTask} onUploadStateChange={setOutputUpload} />
+        {canEdit && <ReviewSettingsDisclosure task={liveTask} />}
 
-        <section aria-labelledby="staff-delivery-context">
-          <h3 id="staff-delivery-context" className="flex items-center gap-2 font-semibold text-ink"><UsersRound className="h-4 w-4 text-accent" />{t('Delivery context')}</h3>
-          <dl className="mt-3 grid gap-3 rounded-panel bg-inset p-4 text-sm sm:grid-cols-2">
-            <div><dt className="text-xs font-medium text-muted">{t('Client')}</dt><dd data-i18n-skip className="mt-1 font-semibold text-ink">{liveTask.clientName}</dd></div>
-            <div><dt className="text-xs font-medium text-muted">{t('Service')}</dt><dd data-i18n-skip className="mt-1 font-semibold text-ink">{liveTask.serviceType}</dd></div>
-            {deliverable && <div><dt className="text-xs font-medium text-muted">{t('Deliverable')}</dt><dd data-i18n-skip className="mt-1 font-semibold text-ink">{deliverable.title}</dd></div>}
-            {cycle && <div><dt className="text-xs font-medium text-muted">{t('Service cycle')}</dt><dd className="mt-1 font-semibold text-ink">{cycle.periodStart} – {cycle.periodEnd}</dd></div>}
-            {dueDate && <div><dt className="text-xs font-medium text-muted">{t('Due date')}</dt><dd className="mt-1 font-semibold text-ink">{formatLocalizedDate(dueDate, locale)}</dd></div>}
-          </dl>
+        <section aria-labelledby="staff-task-brief" className="border-t border-line/70 pt-5">
+          <h3 id="staff-task-brief" className="text-sm font-semibold text-ink">{t('Details')}</h3>
+          <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-ink">{liveTask.description ? <span data-i18n-skip>{liveTask.description}</span> : <span className="text-muted">{t('No description.')}</span>}</p>
+          {liveTask.notes && <p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">{liveTask.notes}</p>}
+          {(deliverable || cycle) && <p className="mt-2 text-xs text-muted">{deliverable && <>{t('Deliverable')}: <span data-i18n-skip>{deliverable.title}</span></>}{deliverable && cycle && ' · '}{cycle && <>{t('Service cycle')}: {cycle.periodStart} – {cycle.periodEnd}</>}</p>}
         </section>
 
-        {liveTask.attachmentLink && (
-          <section aria-labelledby="staff-task-file">
-            <h3 id="staff-task-file" className="font-semibold text-ink">{t('File')}</h3>
-            {attachment ? <a href={attachment} target="_blank" rel="noopener noreferrer" className="mt-3 flex min-h-12 items-center justify-between gap-3 rounded-control bg-inset px-4 text-sm font-semibold text-ink hover:bg-accent-soft hover:text-accent"><span className="truncate">{liveTask.attachmentName ? <span data-i18n-skip>{liveTask.attachmentName}</span> : t('Open attachment')}</span><ExternalLink className="h-4 w-4 shrink-0" /></a> : <p className="mt-2 text-sm text-red-700">{t('This attachment link is invalid.')}</p>}
-          </section>
-        )}
+        <section aria-labelledby="staff-task-attachments" className="space-y-2 border-t border-line/70 pt-5">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 id="staff-task-attachments" className="text-sm font-semibold text-ink">{t('Attachments and links')}</h3>
+            {!linkedOutput && <span className="text-xs text-muted">{t('Optional')}</span>}
+          </div>
+          {/* Evidence is required only for delivery-linked work; ordinary tasks can be submitted without files. */}
+          {linkedOutput
+            ? <p className={`text-sm ${evidenceAvailable ? 'text-muted' : 'text-amber-800 dark:text-[#fff2c2]'}`}>{t(evidenceAvailable ? 'Output added for this deliverable.' : 'This task delivers a client deliverable. Add its output before sending it for review.')}</p>
+            : !liveTask.attachmentLink && <p className="text-sm text-muted">{t(canEdit ? 'Add files or links in Edit task if needed.' : 'No attachments.')}</p>}
+          {liveTask.attachmentLink && (attachment
+            ? <a href={attachment} target="_blank" rel="noopener noreferrer" className="flex min-h-11 items-center justify-between gap-3 rounded-control border border-line px-3 text-sm font-medium text-ink hover:bg-inset hover:text-accent"><span className="truncate">{liveTask.attachmentName ? <span data-i18n-skip>{liveTask.attachmentName}</span> : t('Open attachment')}</span><ExternalLink className="h-4 w-4 shrink-0" aria-hidden="true" /></a>
+            : <p className="text-sm text-red-700">{t('This attachment link is invalid.')}</p>)}
+          <TaskOutputFiles task={liveTask} onUploadStateChange={setOutputUpload} showReviewSettings={false} />
+        </section>
 
-        <section aria-labelledby="staff-task-updates">
-          <h3 id="staff-task-updates" className="flex items-center gap-2 font-semibold text-ink"><MessageSquare className="h-4 w-4 text-accent" />{t('Updates')}</h3>
-          <div className="mt-3 space-y-3">
+        <section aria-labelledby="staff-task-updates" className="border-t border-line/70 pt-5">
+          <h3 id="staff-task-updates" className="text-sm font-semibold text-ink">{t('Updates')}</h3>
+          <div className="mt-2 divide-y divide-line/60">
             {(liveTask.comments || []).map(item => {
               const author = users.find(user => user.id === item.userId);
-              return <article key={item.id} className="rounded-panel bg-inset p-4"><div className="flex items-baseline justify-between gap-3"><p className="text-sm font-semibold text-ink">{author?.name ? <span data-i18n-skip>{author.name}</span> : t('Team member')}</p><time className="shrink-0 text-xs text-muted">{formatLocalizedDistanceToNow(new Date(item.createdAt), locale)}</time></div><p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-ink">{item.text}</p>{pendingSave?.commentId === item.id && <p className="mt-2 text-xs font-medium text-muted" role="status">{t('Awaiting save confirmation')}</p>}</article>;
+              return <article key={item.id} className="py-3"><div className="flex items-baseline justify-between gap-3"><p className="text-sm font-semibold text-ink">{author?.name ? <span data-i18n-skip>{author.name}</span> : t('Team member')}</p><time className="shrink-0 text-xs text-muted">{formatLocalizedDistanceToNow(new Date(item.createdAt), locale)}</time></div><p data-i18n-skip className="mt-1 whitespace-pre-wrap text-sm leading-6 text-ink">{item.text}</p>{pendingSave?.commentId === item.id && <p className="mt-1 text-xs font-medium text-muted" role="status">{t('Awaiting save confirmation')}</p>}</article>;
             })}
-            {(liveTask.comments || []).length === 0 && <p className="rounded-panel bg-inset px-4 py-8 text-center text-sm text-muted">{t('No updates yet. Add the first work note below.')}</p>}
+            {(liveTask.comments || []).length === 0 && <p className="py-2 text-sm text-muted">{t('No updates yet.')}</p>}
           </div>
-          {!canComment && <p className="mt-3 rounded-control bg-inset px-3 py-2 text-xs font-medium text-muted">{t('Read-only task view. You can update tasks assigned to you or created by you.')}</p>}
+          {canEdit && !canComment && <p className="mt-2 text-xs text-muted">{t('Read-only task view. You can update tasks assigned to you or created by you.')}</p>}
           {canComment ? (
-            <form onSubmit={submitComment} className="mt-3 flex items-end gap-2">
+            <form onSubmit={submitComment} className="mt-2 flex items-end gap-2">
               <label className="min-w-0 flex-1"><span className="sr-only">{t('Add work update')}</span><textarea value={comment} onChange={event => setComment(event.target.value)} rows={2} placeholder={t('Add a work update…')} className={`${inputBase} resize-none px-3 py-2.5`} /></label>
               <Button type="submit" aria-label={t('Send work update')} disabled={!comment.trim() || mutationLocked || isSaving || Boolean(pendingSave)} className="h-11 w-11 shrink-0 px-0"><Send className="h-4 w-4" /></Button>
             </form>
           ) : null}
-        </section>
-
-        <section aria-labelledby="staff-task-history">
-          <h3 id="staff-task-history" className="flex items-center gap-2 font-semibold text-ink"><History className="h-4 w-4 text-accent" />{t('History')}</h3>
-          <div className="mt-3 space-y-3 border-l border-line pl-4">
+          <details className="group mt-4">
+            <summary id="staff-task-history" className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-semibold text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 [&::-webkit-details-marker]:hidden"><span aria-hidden="true" className="text-muted transition-transform group-open:rotate-90">›</span>{t('History')} <span className="calm-number text-xs font-medium text-muted">{(liveTask.workHistory || []).length + (liveTask.approvalHistory || []).length}</span></summary>
+          <div className="mt-2 space-y-3 border-l border-line pl-4">
             {[...(liveTask.workHistory || [])].reverse().map(event => <article key={event.id} className="text-sm"><p className="text-ink"><span data-i18n-skip className="font-semibold">{users.find(member => member.id === event.userId)?.name || t('Team member')}</span> · {event.fields.map(field => t(workFieldLabels[field] || 'Task updated')).join(', ')}</p><time className="mt-1 block text-xs text-muted">{formatLocalizedDistanceToNow(new Date(event.createdAt), locale)}</time></article>)}
             {[...(liveTask.approvalHistory || [])].reverse().map(event => {
               const author = users.find(user => user.id === event.userId);
@@ -550,6 +545,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
             )}
             {!liveTask.updatedAt && (liveTask.approvalHistory || []).length === 0 && <p className="text-sm text-muted">{t('No recorded history yet.')}</p>}
           </div>
+          </details>
         </section>
       </div>
     </SideSheet>

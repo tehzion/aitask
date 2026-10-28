@@ -48,7 +48,7 @@ test('Staff slow comment acknowledgement preserves newer input', async ({ page }
   await note.fill('Submitted work note');
   await sheet.getByRole('button', { name: 'Send work update' }).click();
   await expect(sheet.getByRole('button', { name: `Close ${titleA}` })).toBeDisabled();
-  await expect(sheet.getByRole('button', { name: 'Full edit' })).toBeDisabled();
+  await expect(sheet.getByRole('button', { name: 'Edit task' })).toBeDisabled();
   await note.fill('Later unsent work note');
   await finishSave(page);
   await expect(note).toHaveValue('Later unsent work note');
@@ -143,7 +143,7 @@ for (const mobile of [false, true]) {
     await expect(confirmation).toBeVisible();
     await confirmation.getByRole('button', { name: 'Keep editing' }).click();
     await expect(note).toHaveValue('Keep my unsent note');
-    await sheet.getByRole('button', { name: 'Full edit' }).click();
+    await sheet.getByRole('button', { name: 'Edit task' }).click();
     await confirmation.getByRole('button', { name: 'Keep editing' }).click();
     await expect(note).toHaveValue('Keep my unsent note');
     await sheet.getByRole('button', { name: `Close ${titleA}` }).click();
@@ -210,7 +210,7 @@ for (const retry of [false, true]) {
 
 test('Staff full editor also retains comments typed during saving', async ({ page }) => {
   await seedStaff(page);
-  await page.getByRole('dialog', { name: titleA }).getByRole('button', { name: 'Full edit' }).click();
+  await page.getByRole('dialog', { name: titleA }).getByRole('button', { name: 'Edit task' }).click();
   await holdSave(page);
   const input = page.getByPlaceholder('Write a comment or update...');
   await input.fill('Full editor submitted note');

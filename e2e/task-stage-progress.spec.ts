@@ -42,7 +42,7 @@ test('milestone progress follows role actions from assignment through revision a
   await expect(page.getByRole('button', { name: 'Complete task', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
   await openAs(page, 'stage-hod');
-  await page.getByRole('button', { name: 'Request Revision', exact: true }).click();
+  await page.getByRole('button', { name: 'Request revision', exact: true }).click();
   await expect(progress).toHaveAttribute('aria-valuenow', '50');
   await openAs(page, 'stage-staff');
   await page.getByRole('button', { name: /^(Send|Resubmit) for review$/ }).click();

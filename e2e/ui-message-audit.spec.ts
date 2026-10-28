@@ -85,7 +85,7 @@ for (const locale of ['en', 'zh'] as const) {
   test(`Full edit ${locale}: raw save errors are localized while task content stays unchanged`, async ({ page }) => {
     await seed(page, 'Project Manager', locale);
     await page.goto('/tasks?taskId=message-audit-task');
-    await page.getByRole('dialog', { name: 'Message audit artwork', exact: true }).getByRole('button', { name: locale === 'zh' ? '完整编辑' : 'Full edit', exact: true }).click();
+    await page.getByRole('dialog', { name: 'Message audit artwork', exact: true }).getByRole('button', { name: locale === 'zh' ? '编辑任务' : 'Edit task', exact: true }).click();
     const dialog = page.getByRole('dialog').last();
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: locale === 'zh' ? '编辑' : 'Edit', exact: true }).click();

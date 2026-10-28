@@ -299,13 +299,14 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(task, visibleTasks);
   const workflowKind = getWorkflowStepKind(task, workflow.cycles, workflow.deliverables);
   const transitionError = (status: TaskStatus) => workflowTransitionError(task, { ...task, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, workflow.cycles, workflow.deliverables, rolePermissions, { users, clients, projects });
-  const assignmentUnavailableReason = !isClientTaskViewer && !canAssignOthers
+  // Explain a locked action only to people who would otherwise have it.
+  const assignmentUnavailableReason = !isClientTaskViewer && !canAssignOthers && taskAccess.canAssign
     ? getTaskAssignmentUnavailableReason(currentUser, task, rolePermissions, { users, clients, projects })
     : undefined;
   const internalReviewUnavailableReason = !isClientTaskViewer && workflowKind === 'internal_review' && task.status === 'Waiting Approval' && !canApproveInternalReview(currentUser, task, rolePermissions, { users, clients, projects })
     ? transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE
     : undefined;
-  const revisionUnavailableReason = !isClientTaskViewer && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status) && !canRequestTaskRevision(currentUser, task, rolePermissions, { users, clients, projects })
+  const revisionUnavailableReason = !isClientTaskViewer && (currentUser?.role === 'Project Manager' || isHodTaskEditor) && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status) && !canRequestTaskRevision(currentUser, task, rolePermissions, { users, clients, projects })
     ? taskTransitionError(currentUser, task, { ...task, status: 'Revision', isCompleted: false }, rolePermissions, { users, clients, projects })
     : undefined;
   const clientReviewUnavailableReason = isClientTaskViewer && task.visibility !== 'internal' && !canClientReview
@@ -716,12 +717,9 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   </span>
                 </div>
                 <div className="text-right">
-                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Progress')}</label>
-                  <div className="flex items-center justify-end gap-2">
-                    <ProgressBar className="w-24" label={t('Task progress')} value={taskProgress} max={100} />
-                    <span className="text-sm font-bold text-slate-800">{taskProgress}%</span>
-                  </div>
-                  {!isClientTaskViewer && <span className="mt-1 block text-xs font-medium text-slate-500">{t('Priority')}: <span className="font-bold text-slate-800">{t(task.priority)}</span></span>}
+                  {isClientTaskViewer
+                    ? <ProgressBar className="w-32" label={t('Task progress')} value={taskProgress} max={100} />
+                    : <span className="block text-xs font-medium text-slate-500">{t('Priority')}: <span className="font-bold text-slate-800">{t(task.priority)}</span></span>}
                 </div>
               </div>
               {canEditTask && guidedActionError && <p id={completionHintId} className="text-sm text-muted">{t(guidedActionError)}</p>}
@@ -1126,7 +1124,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
               {(task.facebookPage || task.website || task.attachmentLink || canEditTask) && (
                 <div className="pt-4 border-t border-slate-100">
-                  <label className="block text-xs font-medium text-slate-500 mb-2">{isClientTaskViewer ? t('Deliverables & Links') : t('Links & attachment links')}</label>
+                  <label className="block text-xs font-medium text-slate-500 mb-2">{isClientTaskViewer ? t('Deliverables & Links') : <>{t('Attachments and links')} <span className="font-normal">({t('optional')})</span></>}</label>
                   <div className="space-y-2">
                     {task.facebookPage && (
                       <ExternalTaskLink value={task.facebookPage} label={t('Facebook Page')} invalidLabel={t('(invalid link)')} />
@@ -1174,18 +1172,21 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
               {canEditTask && ['Waiting Approval', 'Approved', 'Completed'].includes(task.status) && canRequestTaskRevision(currentUser, task, rolePermissions, { users, clients, projects }) && (
                 <form onSubmit={handleRevisionRequest} data-onboarding-target="task-review" className="pt-4 border-t border-slate-100 space-y-2">
-                  <label className="block text-xs font-medium text-slate-500">{t('Revision Control')}</label>
-                  <textarea
-                    value={revisionNote}
-                    onChange={(e) => setRevisionNote(e.target.value)}
-                    rows={2}
-                    placeholder={t('Optional revision note...')}
-                    className="min-h-11 w-full bg-slate-50 border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-3 outline-none shadow-sm resize-none"
-                  />
-                  <button type="submit" disabled={isSubmitting} className="inline-flex min-h-11 items-center gap-1.5 px-3 py-2 text-sm font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg disabled:cursor-not-allowed disabled:opacity-60">
-                    <RotateCcw className="w-4 h-4" /> {isSubmitting ? t('Requesting...') : t('Request Revision')}
-                  </button>
-                  <ContextualTutorialLink tutorialId="request-task-revision" label={t('Need help requesting a revision?')} />
+                  <details className="group">
+                    <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 text-sm font-medium text-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 [&::-webkit-details-marker]:hidden"><span aria-hidden="true" className="transition-transform group-open:rotate-90">›</span>{t('Add a revision note (optional)')}</summary>
+                    <label className="mt-1 block">
+                      <span className="sr-only">{t('Revision note (optional)')}</span>
+                      <textarea
+                        value={revisionNote}
+                        onChange={(e) => setRevisionNote(e.target.value)}
+                        rows={2}
+                        className={cn(inputBase, 'resize-none px-3 py-2')}
+                      />
+                    </label>
+                  </details>
+                  <Button type="submit" variant="secondary" disabled={isSubmitting}>
+                    <RotateCcw className="h-4 w-4" /> {isSubmitting ? t('Requesting...') : t('Request revision')}
+                  </Button>
                 </form>
               )}
 

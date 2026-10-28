@@ -1,0 +1,146 @@
+[
+  {
+    "name": "staff-ordinary-inprogress",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1179,
+    "footer": "Full edit\nSend for review",
+    "file": "task-staff-ordinary-inprogress-1440.png"
+  },
+  {
+    "name": "staff-ordinary-pending",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1179,
+    "footer": "Full edit\nStart work",
+    "file": "task-staff-ordinary-pending-1440.png"
+  },
+  {
+    "name": "staff-linked-deliverable",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1259,
+    "footer": "Add an output link or upload a deliverable file before sending this linked task for review or completing it.\n\nFull edit\nSend for review",
+    "file": "task-staff-linked-deliverable-1440.png"
+  },
+  {
+    "name": "staff-waiting",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1312,
+    "footer": "Full edit\nAwaiting Review",
+    "file": "task-staff-waiting-1440.png"
+  },
+  {
+    "name": "hod-review",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1312,
+    "footer": "Full edit\nApprove\nRevision Control\nRequest Revision",
+    "file": "task-hod-review-1440.png"
+  },
+  {
+    "name": "pm-finalize",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1649,
+    "footer": "Full edit\nConfirm completion\nRevision Control\nRequest Revision",
+    "file": "task-pm-finalize-1440.png"
+  },
+  {
+    "name": "pm-completed",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1565,
+    "footer": "Full edit\nCompleted\nRevision Control\nRequest Revision",
+    "file": "task-pm-completed-1440.png"
+  },
+  {
+    "name": "superadmin-review",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 24,
+    "footer": "",
+    "file": "task-superadmin-review-1440.png"
+  },
+  {
+    "name": "staff-ordinary-inprogress",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1243,
+    "footer": "Full edit\nSend for review",
+    "file": "task-staff-ordinary-inprogress-390.png"
+  },
+  {
+    "name": "staff-ordinary-pending",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1295,
+    "footer": "Full edit\nStart work",
+    "file": "task-staff-ordinary-pending-390.png"
+  },
+  {
+    "name": "staff-linked-deliverable",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1443,
+    "footer": "Add an output link or upload a deliverable file before sending this linked task for review or completing it.\n\nFull edit\nSend for review",
+    "file": "task-staff-linked-deliverable-390.png"
+  },
+  {
+    "name": "staff-waiting",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1428,
+    "footer": "Full edit\nAwaiting Review",
+    "file": "task-staff-waiting-390.png"
+  },
+  {
+    "name": "hod-review",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1376,
+    "footer": "Full edit\nApprove\nRevision Control\nRequest Revision",
+    "file": "task-hod-review-390.png"
+  },
+  {
+    "name": "pm-finalize",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1713,
+    "footer": "Full edit\nConfirm completion\nRevision Control\nRequest Revision",
+    "file": "task-pm-finalize-390.png"
+  },
+  {
+    "name": "pm-completed",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 1629,
+    "footer": "Full edit\nCompleted\nRevision Control\nRequest Revision",
+    "file": "task-pm-completed-390.png"
+  },
+  {
+    "name": "superadmin-review",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 24,
+    "footer": "",
+    "file": "task-superadmin-review-390.png"
+  }
+]
