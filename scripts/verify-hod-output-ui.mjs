@@ -106,7 +106,7 @@ try {
   await page.locator('input[type="file"]').setInputFiles({ name:'Artwork.pdf',mimeType:'application/pdf',buffer:file });
   await focusUpload.seen;
   await assertProtectedUpload();
-  await expect(page.getByRole('button', { name: 'Full edit', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Edit task', exact: true })).toBeDisabled();
   focusUpload.release();
   await expect(page.getByRole('button',{name:'Retry output save',exact:true})).toBeVisible({ timeout:30000 });
   assert.equal(lostConfirmation,true);
@@ -115,7 +115,7 @@ try {
   await page.unroute('**/storage/v1/object/client-service-files/**');
   await page.unroute('**/rest/v1/rpc/aitask_execute_command');
   await expect(page.getByRole('button', { name: 'Close Upload artwork for review', exact: true })).toBeEnabled();
-  await page.getByRole('button', { name: 'Full edit', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   const fullUpload = await holdUpload();
   await page.locator('input[type="file"]').setInputFiles({ name: 'Full-edit.pdf', mimeType: 'application/pdf', buffer: file });
   await fullUpload.seen;

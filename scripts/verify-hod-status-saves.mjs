@@ -125,7 +125,7 @@ try {
     await page.goto(`${base}tasks?taskId=status-task`);
     const sheet = page.getByRole('dialog', { name: baseTask.title });
     await expect(sheet).toBeVisible();
-    const fullEdit = sheet.getByRole('button', { name: 'Full edit', exact: true });
+    const fullEdit = sheet.getByRole('button', { name: 'Edit task', exact: true });
     if (await fullEdit.isVisible()) await fullEdit.click();
     return sheet;
   };
