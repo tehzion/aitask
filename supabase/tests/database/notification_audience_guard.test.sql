@@ -14,7 +14,7 @@ insert into public.aitask_workspaces(id,name) values ('pgtap-notification-guard'
 insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,department,departments,is_super_admin)
 values ('notification-boss','pgtap-notification-guard','00000000-0000-0000-0000-000000000971','Boss','notification-guard@aitask.local','Project Manager','Management',array['Management'],true);
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
-('pgtap-notification-guard','task','internal-task','{"id":"internal-task","title":"Private","clientName":"Guard Client","visibility":"internal","status":"Pending","createdBy":"notification-boss"}'),
+('pgtap-notification-guard','task','internal-task','{"id":"internal-task","title":"Private","clientName":"Guard Client","department":"Designer","visibility":"internal","status":"Pending","createdBy":"notification-boss"}'),
 ('pgtap-notification-guard','task','visible-task','{"id":"visible-task","title":"Visible","clientName":"Guard Client","visibility":"client-visible","status":"Pending","createdBy":"notification-boss"}');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000971',true);
 select set_config('request.jwt.claim.role','authenticated',true);
@@ -65,7 +65,7 @@ select is((public.aitask_execute_command(
   'pgtap-notification-guard', gen_random_uuid(), 'workspace.patch',
   jsonb_build_array(
     jsonb_build_object('kind','entity','action','update','entityType','task','entityId','internal-task','expectedVersion',1,
-      'data',jsonb_build_object('id','internal-task','title','Private','clientName','Guard Client','visibility','internal','status','Completed','createdBy','notification-boss')),
+      'data',jsonb_build_object('id','internal-task','title','Private','clientName','Guard Client','department','Designer','visibility','internal','status','Completed','createdBy','notification-boss')),
     jsonb_build_object('kind','entity','action','insert','entityType','notification','entityId','atomic-bad','expectedVersion',0,
       'data',jsonb_build_object('id','atomic-bad','targetClient','Guard Client','title','Task Completed','route',jsonb_build_object('page','tasks','entityId','internal-task')))
   )

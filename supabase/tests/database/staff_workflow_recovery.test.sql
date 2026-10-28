@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(18);
+select plan(19);
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001301','authenticated','authenticated','staff-workflow@aitask.local','',now(),'{}','{}',now(),now()),
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000001302','authenticated','authenticated','owner-workflow@aitask.local','',now(),'{}','{}',now(),now()),
@@ -33,6 +33,7 @@ select isnt((select data->'workState'->>'acceptedAt' from public.aitask_entities
 select is((pg_temp.work_update('workflow-task','{"workState":{"acceptedBy":"workflow-staff","blocker":{"reason":"Need assets","openedBy":"forged","openedAt":"2000-01-01T00:00:00Z"}},"workHistory":[]}')->>'ok')::boolean,true,'assignee can request help without erasing history');
 select is((select data->'workState'->'blocker'->>'openedBy' from public.aitask_entities where entity_id='workflow-task'),'workflow-staff','blocker is attributed to authenticated actor');
 select is((select jsonb_array_length(data->'workHistory') from public.aitask_entities where entity_id='workflow-task'),2,'provided history cannot erase server events');
+select is((pg_temp.work_update('workflow-task','{"status":"In Progress"}')->>'ok')::boolean,true,'assignee starts linked work');
 select is((pg_temp.work_update('workflow-task','{"status":"Waiting Approval","attachmentLink":"https://example.com/artwork"}')->>'ok')::boolean,true,'evidence permits review');
 select is((select data->'workState'->>'reviewRequestedBy' from public.aitask_entities where entity_id='workflow-task'),'workflow-staff','review submission has authenticated actor');
 select is((pg_temp.work_update('workflow-admin-task','{"status":"Completed","isCompleted":true}')->>'ok')::boolean,false,'Staff administrative work still requires final PM completion');

@@ -101,7 +101,8 @@ select is(
 
 -- An unassigned task must still be saveable when the client sends only a
 -- valid Project Manager notification; the frontend must not serialize a blank
--- assignee audience alongside it.
+-- assignee audience alongside it. Nobody can start unassigned work, so the
+-- update edits the brief rather than the status.
 select is(
   (public.aitask_execute_command(
     'pgtap-notify', gen_random_uuid(), 'task.update',
@@ -109,12 +110,12 @@ select is(
       jsonb_build_object(
         'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'notify-task-unassigned',
         'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-notify' and entity_type = 'task' and entity_id = 'notify-task-unassigned'),
-        'data', '{"id":"notify-task-unassigned","clientId":"notify-client","clientName":"Notify Co","title":"Unassigned Task","department":"Designer","assignedTo":"","assignedBy":"pgtap-notify-pm","createdBy":"pgtap-notify-staff","status":"In Progress","visibility":"internal"}'::jsonb
+        'data', '{"id":"notify-task-unassigned","clientId":"notify-client","clientName":"Notify Co","title":"Unassigned Task","department":"Designer","assignedTo":"","assignedBy":"pgtap-notify-pm","createdBy":"pgtap-notify-staff","status":"Pending","description":"Updated brief","visibility":"internal"}'::jsonb
       ),
       jsonb_build_object(
         'kind', 'entity', 'action', 'insert', 'entityType', 'notification', 'entityId', 'notify-unassigned-op',
         'expectedVersion', 0,
-        'data', '{"id":"notify-unassigned-op","title":"Task Status Updated","message":"Unassigned Task was moved to In Progress.","route":{"page":"tasks","entityId":"notify-task-unassigned"},"iconType":"status","targetUserId":"pgtap-notify-pm"}'::jsonb
+        'data', '{"id":"notify-unassigned-op","title":"Task Instructions Updated","message":"The brief or execution details for Unassigned Task were updated.","route":{"page":"tasks","entityId":"notify-task-unassigned"},"iconType":"task","targetUserId":"pgtap-notify-pm"}'::jsonb
       )
     )
   ) ->> 'ok')::boolean,

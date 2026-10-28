@@ -52,6 +52,7 @@ select is((pg_temp.patch_task('fallback-review','{"assignedTo":"fallback-worker"
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001401',true);
 set local role authenticated;
+select is((pg_temp.patch_task('fallback-review','{"status":"In Progress"}')->>'ok')::boolean,true,'Staff starts the generated review');
 select is((pg_temp.patch_task('fallback-review','{"status":"Waiting Approval","isCompleted":false}')->>'ok')::boolean,true,'Staff submits a frozen Operation review');
 select is((pg_temp.patch_task('fallback-review','{"status":"Approved"}')->>'ok')::boolean,false,'Staff cannot approve themselves');
 reset role;

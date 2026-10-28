@@ -162,6 +162,9 @@ select is(private.aitask_generated_task_references_are_valid(
   '{"clientId":"rpc-foreign-client","serviceCycleId":"missing-cycle","deliverableId":"missing-deliverable"}'::jsonb
 ), false, 'generated task validation rejects forged object references');
 
+-- Fixture rows are written by the database owner, not inside the earlier
+-- service command whose transaction-local command type is still set.
+select set_config('aitask.command_type', '', true);
 insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
 values
   ('pgtap-rpc-boundaries','client','rpc-ambiguous-a','{"id":"rpc-ambiguous-a","clientName":"Ambiguous Co"}'::jsonb),

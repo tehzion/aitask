@@ -1,0 +1,70 @@
+{
+  "manifestVersion": "2026-10-28.1",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261023_pm_hod_staff_assignment_production.json",
+  "immutable": false,
+  "capturedAt": "2026-10-28T00:00:00Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "PENDING production apply: 20261028120000, 20261028130000, 20261028140000 and 20261028150000 are validated in a disposable Supabase stack but not applied to production. Production remains verified through repository 20261023180000_bind_service_command_entity_types.",
+  "validatedMigrationTail": [
+    "20261020131544_project_management_completion",
+    "20261021110000_monthly_plan_renewal_integrity",
+    "20261023120000_pm_hod_staff_assignment_state",
+    "20261023150000_hod_task_execution_permissions",
+    "20261023170000_task_workflow_action_guards",
+    "20261023180000_bind_service_command_entity_types",
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults"
+  ],
+  "pendingProductionMigrations": [
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults"
+  ],
+  "productionVerification": {
+    "historyAligned": false,
+    "historyThrough": "20261023154255_bind_service_command_entity_types",
+    "migrationResolution": {
+      "status": "connector_aliases_verified",
+      "repositoryToProduction": [
+        {
+          "repository": "20261020131544_project_management_completion",
+          "production": "20261020131544_project_management_completion"
+        },
+        {
+          "repository": "20261021110000_monthly_plan_renewal_integrity",
+          "production": "20261021110000_monthly_plan_renewal_integrity"
+        },
+        {
+          "repository": "20261023120000_pm_hod_staff_assignment_state",
+          "production": "20261023040256_pm_hod_staff_assignment_state"
+        },
+        {
+          "repository": "20261023150000_hod_task_execution_permissions",
+          "production": "20261023063131_hod_task_execution_permissions"
+        },
+        {
+          "repository": "20261023170000_task_workflow_action_guards",
+          "production": "20261023063344_task_workflow_action_guards"
+        },
+        {
+          "repository": "20261023180000_bind_service_command_entity_types",
+          "production": "20261023154255_bind_service_command_entity_types"
+        }
+      ]
+    }
+  },
+  "changeSummary": {
+    "20261028120000_pm_no_hod_assignment_fallback": "Project Managers may assign Staff directly when the task department has no active HOD; HOD-first routing is unchanged elsewhere. Entity write policies point at the current mutator instead of the renamed legacy function.",
+    "20261028130000_service_command_guard_direct_writes": "The service command entity-type guard checks only the command's own writes, not rows maintained by progress triggers, and workflow generation may record its task ids on its deliverable.",
+    "20261028140000_task_stage_guard_corrections": "The responsible PM can complete a Waiting Approval task whose approval mode is none; Staff can create tasks that start in Pending; HODs are no longer limited to the ordinary Staff status action list.",
+    "20261028150000_hod_patch_empty_defaults": "HOD saves are no longer rejected when the app fills absent fields with defaults or omits the server-kept accountableLeadId/reviewCover; real changes to restricted fields stay denied."
+  },
+  "qualityGates": {
+    "disposableSupabaseStack": "PENDING: record the pnpm verify:supabase:rollout result here",
+    "productionApply": "PENDING: owner-reviewed apply to production; then record production versions in productionVerification and clear pendingProductionMigrations"
+  }
+}

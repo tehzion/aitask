@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(24);
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000005501','authenticated','authenticated','stage-pm@aitask.local','',now(),'{}','{}',now(),now()),
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000005502','authenticated','authenticated','stage-hod@aitask.local','',now(),'{}','{}',now(),now()),
@@ -36,6 +36,7 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000005503'
 set local role authenticated;
 select is((pg_temp.stage_update('{"workState":{"acceptedBy":"stage-staff"}}')->>'ok')::boolean,true,'Staff accepts assignment');
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where entity_id='stage-task'),30,'accepted work is 30 percent');
+select is((pg_temp.stage_update('{"status":"In Progress"}')->>'ok')::boolean,true,'Staff starts accepted work');
 select is((pg_temp.stage_update('{"status":"Waiting Approval","completionPercentage":100}')->>'ok')::boolean,true,'Staff submits for review');
 select is((select (data->>'completionPercentage')::integer from public.aitask_entities where entity_id='stage-task'),60,'cached 100 percent review payload is normalized to 60');
 select is((pg_temp.stage_update('{"status":"Approved","completionPercentage":80}')->>'ok')::boolean,false,'Staff cannot approve their submission');

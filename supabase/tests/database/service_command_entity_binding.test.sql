@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(6);
+select plan(8);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 values('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-00000000a801','authenticated','authenticated','service-binding@aitask.local','',now(),'{}','{}',now(),now());
@@ -51,6 +51,16 @@ select is((pg_temp.binding_command(
   'client_plan.manage','client_plan','binding-plan',
   '{"id":"binding-plan","clientId":"binding-client","clientName":"Binding Co","status":"Draft","name":"updated"}'::jsonb
 )->>'ok')::boolean,true,'matching client-plan command remains valid');
+
+select is((pg_temp.binding_command(
+  'deliverable.workflow.generate','deliverable','binding-deliverable',
+  '{"id":"binding-deliverable","clientId":"binding-client","clientName":"Binding Co","cycleId":"binding-cycle","status":"Planned","taskIds":["binding-generated-task"]}'::jsonb
+)->>'ok')::boolean,true,'workflow generation can record generated task ids on its deliverable');
+
+select is((pg_temp.binding_command(
+  'deliverable.workflow.generate','service_cycle','binding-cycle',
+  '{"id":"binding-cycle","clientId":"binding-client","clientName":"Binding Co","planId":"binding-plan","status":"Cancelled"}'::jsonb
+)->>'code'),'VALIDATION','workflow generation still cannot mutate a service cycle');
 
 select is((select data->>'status' from public.aitask_entities where workspace_id='service-command-binding' and entity_type='service_cycle' and entity_id='binding-cycle'),'Published','rejected cross-command writes leave the cycle state unchanged');
 

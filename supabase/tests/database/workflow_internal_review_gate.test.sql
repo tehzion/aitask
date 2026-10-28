@@ -72,6 +72,7 @@ reset role;
 insert into storage.objects(bucket_id,name,owner_id,metadata) values('client-service-files','pgtap-review-gate/gate-company/gate-cycle/work.pdf','00000000-0000-0000-0000-000000000982','{"mimetype":"application/pdf"}');
 set local role authenticated;
 select is((pg_temp.patch_task('gate-work','{"attachmentLink":"","outputAttachments":[{"id":"gate-file","bucket":"client-service-files","path":"pgtap-review-gate/gate-company/gate-cycle/work.pdf","fileName":"Private predecessor.pdf","uploadedBy":"gate-worker"}]}')->>'ok')::boolean,true,'Staff saves file-only frozen output before submission');
+select is((pg_temp.patch_task('gate-work','{"status":"In Progress"}')->>'ok')::boolean,true,'assigned Staff starts workflow work');
 select is((pg_temp.patch_task('gate-work','{"status":"Waiting Approval","isCompleted":false}')->>'ok')::boolean,true,'assigned Staff submits ordinary workflow work');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000986',true);
@@ -95,6 +96,7 @@ select ok(not private.aitask_workflow_task_satisfied('pgtap-review-gate',(select
 set local role authenticated;
 select is((pg_temp.patch_task('gate-review','{"status":"Completed","isCompleted":true,"internalReview":{"reviewedBy":"gate-hod"},"workflowStepKind":"work"}')->>'ok')::boolean,false,'forged reviewer and kind cannot bypass authorization');
 select is((pg_temp.patch_task('gate-review','{"predecessorTaskIds":[],"status":"Completed","isCompleted":true}')->>'ok')::boolean,false,'removing predecessors cannot bypass the gate');
+select is((pg_temp.patch_task('gate-review','{"status":"In Progress"}')->>'ok')::boolean,true,'Staff starts internal review work');
 select is((pg_temp.patch_task('gate-review','{"status":"Waiting Approval","isCompleted":false}')->>'ok')::boolean,true,'Staff can submit completed work for internal review');
 select is((pg_temp.patch_task('gate-publish','{"status":"Completed","isCompleted":true}')->>'ok')::boolean,false,'publication waits for a signed review');
 reset role;
@@ -145,6 +147,7 @@ select is((select data->>'status' from public.aitask_entities where workspace_id
 select is((select data->'internalReview'->>'reviewedBy' from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_id='gate-review'),'gate-hod','forged decision is ignored');
 select is((pg_temp.patch_task('gate-work','{"dueDate":"2026-10-29"}')->>'ok')::boolean,true,'scheduling edits remain permitted');
 select is((select data->>'status' from public.aitask_entities where workspace_id='pgtap-review-gate' and entity_id='gate-review'),'Completed','scheduling edits do not invalidate approved output');
+select is((pg_temp.patch_task('gate-publish','{"status":"In Progress"}')->>'ok')::boolean,true,'Staff starts publication work');
 select is((pg_temp.patch_task('gate-publish','{"status":"Waiting Approval","isCompleted":false}')->>'ok')::boolean,true,'publication submits after signed review');
 reset role;
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000000986',true);
