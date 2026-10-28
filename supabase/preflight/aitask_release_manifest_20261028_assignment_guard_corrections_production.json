@@ -21,7 +21,7 @@
   "pendingProductionMigrations": [],
   "productionVerification": {
     "historyAligned": false,
-    "historyThrough": "20261028150000_hod_patch_empty_defaults",
+    "historyThrough": "20261028160000_optional_task_output",
     "migrationResolution": {
       "status": "connector_aliases_verified",
       "repositoryToProduction": [
@@ -64,6 +64,10 @@
         {
           "repository": "20261028150000_hod_patch_empty_defaults",
           "production": "20261028150000_hod_patch_empty_defaults"
+        },
+        {
+          "repository": "20261028160000_optional_task_output",
+          "production": "20261028160000_optional_task_output"
         }
       ]
     }
@@ -72,10 +76,12 @@
     "20261028120000_pm_no_hod_assignment_fallback": "Project Managers may assign Staff directly when the task department has no active HOD; HOD-first routing is unchanged elsewhere. Entity write policies point at the current mutator instead of the renamed legacy function.",
     "20261028130000_service_command_guard_direct_writes": "The service command entity-type guard checks only the command's own writes, not rows maintained by progress triggers, and workflow generation may record its task ids on its deliverable.",
     "20261028140000_task_stage_guard_corrections": "The responsible PM can complete a Waiting Approval task whose approval mode is none; Staff can create tasks that start in Pending; HODs are no longer limited to the ordinary Staff status action list.",
-    "20261028150000_hod_patch_empty_defaults": "HOD saves are no longer rejected when the app fills absent fields with defaults or omits the server-kept accountableLeadId/reviewCover; real changes to restricted fields stay denied."
+    "20261028150000_hod_patch_empty_defaults": "HOD saves are no longer rejected when the app fills absent fields with defaults or omits the server-kept accountableLeadId/reviewCover; real changes to restricted fields stay denied.",
+    "20261028160000_optional_task_output": "Output is optional when submitting any task, including deliverable-linked work; a supplied output link must still be a valid https URL without credentials."
   },
   "qualityGates": {
     "disposableSupabaseStack": "PASS (2026-10-28): CI=true pnpm verify:supabase:rollout — 77 pgTAP files / 1148 tests, storage, staff saves, HOD status, onboarding, workflow review gate, HOD output UI and security audit checks.",
-    "productionApply": "APPLIED 2026-10-28 by the owner in the Supabase SQL Editor as one transaction, recorded in supabase_migrations.schema_migrations; live definitions of all six changed functions verified identical to the validated local stack, and the three entity write policies call aitask_can_mutate_entity."
+    "productionApply": "APPLIED 2026-10-28 by the owner in the Supabase SQL Editor as one transaction, recorded in supabase_migrations.schema_migrations; live definitions of all six changed functions verified identical to the validated local stack, and the three entity write policies call aitask_can_mutate_entity.",
+    "optionalTaskOutputApply": "APPLIED 2026-10-28 to production in one transaction via the Supabase connector (anchors verified beforehand), recorded in supabase_migrations.schema_migrations as 20261028160000; CI database job passed on e5d6f4b."
   }
 }
