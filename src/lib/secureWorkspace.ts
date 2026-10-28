@@ -1356,6 +1356,14 @@ export const overlayRetainedWorkspaceEntities = (
   };
 };
 
+/** The newer workspace version when a command was rejected only because the workspace moved on. */
+export const staleWorkspaceVersion = (data: unknown): number | undefined => {
+  const response = data as CommandResponse | null;
+  const conflict = response?.conflict as { entityType?: string; actualVersion?: unknown } | undefined;
+  return response && response.ok === false && response.code === 'CONFLICT' && conflict?.entityType === 'workspace'
+    && typeof conflict.actualVersion === 'number' ? conflict.actualVersion : undefined;
+};
+
 const executeCommand = async (
   command: SecureCommand,
   expectedWorkspaceVersion?: number,
@@ -1370,25 +1378,36 @@ const executeCommand = async (
   assertWorkspaceSession(sessionToken);
   bindPendingServiceFiles(command.id, command.operations);
   const serviceCommand = serviceCommandTypes.has(command.type);
+  let workspaceVersion = expectedWorkspaceVersion;
   const invoke = bindSessionRequest(() => command.type === 'deliverable.workflow.generate'
     ? withSyncTimeout(supabase.rpc('aitask_generate_deliverable_task_chain', {
       p_workspace_id: SECURE_WORKSPACE_ID,
       p_command_id: command.id,
       p_operations: command.operations,
-      p_expected_workspace_version: expectedWorkspaceVersion ?? null,
+      p_expected_workspace_version: workspaceVersion ?? null,
     }))
     : withSyncTimeout(supabase.rpc(serviceCommand ? 'aitask_execute_service_command' : 'aitask_execute_command', {
       p_workspace_id: SECURE_WORKSPACE_ID,
       p_command_id: command.id,
       p_command_type: command.type,
       p_operations: command.operations,
-      p_expected_workspace_version: expectedWorkspaceVersion ?? null,
+      p_expected_workspace_version: workspaceVersion ?? null,
     })));
 
   let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
     rpcResult = await invoke();
     if (isAuthError(rpcResult.error) && await refreshSecureSession()) {
+      rpcResult = await invoke();
+    }
+    // Someone else saved since this screen last synced. The workspace check
+    // runs before anything is applied or receipted, and every record still
+    // carries its own expected version, so resend once against the current
+    // workspace version instead of showing the user a conflict for an
+    // unrelated edit. A real conflict on the same record is still reported.
+    const workspaceConflict = staleWorkspaceVersion(rpcResult.data);
+    if (workspaceConflict !== undefined && workspaceVersion !== undefined) {
+      workspaceVersion = workspaceConflict;
       rpcResult = await invoke();
     }
   } catch (error) {
