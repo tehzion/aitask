@@ -434,8 +434,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
             <span className={overdue ? 'font-semibold text-red-700 dark:text-red-300' : 'text-muted'}>{getRelativeDueDateString(liveTask.dueDate, liveTask.isCompleted, liveTask.status, locale)}</span>
             {liveTask.revisionCount > 0 && <span className="font-medium text-amber-700">{t('Revision')} {liveTask.revisionCount}</span>}
           </div>
-          {liveTask.status !== 'Cancelled' && <TaskWorkflowSteps task={liveTask} label={t('Task progress')} progress={taskProgress} />}
         </section>
+        {liveTask.status !== 'Cancelled' && <TaskWorkflowSteps task={liveTask} label={t('Task progress')} progress={taskProgress} />}
 
         {incompletePredecessors.length > 0 && (
           <section className="rounded-panel bg-amber-50 p-4 text-[#6b3f00] ring-1 ring-amber-200 dark:bg-[#31240f] dark:text-[#fff2c2] dark:ring-[#765d22]" aria-labelledby="staff-task-blockers">

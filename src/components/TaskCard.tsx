@@ -7,7 +7,8 @@ import { getLocalizedPriority, getLocalizedTaskStatus } from '../lib/localeLabel
 import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { getTaskWorkflowSteps, type TaskWorkflowStep } from '../lib/taskStage';
 import { isTaskOverdue } from '../lib/taskReporting';
-import { cn, getRelativeDueDateString } from '../lib/utils';
+import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
+import { formatLocalizedDate } from '../lib/i18n';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { useTaskNextStep } from '../hooks/useTaskNextStep';
 import { StatusChip } from './ui';
@@ -58,6 +59,36 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
     unavailableDependencies > 0 && t('Dependency status unavailable'),
   ].filter((flag): flag is string => Boolean(flag));
 
+  // Finished work reads like order history: one compact row, newest context only.
+  if (!open) {
+    const finishedAt = task.completedAt ? parseOptionalDate(task.completedAt.slice(0, 10)) : undefined;
+    return (
+      <article className={cn(
+        'group relative flex items-center gap-3 px-4 py-2.5 text-left transition-colors duration-160 hover:bg-inset/60 focus-within:ring-2 focus-within:ring-inset focus-within:ring-accent/40 sm:px-5',
+        className,
+      )}>
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-medium leading-5 text-ink">
+            <button
+              type="button"
+              onClick={() => onOpen(task)}
+              className="text-left after:absolute after:inset-0 focus:outline-none"
+            ><span data-i18n-skip>{task.title}</span></button>
+          </div>
+          <p className="truncate text-xs leading-5 text-muted">
+            <span data-i18n-skip>{task.clientName}{task.projectName ? ` · ${task.projectName}` : ''}</span>
+            {assignee && <> · <span data-i18n-skip>{assignee}</span></>}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-0.5 text-xs text-muted">
+          <TaskStatusBadges task={task} />
+          {finishedAt && <span className="calm-number">{formatLocalizedDate(finishedAt, locale)}</span>}
+        </div>
+        <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted" />
+      </article>
+    );
+  }
+
   return (
     <article className={cn(
       'group relative flex flex-col gap-2 text-left transition-colors duration-160 focus-within:ring-2 focus-within:ring-inset focus-within:ring-accent/40',
@@ -68,13 +99,13 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
         <p data-i18n-skip className="min-w-0 truncate text-xs font-medium text-muted">{task.clientName}{task.projectName ? ` · ${task.projectName}` : ''}</p>
         <TaskStatusBadges task={task} className="shrink-0 justify-end" />
       </div>
-      <h3 className="text-base font-semibold leading-6 text-ink">
+      <div className="text-base font-semibold leading-6 text-ink">
         <button
           type="button"
           onClick={() => onOpen(task)}
           className="text-left after:absolute after:inset-0 focus:outline-none"
         ><span data-i18n-skip>{task.title}</span></button>
-      </h3>
+      </div>
       <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
         <div className="flex gap-1"><dt>{t('Assigned to')}</dt><dd data-i18n-skip className="font-medium text-ink">{assignee || t('Unassigned')}</dd></div>
         <div className="flex gap-1"><dt className="sr-only">{t('Due')}</dt><dd className={overdue ? 'font-semibold text-red-700 dark:text-red-300' : undefined}>{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}</dd></div>

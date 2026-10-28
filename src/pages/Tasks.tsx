@@ -24,7 +24,9 @@ import { getClientTaskStage } from '../lib/clientPortal';
 import { getLocalizedDepartment, getLocalizedPriority, getLocalizedTaskStatus } from '../lib/localeLabels';
 import { TaskCard, TaskStatusBadges } from '../components/TaskCard';
 import { useTaskNextStep } from '../hooks/useTaskNextStep';
-import { countTasksByStageFilter, isTaskInStageFilter, parseTaskStageFilter, TASK_STAGE_FILTER_LABELS, TASK_STAGE_FILTERS, type TaskStageFilter } from '../lib/taskStage';
+import { countTasksByStageFilter, isTaskInStageFilter, parseTaskStageFilter, type TaskStageFilter } from '../lib/taskStage';
+import TaskStageFilterBar from '../components/TaskStageFilterBar';
+import { buildStaffWorkQueue, isStaffGuidedActionEnabled } from '../lib/staffWorkspace';
 import { formatLocalizedDate } from '../lib/i18n';
 import StaffAllWork from '../components/StaffAllWork';
 import ClientDeliveries from '../components/ClientDeliveries';
@@ -73,7 +75,7 @@ const NextStepText: React.FC<{ task: Task }> = ({ task }) => {
 const TasksWorkspace: React.FC = () => {
   const { locale, t } = useI18n();
   const today = useLocalToday();
-  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
+  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation, serviceCycles, deliverables } = useStore(useShallow(state => ({
     tasks: state.tasks,
     clients: state.clients,
     users: state.users,
@@ -86,6 +88,8 @@ const TasksWorkspace: React.FC = () => {
     taskStatuses: state.taskStatuses,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
     commitPendingMutation: state.commitPendingMutation,
+    serviceCycles: state.serviceCycles,
+    deliverables: state.deliverables,
   })));
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const [quickSyncError, setQuickSyncError] = useState('');
@@ -320,10 +324,16 @@ const TasksWorkspace: React.FC = () => {
       return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask && matchesRoutePeriod && matchesFocus;
     });
   }, [assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, routeFocus, routePeriodBounds, searchTerm, taskIdFilter, tasks, users, today]);
-  const stageCounts = useMemo(() => countTasksByStageFilter(unscopedTasks), [unscopedTasks]);
+  // Needs action uses the same queue rules as the Staff, HOD and PM lists.
+  const needsActionIds = useMemo(() => new Set(buildStaffWorkQueue(unscopedTasks, format(today, 'yyyy-MM-dd'), {
+    isActionable: task => isStaffGuidedActionEnabled(task, taskStatuses, currentUser, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }),
+  }).needs_action.map(task => task.id)), [allTasks, clientProfiles, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, today, unscopedTasks, users]);
+  const needsActionOnly = searchParams.get('queue') === 'needs_action';
+  const chipTasks = useMemo(() => (needsActionOnly ? unscopedTasks.filter(task => needsActionIds.has(task.id)) : unscopedTasks), [needsActionIds, needsActionOnly, unscopedTasks]);
+  const stageCounts = useMemo(() => countTasksByStageFilter(chipTasks), [chipTasks]);
   const filteredTasks = useMemo(() => (
-    isClientUser || !applyListScope ? unscopedTasks : unscopedTasks.filter(task => isTaskInStageFilter(task, listScope))
-  ), [applyListScope, isClientUser, listScope, unscopedTasks]);
+    isClientUser || !applyListScope ? chipTasks : chipTasks.filter(task => isTaskInStageFilter(task, listScope))
+  ), [applyListScope, chipTasks, isClientUser, listScope]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -386,7 +396,7 @@ const TasksWorkspace: React.FC = () => {
       : 'View details';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, activeQuickTask);
   const TABLE_COLUMN_COUNT = isClientUser ? 4 : 6;
-  const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter, routeFocus].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
+  const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter, routeFocus, needsActionOnly].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
   const activeFilterLabels = [
     searchTerm && `Search: ${searchTerm}`,
     filterDepartment !== 'All' && filterDepartment,
@@ -631,51 +641,18 @@ const TasksWorkspace: React.FC = () => {
       )}
 
       <div className={`${tableShell} flex flex-col`}>
-        <div className="space-y-4 border-b border-slate-200 bg-slate-50/70 p-4">
+        <div className="space-y-4 border-b border-line bg-inset/60 p-4">
           {!isClientUser && (
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-              <div className="no-scrollbar -mx-4 min-w-0 overflow-x-auto px-4 xl:mx-0 xl:px-0">
-                <div className="flex w-max gap-1 border-b border-line" role="group" aria-label={t('Task stages')}>
-                  {TASK_STAGE_FILTERS.map(value => {
-                    const isActive = applyListScope && listScope === value;
-                    return (
-                      <button
-                        key={value}
-                        type="button"
-                        aria-pressed={isActive}
-                        onClick={() => applyStageFilter(value)}
-                        className={cn(
-                          'relative min-h-11 shrink-0 px-3 text-sm font-semibold transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40',
-                          isActive ? 'text-ink after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink',
-                        )}
-                      >
-                        {t(TASK_STAGE_FILTER_LABELS[value])}{' '}
-                        <span className="calm-number ml-1 text-xs font-medium opacity-70">{stageCounts[value]}</span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-              <div className="flex shrink-0 flex-wrap items-center gap-2" role="group" aria-label={t('Deadline filters')}>
-                {([
-                  ['today', t('Due today'), periodRouteFilter === 'today' || (!routeFocus && dateFrom === format(today, 'yyyy-MM-dd') && dateTo === format(today, 'yyyy-MM-dd'))],
-                  ['overdue', t('Overdue'), routeFocus === 'overdue'],
-                ] as const).map(([value, label, isActive]) => (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => toggleDeadlineFilter(value)}
-                    className={cn(
-                      'min-h-9 rounded-full border px-3 text-xs font-semibold transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-                      isActive ? 'border-ink bg-ink text-canvas' : 'border-line bg-surface text-muted hover:text-ink',
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <TaskStageFilterBar
+              value={applyListScope ? listScope : null}
+              counts={stageCounts}
+              onChange={applyStageFilter}
+              quickFilters={[
+                { id: 'needs_action', label: t('Needs action'), active: needsActionOnly, count: needsActionIds.size, onToggle: () => setFilter('queue', needsActionOnly ? '' : 'needs_action') },
+                { id: 'today', label: t('Due today'), active: periodRouteFilter === 'today' || (!routeFocus && dateFrom === format(today, 'yyyy-MM-dd') && dateTo === format(today, 'yyyy-MM-dd')), onToggle: () => toggleDeadlineFilter('today') },
+                { id: 'overdue', label: t('Overdue'), active: routeFocus === 'overdue', onToggle: () => toggleDeadlineFilter('overdue') },
+              ]}
+            />
           )}
           <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
             <div className="relative w-full lg:max-w-sm">
@@ -892,7 +869,7 @@ const TasksWorkspace: React.FC = () => {
               </table>
             </div>
 
-            <div className="grid grid-cols-1 gap-px bg-line/70 md:grid-cols-2 xl:hidden">
+            <div className={cn('grid grid-cols-1 gap-px bg-line/70 xl:hidden', filteredTasks.some(task => !isTaskInStageFilter(task, 'active')) ? '' : 'md:grid-cols-2')}>
               {backend?.isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => <SkeletonMobileCard key={i} />)
               ) : (
@@ -900,7 +877,7 @@ const TasksWorkspace: React.FC = () => {
                   <TaskCard key={task.id} task={task} allTasks={tasks} users={users} onOpen={setSelectedTask} className="bg-surface" />
                 ))
               )}
-              {!backend?.isLoading && pagedTasks.length === 0 && <div className="bg-surface px-4 py-12 text-center md:col-span-2">
+              {!backend?.isLoading && pagedTasks.length === 0 && <div className="col-span-full bg-surface px-4 py-12 text-center">
                 <p className="font-semibold text-ink">{t(emptyListMessage)}</p>
                 {tasks.length > 0 && <p className="mt-1 text-sm text-muted">{t('Try another stage or clear your filters.')}</p>}
               </div>}

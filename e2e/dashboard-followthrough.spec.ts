@@ -53,7 +53,7 @@ test('dashboard overdue drilldown and task quick filters use the same task set',
   for (const title of ['Followup today', 'Followup completed', 'Followup invalid', 'Followup cancelled']) {
     await expect(page.getByText(title, { exact: true })).toHaveCount(0);
   }
-  const filters = page.getByRole('group', { name: 'Deadline filters' });
+  const filters = page.getByRole('group', { name: 'Quick task filters' });
   await filters.getByRole('button', { name: 'Due today', exact: true }).click();
   await expect(page).toHaveURL(/period=today/);
   await expect(page.getByText('Followup today', { exact: true }).first()).toBeVisible();

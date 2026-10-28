@@ -148,5 +148,5 @@ test('My work and All work explain distinct responsibilities and reuse existing 
   await overview.getByRole('link', { name: /Needs action/ }).click();
   await expect(page).toHaveURL(/\/tasks\?queue=needs_action/);
   await expect(page.getByRole('heading', { name: 'All work', exact: true })).toBeVisible();
-  await expect(page.getByRole('tab', { name: /Needs action/, selected: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Quick task filters' }).getByRole('button', { name: /Needs action/ })).toHaveAttribute('aria-pressed', 'true');
 });
