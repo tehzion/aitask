@@ -209,14 +209,14 @@ const stepsByPersona: Record<OnboardingPersona, Array<[string, string, string, s
   ],
   hod: [
     ['dashboard', 'dashboard-overview', 'Start with department work', '从部门工作开始', 'Your dashboard focuses on work assigned to you and work visible in your departments.', '您的仪表板聚焦于分配给您的工作和您部门可见的工作。'],
-    ['tasks', 'tasks-overview', 'Read the handoff before assigning', '分配前先阅读交接内容', 'Open a task to check its requirement, deadline, department, and the context supplied by the Project Manager.', '打开任务，检查项目经理提供的要求、截止日期、部门和背景。'],
+    ['tasks', 'tasks-overview', 'Read the handoff before assigning', '分配前先阅读交接内容', 'In Department tasks, open a task to check its requirement, deadline, department, and the context supplied by the Project Manager.', '在部门任务中打开任务，检查项目经理提供的要求、截止日期、部门和背景。'],
     ['assign', 'tasks-overview', 'Assign only eligible staff', '只分配给符合条件的员工', 'You can assign while a task is Pending, In Progress, or Revision. Assignment is locked for Waiting Approval, Approved, Completed, and Cancelled.', '任务处于待处理、进行中或修订状态时可以分配。等待审批、已批准、已完成和已取消时不能重新分配。'],
     ['review', 'tasks-overview', 'Review submitted deliverables', '审核已提交的交付成果', 'When staff submit work, check the files and comments. Request a revision only when the current workflow and your permissions allow it.', '员工提交工作后，检查文件和评论。只有当前流程和您的权限允许时，才能请求修订。'],
     ['workflow', 'help-overview', 'Use Help for status rules', '使用帮助中心查看状态规则', 'The Help Centre explains your review gate, revision path, and the handoff to client review.', '帮助中心说明您的审核关卡、修订路径以及交接到客户审核的流程。'],
   ],
   staff: [
     ['dashboard', 'dashboard-overview', 'See what needs your attention', '查看需要您处理的工作', 'Your dashboard shows assigned work, deadlines, revision requests, and completed items for your workspace.', '您的仪表板显示分配给您的工作、截止日期、修订请求和已完成事项。'],
-    ['tasks', 'tasks-overview', 'Open the assigned task', '打开分配给您的任务', 'Read the requirement and deadline before accepting the assignment. Keep the task status and progress current as you work.', '接受任务前先阅读要求和截止日期。工作过程中及时更新任务状态和进度。'],
+    ['tasks', 'tasks-overview', 'Open the assigned task', '打开分配给您的任务', 'Open the task from My work or All work and read the requirement and deadline, then accept it or start work. Keep the task status and progress current as you work.', '从我的工作或全部工作中打开任务，阅读要求和截止日期后接受任务或直接开始工作。工作过程中及时更新任务状态和进度。'],
     ['updates', 'tasks-overview', 'Keep the delivery record complete', '保持交付记录完整', 'Add comments, upload files or deliverables, and request assistance when context is missing. Submit completed work for approval.', '添加评论、上传文件或交付成果；缺少背景时请求协助。完成工作后提交审批。'],
     ['revision', 'tasks-overview', 'Respond to revision requests', '回应修订请求', 'A revision brings the work back into progress. Read the reviewer’s note, make the change, and submit the updated work again.', '修订会让工作回到进行中。阅读审核意见，完成修改，然后再次提交更新后的工作。'],
     ['workflow', 'help-overview', 'Use Help when a status is unclear', '不清楚状态时打开帮助中心', 'The Help Centre explains statuses, assignment boundaries, and how your work moves to department review.', '帮助中心说明任务状态、分配边界以及工作如何进入部门审核。'],

@@ -17,3 +17,9 @@ export const resolveTaskCompletedAt = (
   if (!nextIsCompleted) return undefined;
   return isTaskCompleted(task) ? task.completedAt : completedAt;
 };
+
+// Acceptance is optional: an assignee who has started the work (In Progress,
+// review, revision) is no longer waiting to accept it.
+export const isTaskAwaitingAcceptance = (task: Pick<Task, 'isCompleted' | 'status' | 'assignedTo' | 'workState'>) => (
+  isTaskOpen(task) && task.status === 'Pending' && Boolean(task.assignedTo) && task.workState?.acceptedBy !== task.assignedTo
+);

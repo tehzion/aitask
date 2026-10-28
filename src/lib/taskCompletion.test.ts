@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../types';
-import { resolveTaskCompletedAt } from './taskCompletion';
+import { isTaskAwaitingAcceptance, resolveTaskCompletedAt } from './taskCompletion';
 
 const state = (overrides: Partial<Pick<Task, 'isCompleted' | 'status' | 'completedAt'>> = {}) => ({
   isCompleted: false,
@@ -32,5 +32,17 @@ describe('task completion timestamps', () => {
       status: 'Completed',
       completedAt: '2026-07-30T08:00:00.000Z',
     }), false)).toBeUndefined();
+  });
+});
+
+describe('awaiting acceptance', () => {
+  const task = (status: string, acceptedBy?: string) => ({ isCompleted: false, status, assignedTo: 'staff-1', workState: acceptedBy ? { acceptedBy } : undefined }) as Pick<Task, 'isCompleted' | 'status' | 'assignedTo' | 'workState'>;
+
+  it('counts only unstarted assignments the assignee has not accepted', () => {
+    expect(isTaskAwaitingAcceptance(task('Pending'))).toBe(true);
+    expect(isTaskAwaitingAcceptance(task('Pending', 'staff-1'))).toBe(false);
+    expect(isTaskAwaitingAcceptance(task('In Progress'))).toBe(false);
+    expect(isTaskAwaitingAcceptance(task('Waiting Approval'))).toBe(false);
+    expect(isTaskAwaitingAcceptance({ ...task('Pending'), assignedTo: '' })).toBe(false);
   });
 });

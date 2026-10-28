@@ -528,7 +528,8 @@ const Settings: React.FC = () => {
   return (
     <div className={pageShell}>
       <UploadRecoveryPanel />
-      <DiagnosticsPanel />
+      {/* Diagnostics are a support tool for the workspace administrator only. */}
+      {isSuperAdmin && <DiagnosticsPanel />}
       <PageHeader
         title={mustResetPassword ? t('Account Setup') : t('Settings')}
         description={mustResetPassword ? t('Set your own password to unlock the workspace.') : scopeDescription}

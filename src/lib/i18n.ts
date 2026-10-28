@@ -1550,6 +1550,8 @@ const zhCopyAdditions: Record<string, string> = {
   'Department context': '部门工作概况',
   'Department workload, delegated tasks, and review risk.': '部门工作量、委派任务和审核风险。',
   'Department tasks': '部门任务',
+  'Team members': '团队成员',
+  'Invite HOD and Staff accounts and manage who works on your projects.': '邀请部门主管和员工账号，并管理参与您项目的成员。',
   'Waiting review': '等待审核',
   'Department queue': '部门队列',
   'Your department queue is clear': '部门队列已清空',

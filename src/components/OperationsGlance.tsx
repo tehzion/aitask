@@ -157,8 +157,10 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
         </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby={`${scope}-attention-title`}>
+      <div className={cn('grid gap-4', isStaffScope && 'xl:grid-cols-2')}>
+        {/* The management Overview already lists overdue and approval work, so
+            the agency pulse keeps to throughput and recent completions. */}
+        {isStaffScope && <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby={`${scope}-attention-title`}>
           <div className="border-b border-slate-100 px-4 py-4 sm:px-5">
             <h3 id={`${scope}-attention-title`} className="text-base font-semibold text-slate-900">
               {isStaffScope ? t('My focus') : t('Needs attention')}
@@ -179,7 +181,7 @@ const OperationsGlance: React.FC<OperationsGlanceProps> = ({ tasks, users, scope
               </div>
             )}
           </div>
-        </section>
+        </section>}
 
         <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby={`${scope}-completions-title`}>
           <div className="border-b border-slate-100 px-4 py-4 sm:px-5">

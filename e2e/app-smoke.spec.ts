@@ -93,7 +93,8 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.getByRole('tab', { name: 'Agency pulse' }).click();
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Needs attention' })).toBeVisible();
+  // Overdue and approval work lives on Overview only; the pulse tab must not repeat it.
+  await expect(page.getByRole('region', { name: 'Agency pulse' }).getByRole('region', { name: 'Needs attention' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Recent completions' })).toBeVisible();
   await page.getByRole('tab', { name: 'Team workload' }).click();
   const teamWorkload = page.getByRole('region', { name: 'Team workload' });

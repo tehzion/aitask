@@ -10,6 +10,7 @@ import { canCreateTasks, getDashboardPersona, getVisibleTasks, isDepartmentScope
 import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, getUnavailableTaskDependencyCount, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, isStaffGuidedActionEnabled, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getMemberDepartments, isMemberInDepartment } from '../lib/departments';
 import { getTeamWorkloadSummaries, isTaskOpen } from '../lib/taskReporting';
+import { isTaskAwaitingAcceptance } from '../lib/taskCompletion';
 import { getRelativeDueDateString, getTodayInputDate } from '../lib/utils';
 import { pageShell } from './uiTokens';
 import { Button, MetaLine, SegmentedTabs, StatusChip, Surface } from './ui';
@@ -133,7 +134,7 @@ const StaffMyWork: React.FC = () => {
           [t('Active tasks'), tasks.filter(isTaskOpen).length, `/tasks${isHod ? `?scope=${scope}` : ''}`],
           [t('Needs action'), queue.needs_action.length, `/tasks?queue=needs_action${isHod ? `&scope=${scope}` : ''}`],
           [t('Help requested'), tasks.filter(task => isTaskOpen(task) && task.workState?.blocker).length, `/tasks?help=1${isHod ? `&scope=${scope}` : ''}`],
-          [t('Awaiting acceptance'), tasks.filter(task => isTaskOpen(task) && task.assignedTo && task.workState?.acceptedBy !== task.assignedTo).length, `/tasks?unaccepted=1${isHod ? `&scope=${scope}` : ''}`],
+          [t('Awaiting acceptance'), tasks.filter(isTaskAwaitingAcceptance).length, `/tasks?unaccepted=1${isHod ? `&scope=${scope}` : ''}`],
         ] as const).map(([label, value, to]) => (
           <Link key={to} to={to} className="min-h-11 bg-surface px-4 py-3 transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/40">
             <strong className="calm-number block text-xl font-semibold text-ink">{value}</strong>

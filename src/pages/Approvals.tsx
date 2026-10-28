@@ -1187,8 +1187,10 @@ const Approvals: React.FC = () => {
   return (
     <div className={pageShell}>
       <PageHeader
-        title={t('Approvals')}
-        description={t('Review access requests and manage workspace members, roles, and decisions.')}
+        title={projectManager && !superAdmin ? t('Team members') : t('Approvals')}
+        description={projectManager && !superAdmin
+          ? t('Invite HOD and Staff accounts and manage who works on your projects.')
+          : t('Review access requests and manage workspace members, roles, and decisions.')}
         onboardingTarget="approvals-overview"
         action={(superAdmin || projectManager) ? (
           <Button onClick={() => setIsAddUserOpen(true)} disabled={isActionSaving || backend.isSaving}>

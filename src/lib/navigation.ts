@@ -135,6 +135,8 @@ export const getNavigationSections = (
   const generalPrimary = getVisibleNavigation(user, rolePermissions).map(item => ({
     ...item,
     icon: navIcons[item.label as keyof typeof navIcons],
+    // A Project Manager only manages project members there, never access requests.
+    ...(item.path === '/approvals' && user?.role === 'Project Manager' && !isBossKoo(user) ? { label: 'Team members' } : {}),
   }));
   return {
     // The management workspace is Boss Koo's; a Project Manager gets the same
