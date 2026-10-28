@@ -21,7 +21,7 @@ const signInAs = async (page: Page, username: string) => {
     await page.getByLabel('Email or username').fill(username);
   }
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   if (/\/settings$/.test(page.url())) {
     const continueButton = page.getByRole('button', { name: 'Continue for now' });

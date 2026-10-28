@@ -184,9 +184,12 @@ const DeliveryTracker: React.FC = () => {
     });
   };
 
-  const assigneeNames = (ids: string[]) => ids
-    .map(id => users.find(user => user.id === id)?.name)
-    .filter((name): name is string => Boolean(name));
+  // Clients see the agency as one team, never internal member names.
+  const assigneeNames = (ids: string[]) => isClientView
+    ? (ids.length > 0 ? [t('Agency team')] : [])
+    : ids
+      .map(id => users.find(user => user.id === id)?.name)
+      .filter((name): name is string => Boolean(name));
 
   return (
     <div className={pageShell}>

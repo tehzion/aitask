@@ -5,7 +5,7 @@ test('Account reports include assigned work and exclude other departments', asyn
   await page.goto('/login');
   await page.getByLabel('Email or username').fill('Account Demo');
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !/\/login$/.test(url.pathname));
   const releaseNotice = page.getByRole('button', { name: 'Happy working' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);

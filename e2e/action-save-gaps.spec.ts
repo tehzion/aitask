@@ -266,7 +266,7 @@ for (const outcome of ['rejection', 'exception'] as const) {
     }, outcome);
     await page.locator('tbody').getByText('Action gap task', { exact: true }).click({ button: 'right' });
     const quick = page.getByRole('dialog', { name: 'Quick Edit' });
-    await quick.getByRole('combobox').nth(1).selectOption('High');
+    await quick.getByRole('combobox').filter({ has: page.getByRole('option', { name: 'High', exact: true }) }).selectOption('High');
     await page.evaluate(() => (window as unknown as { finishActionSave: () => void }).finishActionSave());
     const task = await page.evaluate(async () => {
       const { useStore } = await import('/src/store/index.ts');

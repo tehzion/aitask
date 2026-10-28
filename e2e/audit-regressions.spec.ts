@@ -156,7 +156,7 @@ test('sidebar logout and same-tab login restart synchronization listeners', asyn
   await expect(page).toHaveURL(/\/login$/);
   await page.getByLabel('Email or username').fill('Boss Koo');
   await page.getByLabel('Password', { exact: true }).fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).not.toHaveURL(/\/login$/);
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   if (await continueButton.isVisible()) await continueButton.click();

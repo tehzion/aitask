@@ -310,6 +310,9 @@ test('a pending activity can be retried even when its newer draft is empty or ha
 
 test('Use latest still resolves a workspace operation started outside the Staff sheet', async ({ page }) => {
   await seedStaff(page);
+  const sheet = page.getByRole('dialog', { name: titleA });
+  // Inject the pending operation only after the reloaded app has finished loading.
+  await expect(sheet).toBeVisible();
   await page.evaluate(async () => {
     const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
     // Keep the local sync loop from clearing the injected pending operation.
@@ -322,7 +325,6 @@ test('Use latest still resolves a workspace operation started outside the Staff 
       },
     }));
   });
-  const sheet = page.getByRole('dialog', { name: titleA });
   await sheet.getByRole('button', { name: 'Restore saved data', exact: true }).click();
   expect(await page.evaluate(() => (window as unknown as { externalDiscardCalls: number }).externalDiscardCalls)).toBe(1);
   await expect(sheet.getByRole('alert')).toHaveCount(0);

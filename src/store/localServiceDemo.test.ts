@@ -7,6 +7,7 @@ vi.hoisted(() => {
 
 import { useStore } from './index';
 import { LOCAL_SERVICE_DEMO_VERSION_KEY } from '../mock/localServiceDemo';
+import { getVisibleTasks } from '../lib/access';
 
 const initialState = useStore.getState();
 const storage = new Map<string, string>();
@@ -78,6 +79,8 @@ describe('local service demo reset', () => {
 
     expect(first.clients.some(client => client.id === 'demo-service-client-urban')).toBe(true);
     expect(counts).toEqual({ clients: 4, plans: 4, cycles: 3, tasks: 12 });
+    const pm = first.users.find(user => user.id === 'u-admin')!;
+    expect(getVisibleTasks(pm, first.tasks, first.rolePermissions, { projects: first.projects, clients: first.clients }).length).toBeGreaterThan(0);
     expect({ clients: second.clients.length, plans: second.clientPlans.length, cycles: second.serviceCycles.length, tasks: second.tasks.length }).toEqual(counts);
   });
 });

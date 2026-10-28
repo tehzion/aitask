@@ -22,6 +22,7 @@ import { useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { isTaskOpen } from '../lib/taskReporting';
+import { isTaskAwaitingAcceptance } from '../lib/taskCompletion';
 import { shouldApplyTaskListScope } from '../lib/taskListScope';
 
 type StaffAllWorkBucket = 'all' | StaffWorkBucketKey;
@@ -127,7 +128,7 @@ const StaffAllWork: React.FC = () => {
     const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType, task.department, getLocalizedDepartment(task.department, locale)].filter(Boolean).join(' ').toLowerCase();
     return (!normalizedSearch || searchable.includes(normalizedSearch))
       && (!helpOnly || Boolean(isTaskOpen(task) && task.workState?.blocker))
-      && (!unacceptedOnly || Boolean(isTaskOpen(task) && task.assignedTo && task.workState?.acceptedBy !== task.assignedTo))
+      && (!unacceptedOnly || isTaskAwaitingAcceptance(task))
       && (client === 'All' || task.clientName === client)
       && (project === 'All' || task.projectName === project)
       && (assignee === 'All' || task.assignedTo === assignee)

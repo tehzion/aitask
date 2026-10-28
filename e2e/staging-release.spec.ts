@@ -43,7 +43,7 @@ const signIn = async (page: Page, role: QaRole) => {
   await page.goto('/login');
   await page.getByLabel('Email').fill(account.email);
   await page.getByLabel('Password').fill(account.password);
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !/\/login$/.test(url.pathname));
   if (/\/settings$/.test(page.url())) {
     throw new Error(`${role} staging account requires a password reset and cannot be used for release verification.`);
@@ -415,7 +415,7 @@ test('a real hosted password setup updates Auth and finalizes the member account
   await page.goto('/login');
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(initialPassword);
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !/\/login$/.test(url.pathname));
 
   await page.goto('/account/password?type=invite');
@@ -434,7 +434,7 @@ test('a real hosted password setup updates Auth and finalizes the member account
   await page.getByRole('button', { name: 'Logout' }).click();
   await page.getByLabel('Email').fill(email);
   await page.getByLabel('Password').fill(newPassword);
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !/\/(?:login|settings)$/.test(url.pathname));
   await expect(page.locator('main')).toBeVisible();
 });

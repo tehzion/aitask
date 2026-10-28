@@ -58,7 +58,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
       actions.push({ id: `nav:${path}`, label: t(label), icon: Icon, run: () => { navigate(path); onClose(); } });
     });
     if (canCreateTasks(currentUser, rolePermissions)) {
-      actions.push({ id: 'action:create-task', label: t('Create task'), icon: CheckSquare, run: () => { setCreateTaskModalOpen(true); onClose(); } });
+      actions.push({ id: 'action:create-task', label: t('New task'), icon: CheckSquare, run: () => { setCreateTaskModalOpen(true); onClose(); } });
     }
     if (isBossKoo(currentUser)) {
       actions.push({ id: 'action:add-member', label: t('Manage members'), icon: UserPlus, run: () => { navigate('/approvals?tab=members'); onClose(); } });

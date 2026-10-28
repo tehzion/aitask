@@ -25,7 +25,7 @@ test('a first-time offline Reports deep link renders the report shell and data f
   await page.goto('/login');
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => url.pathname === '/' || url.pathname === '/settings');
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   if (page.url().endsWith('/settings')) await continueButton.click();
@@ -88,7 +88,7 @@ test('a real service-worker replacement preserves a dirty form and enables refre
   await page.goto('/login');
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => url.pathname === '/' || url.pathname === '/settings');
   if (new URL(page.url()).pathname === '/settings') await page.getByRole('button', { name: 'Continue for now' }).click();
   const notice = page.getByRole('button', { name: 'Happy working' });

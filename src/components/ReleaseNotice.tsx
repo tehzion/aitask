@@ -8,6 +8,7 @@ import {
   RELEASE_NOTICE_ID,
   acknowledgeLocalReleaseNotice,
   getReleaseNoticeCopy,
+  getLocalReleaseNoticeKey,
   hasLocalReleaseNoticeAcknowledgement,
 } from '../lib/releaseNotice';
 import {
@@ -40,6 +41,12 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
       return;
     }
     if (dismissedThisSession.current.has(currentUser.id)) return;
+    try {
+      if (sessionStorage.getItem(getLocalReleaseNoticeKey(currentUser.id)) === 'acknowledged') {
+        setIsOpen(false);
+        return;
+      }
+    } catch { /* Storage can be unavailable; retain the in-memory fallback. */ }
 
     let active = true;
     const loadAcknowledgement = async () => {
@@ -49,7 +56,7 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
       }
 
       const result = await getSecureReleaseNoticeAcknowledgement(RELEASE_NOTICE_ID);
-      if (!active) return;
+      if (!active || dismissedThisSession.current.has(currentUser.id)) return;
       // A failed lookup must never block work. Showing the update again is safer
       // than treating an unverified acknowledgement as read.
       setIsOpen(result.ok ? !result.acknowledged : true);
@@ -65,6 +72,9 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
   const dismiss = React.useCallback(() => {
     if (!currentUser || dismissedThisSession.current.has(currentUser.id)) return;
     dismissedThisSession.current.add(currentUser.id);
+    try {
+      sessionStorage.setItem(getLocalReleaseNoticeKey(currentUser.id), 'acknowledged');
+    } catch { /* The in-memory fallback still covers this page load. */ }
     setIsOpen(false);
 
     if (shouldUseSecureSupabase()) {

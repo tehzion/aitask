@@ -95,18 +95,13 @@ test('B: an optional link can be added and the task is still submitted normally'
   await expect.poll(() => saved(page).then(task => task.status)).toBe('Waiting Approval');
 });
 
-test('C: a delivery-linked task still requires its output before review', async ({ page }) => {
+test('C: a delivery-linked task can be sent for review without an output', async ({ page }) => {
   await seed(page, STAFF, { status: 'In Progress' }, true);
   const panel = await openAs(page, STAFF);
-  await expect(panel.getByText('This task delivers a client deliverable. Add its output before sending it for review.')).toBeVisible();
-  await expect(panel.getByText('Add the required output before submitting.')).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Send for review', exact: true })).toBeDisabled();
-  const blocked = await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    return useStore.getState().updateTaskStatus('td-task', 'Waiting Approval');
-  });
-  expect(blocked.ok).toBe(false);
-  expect((await saved(page)).status).toBe('In Progress');
+  await expect(panel.getByText('This task delivers a client deliverable. Add its output before sending it for review.')).toHaveCount(0);
+  await expect(panel.getByText('Optional', { exact: true })).toBeVisible();
+  await panel.getByRole('button', { name: 'Send for review', exact: true }).click();
+  await expect.poll(() => saved(page).then(task => task.status)).toBe('Waiting Approval');
 });
 
 test('D: with approval disabled the assignee completes the task directly', async ({ page }) => {

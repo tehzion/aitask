@@ -15,7 +15,7 @@ const signIn = async (page: Page, username: string) => {
   await page.reload();
   await page.getByLabel('Email or username').fill(username);
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !/\/login$/.test(url.pathname));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
   await dismissReleaseNotice(page);
@@ -37,7 +37,7 @@ test('Staff Chinese workspace localizes dynamic copy and preserves work content'
   await page.setViewportSize({ width: 390, height: 844 });
   const mobileNavigation = page.getByRole('navigation', { name: '移动端导航' });
   await expect(mobileNavigation.getByText('我的工作', { exact: true })).toBeVisible();
-  await expect(mobileNavigation.getByText('交付跟踪', { exact: true })).toBeVisible();
+  await expect(mobileNavigation.getByText('交付内容', { exact: true })).toBeVisible();
   await expect(mobileNavigation.getByText('更多', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1280, height: 800 });
 
@@ -108,7 +108,7 @@ test('Staff collapsed navigation is labelled and mobile layout remains accessibl
   await expect(openMenu).toContainText('Menu');
   const moreTrigger = page.getByRole('button', { name: 'Open more destinations' });
   await moreTrigger.click();
-  await expect(page.getByRole('button', { name: 'Create task' })).toBeVisible();
+  await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'New task' })).toBeVisible();
   const closeMenu = page.getByRole('button', { name: 'Close navigation menu' }).last();
   await expect(closeMenu).toBeVisible();
   await closeMenu.click();

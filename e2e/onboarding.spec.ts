@@ -26,7 +26,7 @@ for (const width of [320, 375, 390, 414, 768, 1024]) {
 const loginWithDemo = async (page: import('@playwright/test').Page, username: string) => {
   await page.goto('/login');
   await page.getByRole('button', { name: `Use ${username}` }).click();
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
   const releaseNotice = page.getByRole('button', { name: 'Happy working' });

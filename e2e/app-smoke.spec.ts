@@ -5,7 +5,7 @@ const switchDemoAccount = async (page: import('@playwright/test').Page, username
   await expect(page.getByRole('heading', { name: 'Sign in to AiTask' })).toBeVisible();
   await page.getByLabel('Email or username').fill(username);
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/(?:settings)?$/);
   if (/\/settings$/.test(page.url())) await page.getByRole('button', { name: 'Continue for now' }).click();
   const releaseNotice = page.getByRole('button', { name: 'Happy working' });
@@ -74,7 +74,7 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.getByLabel('Email or username').fill('Boss Koo');
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole('heading', { name: 'Account Setup' })).toBeVisible();
 
@@ -93,7 +93,8 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.getByRole('tab', { name: 'Agency pulse' }).click();
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toBeVisible();
-  await expect(page.getByRole('region', { name: 'Needs attention' })).toBeVisible();
+  // Overdue and approval work lives on Overview only; the pulse tab must not repeat it.
+  await expect(page.getByRole('region', { name: 'Agency pulse' }).getByRole('region', { name: 'Needs attention' })).toHaveCount(0);
   await expect(page.getByRole('region', { name: 'Recent completions' })).toBeVisible();
   await page.getByRole('tab', { name: 'Team workload' }).click();
   const teamWorkload = page.getByRole('region', { name: 'Team workload' });
@@ -172,7 +173,7 @@ test('first login reaches the app and critical responsive routes remain usable',
         id: 'routine-notification-qa',
         targetUserId: current.currentUser.id,
         title: 'Task Status Updated',
-        message: 'Routine updates belong in history without an interruptive popup.',
+        message: 'Routine updates now surface as a popup as well as in history.',
         route: { page: 'tasks', entityId: 'routine-task' },
         isRead: false,
         readByUserIds: [],
@@ -183,7 +184,8 @@ test('first login reaches the app and critical responsive routes remain usable',
       }],
     });
   });
-  await expect(page.getByRole('article', { name: 'New notification: Task Status Updated' })).toHaveCount(0);
+  // Routine status updates pop up too (see notificationPopups: every new unread notice).
+  await expect(page.getByRole('article', { name: 'New notification: Task Status Updated' })).toHaveCount(1);
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -401,7 +403,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await mobileNotificationsButton.click();
   await expect(page).toHaveURL(/\/notifications$/);
   await expect(page.getByRole('heading', { name: 'Notifications' })).toBeVisible();
-  await expect(page.getByText('Center QA 1', { exact: true })).toBeVisible();
+  await expect(page.locator('main').getByText('Center QA 1', { exact: true })).toBeVisible();
 
   await page.setViewportSize({ width: 1536, height: 864 });
   await headerNotificationButton.click();
@@ -413,20 +415,20 @@ test('first login reaches the app and critical responsive routes remain usable',
   const notificationSearch = page.getByLabel('Search notifications');
   await notificationSearch.fill('Center QA 7');
   await expect.poll(() => new URL(page.url()).searchParams.get('search')).toBe('Center QA 7');
-  await expect(page.getByText('Center QA 7', { exact: true })).toBeVisible();
-  await expect(page.getByText('Center QA 1', { exact: true })).toHaveCount(0);
+  await expect(page.locator('main').getByText('Center QA 7', { exact: true })).toBeVisible();
+  await expect(page.locator('main').getByText('Center QA 1', { exact: true })).toHaveCount(0);
   await notificationSearch.fill('');
   await expect.poll(() => new URL(page.url()).searchParams.get('search')).toBeNull();
   await page.getByLabel('Filter notification category').selectOption('status');
-  await expect(page.getByText('Center QA 1', { exact: true })).toBeVisible();
+  await expect(page.locator('main').getByText('Center QA 1', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Unread (6)' }).click();
-  const firstCenterItem = page.getByRole('article').filter({ hasText: 'Center QA 1' });
+  const firstCenterItem = page.locator('main').getByRole('article').filter({ hasText: 'Center QA 1' });
   await firstCenterItem.getByRole('button', { name: 'Mark read' }).click();
   await expect(firstCenterItem).toHaveCount(0);
   await page.getByRole('button', { name: 'Mark all read' }).click();
   await expect(page.getByText('No unread notifications')).toBeVisible();
   await page.getByRole('button', { name: /^all$/i }).click();
-  const readCenterItem = page.getByRole('article').filter({ hasText: 'Center QA 7' });
+  const readCenterItem = page.locator('main').getByRole('article').filter({ hasText: 'Center QA 7' });
   await readCenterItem.getByRole('button', { name: 'Mark unread' }).click();
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
 

@@ -275,16 +275,16 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
               </div>
               <div id="staff-more-menu" hidden={isDesktop && !staffMoreOpen} className={clsx('mt-1 space-y-1', !isCollapsed && 'ml-4 border-l border-line pl-2', 'md:mt-2')}>
                 {isStaff && canCreateTasks(currentUser, rolePermissions) && (
-                  <div className="group/nav-item relative" {...collapsedLabelHandlers('Create task')}>
+                  <div className="group/nav-item relative" {...collapsedLabelHandlers('New task')}>
                     <button
                       type="button"
                       onClick={() => { setCreateTaskModalOpen(true); onClose(); }}
-                      aria-label={isCollapsed ? t('Create task') : undefined}
-                      title={isCollapsed ? t('Create task') : undefined}
+                      aria-label={isCollapsed ? t('New task') : undefined}
+                      title={isCollapsed ? t('New task') : undefined}
                       className={clsx('group flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-accent transition-[background-color,color,box-shadow] duration-160 hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface', isCollapsed && 'md:justify-center md:px-2')}
                     >
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"><Plus aria-hidden="true" className="h-[18px] w-[18px]" /></span>
-                      <span className={clsx('min-w-0 truncate text-left text-sm font-semibold', isCollapsed && 'md:hidden')}>{t('Create task')}</span>
+                      <span className={clsx('min-w-0 truncate text-left text-sm font-semibold', isCollapsed && 'md:hidden')}>{t('New task')}</span>
                     </button>
                   </div>
                 )}

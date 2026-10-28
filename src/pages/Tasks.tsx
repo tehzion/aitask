@@ -940,7 +940,7 @@ const TasksWorkspace: React.FC = () => {
 	                          <span className="truncate text-right">{task.serviceType}</span>
                         </div>
                         {isOverdue && (
-                          <div className="mt-2 text-[10px] text-red-500 font-extrabold flex items-center gap-1.5">
+                          <div className="mt-2 text-[10px] text-red-700 font-extrabold flex items-center gap-1.5">
                             <span className="h-2 w-2 rounded-full bg-red-500" />
                             {t('Overdue')}
                           </div>

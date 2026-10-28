@@ -69,7 +69,7 @@ const signInAs = async (page: Page, username: string) => {
     await page.getByLabel('Email or username').fill(username);
   }
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !url.pathname.startsWith('/login'));
   await dismissTransientOverlays(page);
 };
@@ -159,12 +159,14 @@ test.describe('responsive role and route audit', () => {
     }
   });
 
-  test('keeps approvals Boss-only and exposes the HOD workbench copy', async ({ page }) => {
+  test('keeps registration approvals Boss-only and exposes the HOD workbench copy', async ({ page }) => {
+    // Project Managers manage their own team members there; registrations and
+    // role controls stay with the Boss Koo admin account.
     await signInAs(page, 'Project Manager Demo');
     await page.goto('/approvals', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
-    await expect(page.getByText('Approvals are restricted to Boss Koo')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add Member' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Team members', level: 1 })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Pending registrations|Registrations/ })).toHaveCount(0);
+    await expect(page.getByText('Pending registrations', { exact: true })).toHaveCount(0);
 
     await signInAs(page, 'HOD Demo');
     await page.goto('/tasks', { waitUntil: 'domcontentloaded' });
@@ -192,7 +194,7 @@ test.describe('responsive role and route audit', () => {
       await page.reload();
       await page.getByRole('button', { name: /(?:Use|使用) Staff Demo/ }).click();
       await page.locator('#password').fill('password123');
-      await page.getByRole('button', { name: /Access Dashboard|进入仪表板/ }).click();
+      await page.getByRole('button', { name: /^(Sign in|登录)$/ }).click();
       await page.waitForURL(url => url.pathname === '/settings');
       await expect(page.getByRole('heading', { name: /Account Setup|账号设置/ })).toBeVisible();
       await expect(page.locator('#current-password')).toBeVisible();

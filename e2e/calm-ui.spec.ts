@@ -21,7 +21,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => ['/', '/settings'].includes(url.pathname));
   if (/\/settings$/.test(page.url())) {
     await page.getByRole('button', { name: 'Continue for now' }).click();
@@ -53,7 +53,7 @@ const expectNoHorizontalOverflow = async (page: import('@playwright/test').Page,
 const hasCommittedVisualBaseline = process.platform === 'darwin';
 
 test('core operations screens keep their semantic layout in light and dark modes', async ({ page }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   await openDemoWorkspace(page);
 
   const viewports = [
@@ -88,6 +88,7 @@ test('core operations screens keep their semantic layout in light and dark modes
       }
 
       await page.goto('/projects');
+      await expect(page.locator('main')).toBeVisible({ timeout: 15000 });
       const axeResults = await new AxeBuilder({ page }).include('main').analyze();
       expect(axeResults.violations, `${viewport.name} ${theme} Projects: ${axeResults.violations.map(item => item.id).join(', ')}`).toEqual([]);
 

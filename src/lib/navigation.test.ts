@@ -11,6 +11,12 @@ const internalUsers: User[] = [
 ];
 
 describe('delivery tracker navigation labels', () => {
+  it('labels the Project Manager members page without implying access requests', () => {
+    const [boss, pm] = internalUsers;
+    expect(getNavigationSections(pm).primary.find(entry => entry.path === '/approvals')).toMatchObject({ label: 'Team members' });
+    expect(getNavigationSections(boss).primary.find(entry => entry.path === '/approvals')).toMatchObject({ label: 'Approvals' });
+  });
+
   it('uses Delivery tracker for every internal role while preserving the /clients route', () => {
     internalUsers.forEach(user => {
       const sections = getNavigationSections(user);
@@ -19,16 +25,16 @@ describe('delivery tracker navigation labels', () => {
     });
   });
 
-  it('uses Delivery tracker in the internal mobile navigation', () => {
+  it('uses the short Deliveries label in the internal mobile navigation', () => {
     internalUsers.slice(0, 2).forEach(user => {
       expect(getMobileNavigation(user).find(entry => entry.path === '/clients')).toMatchObject({
-        label: 'Delivery tracker',
+        label: 'Deliveries',
         path: '/clients',
       });
     });
     internalUsers.slice(2).forEach(user => {
       expect(getMobileNavigation(user).find(entry => entry.path === '/clients')).toMatchObject({
-        label: 'Delivery tracker',
+        label: 'Deliveries',
         path: '/clients',
       });
     });

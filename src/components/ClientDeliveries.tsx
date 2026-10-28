@@ -41,9 +41,8 @@ const dateKey = (date: Date) => {
 
 const ClientDeliveries = () => {
   const { locale, t } = useI18n();
-  const { allTasks, users, currentUser, rolePermissions } = useStore(useShallow(state => ({
+  const { allTasks, currentUser, rolePermissions } = useStore(useShallow(state => ({
     allTasks: state.tasks,
-    users: state.users,
     currentUser: state.currentUser,
     rolePermissions: state.rolePermissions,
   })));
@@ -96,10 +95,9 @@ const ClientDeliveries = () => {
   const groups = React.useMemo(() => groupClientDeliveries(filteredTasks, now), [filteredTasks, now]);
   const visibleStages = CLIENT_DELIVERY_STAGE_ORDER.filter(stage => groups[stage].length > 0);
   const activeFilterCount = Number(stageFilter !== 'all') + Number(serviceFilter !== 'All') + Number(dateFilter !== 'any');
-  const contactName = (id: string) => {
-    const name = users.find(user => user.id === id)?.name;
-    return name ? <span data-i18n-skip>{name}</span> : t('Agency team');
-  };
+  // Clients never see internal team identities; the hosted projection omits the
+  // assignee, so local data must not reveal it either.
+  const contactName = () => t('Agency team');
   const taskUrl = (id: string) => {
     const next = new URLSearchParams(searchParams);
     next.set('taskId', id);
@@ -154,8 +152,8 @@ const ClientDeliveries = () => {
                     <article key={task.id} className="group grid gap-4 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2"><Link data-i18n-skip to={taskUrl(task.id)} className="truncate text-sm font-semibold text-ink transition-colors duration-160 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{task.title}</Link><StatusChip tone={stageTone[stage]}>{stageLabel(stage)}</StatusChip></div>
-                        <p className="mt-1 text-xs leading-5 text-muted"><span data-i18n-skip>{task.serviceType}</span> · {contactName(task.assignedTo)}<span> · {dueDate ? formatLocalizedDate(dueDate, locale) : t('Date to be confirmed')}</span></p>
-                        {stage === 'timing_changed' && <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-amber-800 dark:text-amber-200">{latestTeamComment?.text ? <span data-i18n-skip>{latestTeamComment.text}</span> : <>{t('The expected date has changed.')} {contactName(task.assignedTo)} {t('is your contact for timing.')}</>}</p>}
+                        <p className="mt-1 text-xs leading-5 text-muted"><span data-i18n-skip>{task.serviceType}</span> · {contactName()}<span> · {dueDate ? formatLocalizedDate(dueDate, locale) : t('Date to be confirmed')}</span></p>
+                        {stage === 'timing_changed' && <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-amber-800 dark:text-amber-200">{latestTeamComment?.text ? <span data-i18n-skip>{latestTeamComment.text}</span> : <>{t('The expected date has changed.')} {contactName()} {t('is your contact for timing.')}</>}</p>}
                       </div>
                       <Link to={taskUrl(task.id)} className={cn('inline-flex min-h-11 items-center justify-center gap-1.5 rounded-control px-3 text-sm font-semibold transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 active:translate-y-px', stage === 'needs_review' ? 'bg-accent text-white hover:brightness-95 dark:text-[rgb(var(--calm-accent-ink))]' : 'text-accent hover:bg-accent-soft')}>{stage === 'needs_review' ? t('delivery.review') : t('delivery.view')}<ArrowRight className="h-4 w-4" /></Link>
                     </article>

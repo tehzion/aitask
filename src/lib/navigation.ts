@@ -135,6 +135,8 @@ export const getNavigationSections = (
   const generalPrimary = getVisibleNavigation(user, rolePermissions).map(item => ({
     ...item,
     icon: navIcons[item.label as keyof typeof navIcons],
+    // A Project Manager only manages project members there, never access requests.
+    ...(item.path === '/approvals' && user?.role === 'Project Manager' && !isBossKoo(user) ? { label: 'Team members' } : {}),
   }));
   return {
     // The management workspace is Boss Koo's; a Project Manager gets the same
@@ -158,8 +160,9 @@ export const getMobileNavigation = (
   clientProfilePath?: string,
 ) => {
   const sections = getNavigationSections(user, rolePermissions, clientProfilePath);
-  if (user?.role === 'Staff' || user?.role === 'HOD' || user?.role === 'Client') {
-    return sections.mobilePrimary || sections.primary;
-  }
-  return filterVisible(user, rolePermissions, generalMobilePrimary);
+  const items = user?.role === 'Staff' || user?.role === 'HOD' || user?.role === 'Client'
+    ? sections.mobilePrimary || sections.primary
+    : filterVisible(user, rolePermissions, generalMobilePrimary);
+  // The bottom bar has no room for "Delivery tracker" at 320px.
+  return items.map(item => item.label === 'Delivery tracker' ? { ...item, label: 'Deliveries' } : item);
 };

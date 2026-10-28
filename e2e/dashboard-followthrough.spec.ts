@@ -64,7 +64,7 @@ test('dashboard overdue drilldown and task quick filters use the same task set',
   await expect(page.getByText('Followup completed', { exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('article').filter({ hasText: 'Followup overdue' })).toBeVisible();
-  await filters.getByRole('button', { name: 'All', exact: true }).click();
+  await filters.getByRole('button', { name: 'All tasks', exact: true }).click();
   await expect(page).not.toHaveURL(/focus=|period=/);
   await expect(page.locator('article').filter({ hasText: 'Followup tomorrow' })).toBeVisible();
 });

@@ -829,7 +829,7 @@ describe('workspace optimistic lock', () => {
     }));
   });
 
-  it('surfaces a workspace-scoped conflict from the server', async () => {
+  it('resends once against the newer workspace version when only the workspace moved on', async () => {
     const conflict = {
       entityType: 'workspace',
       entityId: 'aitask-main',
@@ -837,12 +837,36 @@ describe('workspace optimistic lock', () => {
       actualVersion: 9,
       current: { workspaceVersion: 9, updatedAt: '2026-08-16T00:00:00Z' },
     };
-    rpc.mockResolvedValueOnce({
-      data: { ok: false, code: 'CONFLICT', error: 'The workspace changed since your last sync. Review the latest data before retrying.', conflict },
-      error: null,
-    });
+    rpc
+      .mockResolvedValueOnce({ data: { ok: false, code: 'CONFLICT', error: 'The workspace changed since your last sync. Review the latest data before retrying.', conflict }, error: null })
+      .mockResolvedValueOnce({ data: { ok: true, workspaceVersion: 10, changed: [{ entityType: 'member', entityId: '7', version: 1, updatedAt: '2026-08-16T00:00:00Z' }] }, error: null });
 
     const result = await saveSecureWorkspace(stateWithUser('7'), undefined, 8);
+
+    expect(result.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[0][1].p_expected_workspace_version).toBe(8);
+    expect(rpc.mock.calls[1][1].p_expected_workspace_version).toBe(9);
+    expect(rpc.mock.calls[1][1].p_command_id).toBe(rpc.mock.calls[0][1].p_command_id);
+  });
+
+  it('surfaces a workspace-scoped conflict that persists after the automatic resend', async () => {
+    const conflict = {
+      entityType: 'workspace',
+      entityId: 'aitask-main',
+      expectedVersion: 8,
+      actualVersion: 9,
+      current: { workspaceVersion: 9, updatedAt: '2026-08-16T00:00:00Z' },
+    };
+    const response = {
+      data: { ok: false, code: 'CONFLICT', error: 'The workspace changed since your last sync. Review the latest data before retrying.', conflict },
+      error: null,
+    };
+    rpc.mockResolvedValueOnce(response).mockResolvedValueOnce(response);
+
+    const result = await saveSecureWorkspace(stateWithUser('7'), undefined, 8);
+
+    expect(rpc).toHaveBeenCalledTimes(2);
 
     expect(result).toMatchObject({ ok: false, code: 'CONFLICT' });
     if (result.ok === false) {

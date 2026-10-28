@@ -25,7 +25,7 @@ const seed = async (page: Page, actor: 'hod' | 'pm' | 'boss', own = false) => {
 
 test('HOD-owned review uses an independent PM and retains accountable ownership', async ({ page }) => {
   await seed(page, 'hod', true);
-  await expect(page.getByRole('button', { name: 'Waiting for review', exact: true })).toBeDisabled();
+  await expect(page.getByRole('status').filter({ hasText: 'Awaiting Review' })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Approve', exact: true })).toHaveCount(0);
   await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ currentUser: useStore.getState().users.find(user => user.id === 'pm')! }); });
   await page.goto('/tasks?taskId=independent-review');

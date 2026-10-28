@@ -9,7 +9,7 @@ for (const refresh of ['midnight', 'resume'] as const) {
     await page.goto('/login');
     await page.getByLabel('Email or username').fill('Boss Koo');
     await page.getByLabel('Password').fill('password123');
-    await page.getByRole('button', { name: 'Access Dashboard' }).click();
+    await page.getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.waitForURL(url => url.pathname !== '/login');
     if (page.url().endsWith('/settings')) await page.getByRole('button', { name: 'Continue for now' }).click();
     await page.getByRole('button', { name: 'Happy working' }).click();

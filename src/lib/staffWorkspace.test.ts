@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import type { Task, User } from '../types';
 import { buildStaffWorkQueue, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks, getUnavailableTaskDependencyCount, isStaffGuidedActionEnabled } from './staffWorkspace';
 import { getTaskStatusControls } from './taskStatusControls';
-import { TASK_EVIDENCE_REQUIRED } from './staffWorkflow';
 
 const task = (overrides: Partial<Task>): Task => ({
   id: overrides.id || crypto.randomUUID(),
@@ -177,7 +176,7 @@ describe('reviewer-aware queue', () => {
     expect(buildStaffWorkQueue([reviewable], '2026-08-26', { isActionable }).needs_action.map(item => item.id)).toEqual([reviewable.id]);
   });
 
-  it('does not mark review work actionable when the guided action is gated', () => {
+  it('keeps linked review work actionable without an output', () => {
     const actor = { id: 'gated-hod', name: 'HOD', role: 'HOD', departments: ['Video Editor'], hasLogin: true } as User;
     const statuses = ['Pending', 'In Progress', 'Waiting Approval', 'Approved', 'Completed'];
     const scope = { users: [actor] };
@@ -185,11 +184,11 @@ describe('reviewer-aware queue', () => {
     const plain = task({ status: 'Waiting Approval', department: 'Video Editor' });
     const workflow = { tasks: [linked, plain], cycles: [], deliverables: [] };
     expect(getStaffGuidedAction(linked, statuses, actor, [], scope).kind).toBe('advance');
-    expect(isStaffGuidedActionEnabled(linked, statuses, actor, [], scope, workflow)).toBe(false);
+    expect(isStaffGuidedActionEnabled(linked, statuses, actor, [], scope, workflow)).toBe(true);
     expect(isStaffGuidedActionEnabled(plain, statuses, actor, [], scope, workflow)).toBe(true);
   });
 
-  it('reports the evidence requirement for every review-ready status, not only completion', () => {
+  it('does not block any review-ready status on a missing output', () => {
     const statuses = ['Pending', 'In Progress', 'Waiting Approval', 'Approved', 'Completed'];
     const hod = { id: 'evidence-hod', name: 'HOD', role: 'HOD', departments: ['Video Editor'], hasLogin: true } as User;
     const staff = { id: 'evidence-staff', name: 'Staff', role: 'Staff', departments: ['Video Editor'], hasLogin: true } as User;
@@ -197,14 +196,14 @@ describe('reviewer-aware queue', () => {
 
     const reviewTask = task({ status: 'Waiting Approval', department: 'Video Editor', deliverableId: 'output', assignedTo: staff.id });
     const reviewControls = getTaskStatusControls(hod, reviewTask, statuses, [], { users: [hod, staff] }, { tasks: [reviewTask], cycles: [], deliverables: [] });
-    expect(reviewControls.find(option => option.status === 'Approved')?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
+    expect(reviewControls.find(option => option.status === 'Approved')?.disabledReason).toBeUndefined();
 
     const submitTask = task({ status: 'In Progress', department: 'Video Editor', deliverableId: 'output', assignedTo: staff.id });
     const submitControls = getTaskStatusControls(staff, submitTask, statuses, [], { users: [staff] }, { tasks: [submitTask], cycles: [], deliverables: [] });
-    expect(submitControls.find(option => option.status === 'Waiting Approval')?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
+    expect(submitControls.find(option => option.status === 'Waiting Approval')?.disabledReason).toBeUndefined();
 
     const completeTask = task({ status: 'Approved', department: 'Video Editor', deliverableId: 'output', assignedTo: staff.id, createdBy: pm.id });
     const completeControls = getTaskStatusControls(pm, completeTask, statuses, [], { users: [pm, staff] }, { tasks: [completeTask], cycles: [], deliverables: [] });
-    expect(completeControls.find(option => option.status === 'Completed')?.disabledReason).toBe(TASK_EVIDENCE_REQUIRED);
+    expect(completeControls.find(option => option.status === 'Completed')?.disabledReason).toBeUndefined();
   });
 });

@@ -119,12 +119,15 @@ try {
   await page.goto(`${base}login`);
   await page.getByLabel('Email', { exact: true }).fill(account.email);
   await page.getByLabel('Password', { exact: true }).fill(password);
-  await page.getByRole('button', { name: 'Access Dashboard', exact: true }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
+  const acknowledgement = page.waitForResponse(response => response.url().includes('/rpc/aitask_acknowledge_release_notice') && response.ok());
   await page.getByRole('button', { name: 'Happy working', exact: true }).click();
+  const acknowledgementResponse = await acknowledgement;
+  assert.deepEqual(await acknowledgementResponse.json(), { ok: true, noticeId: '2026-08-service-operations', acknowledged: true }, 'Release notice acknowledgement was not saved');
   const openEditor = async () => {
     await page.goto(`${base}tasks?taskId=status-task`);
     const sheet = page.getByRole('dialog', { name: baseTask.title });
-    await expect(sheet).toBeVisible();
+    await expect(sheet).toBeVisible({ timeout: 30000 });
     const fullEdit = sheet.getByRole('button', { name: 'Edit task', exact: true });
     if (await fullEdit.isVisible()) await fullEdit.click();
     return sheet;

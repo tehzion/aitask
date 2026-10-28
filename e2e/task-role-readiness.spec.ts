@@ -63,7 +63,8 @@ test('customer revision returns to Staff and requires another HOD approval befor
   await openAs(page, 'stage-pm');
   await expect(page.getByRole('button', { name: 'Confirm completion', exact: true })).toHaveCount(0);
   await openAs(page, 'stage-staff');
-  await page.getByRole('button', { name: 'Send for review', exact: true }).click();
+  // Work returned by the client is resubmitted, not sent for the first time.
+  await page.getByRole('button', { name: 'Resubmit for review', exact: true }).click();
   await openAs(page, 'stage-hod');
   await page.getByRole('button', { name: 'Approve', exact: true }).click();
   await openAs(page, 'stage-client');

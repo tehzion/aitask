@@ -7,7 +7,7 @@ const openAdminWorkspace = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
-  await page.getByRole('button', { name: 'Access Dashboard' }).click();
+  await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   if (/\/settings$/.test(page.url())) {
     await page.getByRole('button', { name: 'Continue for now' }).click();
   }
@@ -41,6 +41,23 @@ test('each account receives the service operations update once', async ({ page }
   await expect(page.locator('#root')).not.toHaveAttribute('inert', '');
   await page.reload();
   await expect(dialog).toHaveCount(0);
+});
+
+test('dismissal survives a reload before persistent acknowledgement and remains scoped to the account', async ({ page }) => {
+  await openAdminWorkspace(page);
+  const dialog = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
+  await expect(dialog).toBeVisible();
+  const userId = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return useStore.getState().currentUser!.id;
+  });
+  await dialog.getByRole('button', { name: 'Happy working' }).click();
+  await page.evaluate(({ id, updateId }) => localStorage.removeItem(`aitask:release-notice:${updateId}:${id}`), { id: userId, updateId: noticeId });
+  await page.reload();
+  await expect(dialog).toHaveCount(0);
+
+  await switchDemoUser(page, 'u-operation-demo-local');
+  await expect(page.getByRole('dialog', { name: 'A clearer way to run client delivery' })).toBeVisible();
 });
 
 test('release notice content follows the existing role workbench rules', async ({ page }) => {
@@ -82,7 +99,7 @@ test('the notice is Chinese, dark-mode readable, and usable on mobile', async ({
   await page.reload();
   await page.getByRole('button', { name: '使用 Project Manager Demo' }).click();
   await page.getByLabel('密码').fill('password123');
-  await page.getByRole('button', { name: '进入仪表板' }).click();
+  await page.getByRole('button', { name: '登录', exact: true }).click();
   if (/\/settings$/.test(page.url())) {
     await page.getByRole('button', { name: '暂时继续' }).click();
   }
