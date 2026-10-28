@@ -64,46 +64,47 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001702', true);
 set local role authenticated;
 
-select is((pg_temp.task_command('update', 'workflow-no-approval',
+select is(((pg_temp.task_command('update', 'workflow-no-approval',
   (select data from public.aitask_entities where workspace_id = 'pgtap-workflow-actions' and entity_type = 'task' and entity_id = 'workflow-no-approval')
     || jsonb_build_object('status', 'In Progress', 'completionPercentage', 30)
 ))->>'ok')::boolean, true, 'assigned Staff can start no-approval work');
 
-select is((pg_temp.task_command('update', 'workflow-no-approval',
+select is(((pg_temp.task_command('update', 'workflow-no-approval',
   (select data from public.aitask_entities where workspace_id = 'pgtap-workflow-actions' and entity_type = 'task' and entity_id = 'workflow-no-approval')
     || jsonb_build_object('status', 'Waiting Approval')
 ))->>'ok')::boolean, false, 'no-approval work cannot be diverted into review');
 
-select is((pg_temp.task_command('update', 'workflow-no-approval',
+select is(((pg_temp.task_command('update', 'workflow-no-approval',
   (select data from public.aitask_entities where workspace_id = 'pgtap-workflow-actions' and entity_type = 'task' and entity_id = 'workflow-no-approval')
     || jsonb_build_object('status', 'Completed', 'isCompleted', true)
 ))->>'ok')::boolean, true, 'assigned Staff can complete no-approval work');
 
 select is((select data->>'status' from public.aitask_entities where workspace_id = 'pgtap-workflow-actions' and entity_type = 'task' and entity_id = 'workflow-no-approval'), 'Completed', 'no-approval completion is persisted atomically');
 
-select is((pg_temp.task_command('update', 'workflow-reviewed',
+select is(((pg_temp.task_command('update', 'workflow-reviewed',
   (select data from public.aitask_entities where workspace_id = 'pgtap-workflow-actions' and entity_type = 'task' and entity_id = 'workflow-reviewed')
     || jsonb_build_object('status', 'Completed', 'isCompleted', true)
 ))->>'ok')::boolean, false, 'Staff cannot complete work that requires review');
 
-select is((pg_temp.task_command('update', 'workflow-reviewed',
+select is(((pg_temp.task_command('update', 'workflow-reviewed',
   (select data from public.aitask_entities where workspace_id = 'pgtap-workflow-actions' and entity_type = 'task' and entity_id = 'workflow-reviewed')
     || jsonb_build_object('status', 'Waiting Approval')
 ))->>'ok')::boolean, true, 'assigned Staff can submit reviewed work');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001703', true);
-select is((pg_temp.task_command('update', 'workflow-reviewed',
+select is(((pg_temp.task_command('update', 'workflow-reviewed',
   (select data from public.aitask_entities where workspace_id = 'pgtap-workflow-actions' and entity_type = 'task' and entity_id = 'workflow-reviewed')
     || jsonb_build_object('status', 'Approved')
 ))->>'ok')::boolean, false, 'an unassigned Staff member cannot approve submitted work');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001704', true);
-select is((pg_temp.task_command('update', 'workflow-pm-review',
+select is(((pg_temp.task_command('update', 'workflow-pm-review',
   (select data from public.aitask_entities where workspace_id = 'pgtap-workflow-actions' and entity_type = 'task' and entity_id = 'workflow-pm-review')
     || jsonb_build_object('status', 'Waiting Approval')
 ))->>'ok')::boolean, true, 'the responsible Project Manager can submit owned reviewed work');
 
-select is((pg_temp.task_command('update', 'workflow-reviewed',
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001702', true);
+select is(((pg_temp.task_command('update', 'workflow-reviewed',
   (select data from public.aitask_entities where workspace_id = 'pgtap-workflow-actions' and entity_type = 'task' and entity_id = 'workflow-reviewed')
     || jsonb_build_object('status', 'QA review')
 ))->>'ok')::boolean, false, 'direct custom status changes are rejected for ordinary Staff');
