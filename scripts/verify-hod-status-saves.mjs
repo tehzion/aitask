@@ -129,12 +129,22 @@ try {
     if (await fullEdit.isVisible()) await fullEdit.click();
     return sheet;
   };
+  // The editor offers the next workflow action instead of a status list:
+  // the HOD's own Pending task shows Start work, then Send for review.
   let dialog = await openEditor();
-  await dialog.getByRole('combobox', { name: 'Task status', exact: true }).selectOption('In Progress');
+  await page.route('**/rest/v1/rpc/aitask_execute_command', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, code: 'FORBIDDEN', error: 'You do not have permission to make this change.' }) }));
+  await dialog.getByRole('button', { name: 'Start work', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('correct the rejected change');
+  await expect(dialog.getByRole('button', { name: 'Retry my changes', exact: true })).toHaveCount(0);
+  assert.equal(canonicalStatus('status-task'), 'Pending', 'Rejected browser change was not persisted');
+  if (process.env.AITASK_HOD_STATUS_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.AITASK_HOD_STATUS_EVIDENCE_DIR}/rejected-status-recovery.png`, fullPage: true });
+  await page.unroute('**/rest/v1/rpc/aitask_execute_command');
+  await dialog.getByRole('button', { name: 'Restore saved data', exact: true }).click();
+  await expect(dialog.getByRole('button', { name: 'Start work', exact: true })).toBeEnabled();
+  await dialog.getByRole('button', { name: 'Start work', exact: true }).click();
   await expect.poll(() => canonicalStatus('status-task')).toBe('In Progress');
-  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toBeEnabled();
   dialog = await openEditor();
-  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveValue('In Progress');
+  await expect(dialog.getByRole('button', { name: 'Send for review', exact: true })).toBeEnabled();
 
   const beforeBrowserRetry = Number(sql("select count(*) from public.aitask_audit_events where entity_id='status-task' and actor_member_id='status-hod'"));
   let lostBrowserResponse = false;
@@ -146,29 +156,16 @@ try {
       await route.abort('failed');
     } else await route.continue();
   });
-  await dialog.getByRole('combobox', { name: 'Task status', exact: true }).selectOption('Pending');
+  await dialog.getByRole('button', { name: 'Send for review', exact: true }).click();
   await expect(dialog.getByRole('button', { name: 'Retry my changes', exact: true })).toBeVisible({ timeout: 30000 });
   assert.equal(lostBrowserResponse, true);
   await dialog.getByRole('button', { name: 'Retry my changes', exact: true }).click();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
-  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveValue('Pending');
+  await expect.poll(() => canonicalStatus('status-task')).toBe('Waiting Approval');
   assert.equal(Number(sql("select count(*) from public.aitask_audit_events where entity_id='status-task' and actor_member_id='status-hod'")), beforeBrowserRetry + 1);
   await page.unroute('**/rest/v1/rpc/aitask_execute_command');
-
-  await page.route('**/rest/v1/rpc/aitask_execute_command', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, code: 'FORBIDDEN', error: 'You do not have permission to make this change.' }) }));
-  await dialog.getByRole('combobox', { name: 'Task status', exact: true }).selectOption('In Progress');
-  await expect(dialog.getByRole('alert')).toContainText('correct the rejected change');
-  await expect(dialog.getByRole('button', { name: 'Retry my changes', exact: true })).toHaveCount(0);
-  assert.equal(canonicalStatus('status-task'), 'Pending', 'Rejected browser change was not persisted');
-  if (process.env.AITASK_HOD_STATUS_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.AITASK_HOD_STATUS_EVIDENCE_DIR}/rejected-status-recovery.png`, fullPage: true });
-  await page.unroute('**/rest/v1/rpc/aitask_execute_command');
-  await dialog.getByRole('button', { name: 'Restore saved data', exact: true }).click();
-  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toHaveValue('Pending');
-  await dialog.getByRole('combobox', { name: 'Task status', exact: true }).selectOption('In Progress');
-  await expect.poll(() => canonicalStatus('status-task')).toBe('In Progress');
-  await expect(dialog.getByRole('combobox', { name: 'Task status', exact: true })).toBeEnabled();
   assert.deepEqual(runtimeErrors, []);
-  console.log('[hod-status] Real browser sign-in, status save/reload, lost-response retry without duplication, permission rejection, canonical restoration and fresh save passed.');
+  console.log('[hod-status] Real browser sign-in, permission rejection, canonical restoration, fresh save/reload and lost-response retry without duplication passed.');
 } finally {
   globalThis.fetch = originalFetch;
   if (browser) await browser.close();
