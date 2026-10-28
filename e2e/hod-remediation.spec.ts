@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 const seed = async (page: Page, actor: 'hod' | 'pm' | 'boss', own = false) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async ({ actor, own }) => {
     const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');

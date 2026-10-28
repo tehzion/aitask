@@ -3,6 +3,8 @@ import { expect, test, type Page } from '@playwright/test';
 const taskId = 'ui-feedback-task';
 const seed = async (page: Page, role: 'Staff' | 'HOD', locale: 'en' | 'zh' = 'en') => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async ({ role, locale }) => {
     const { useStore } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');

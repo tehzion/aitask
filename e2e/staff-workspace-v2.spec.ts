@@ -16,6 +16,8 @@ const screenshotOptions = (page: import('@playwright/test').Page) => ({
 const openStaffWorkspace = async (page: import('@playwright/test').Page) => {
   await page.clock.install({ time: new Date('2026-08-26T00:00:00.000Z') });
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => localStorage.setItem('aitask:locale', 'en'));
   await page.reload();
   await page.getByRole('button', { name: 'Use Staff Demo' }).click();

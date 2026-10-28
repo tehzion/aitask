@@ -10,6 +10,10 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   test.setTimeout(120_000);
   await page.goto('/login');
 
+  // Let the app finish its startup load so seeded state is not overwritten.
+
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
+
   const seeded = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/lib/serviceManagement.ts');

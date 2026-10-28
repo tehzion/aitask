@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 
 const setBoss = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => localStorage.setItem('aitask:locale', 'en'));
   await page.reload();
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();

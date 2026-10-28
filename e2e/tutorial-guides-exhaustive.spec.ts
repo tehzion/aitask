@@ -11,6 +11,8 @@ const profiles = [
 
 const loginWithDemo = async (page: import('@playwright/test').Page, username: string) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => localStorage.clear());
   const demoAccount = page.getByRole('button', { name: `Use ${username}` });
   if (await demoAccount.count()) {

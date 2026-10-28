@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 
 const openOperationsWorkspace = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const user = useStore.getState().users.find(candidate => candidate.id === 'u-boss');

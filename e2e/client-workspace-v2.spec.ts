@@ -5,6 +5,8 @@ import AxeBuilder from '@axe-core/playwright';
 test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   const seeded = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const current = useStore.getState();
@@ -191,6 +193,8 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
 
 test('Client tracker statistics reconcile approvals, cancellations and filtered totals', async ({ page }) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
@@ -232,6 +236,8 @@ test('Client tracker statistics reconcile approvals, cancellations and filtered 
 
 test('Client Home counts the entire review queue and Reports separate completion from approval', async ({ page }) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   const timingDates = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const { getWorkWeekRange } = await import('/src/lib/workWeek.ts');

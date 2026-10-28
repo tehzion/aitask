@@ -33,6 +33,8 @@ const makeTask = (task: SeedTask) => ({
 
 const signIn = async (page: Page, username: string) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   await page.evaluate(async name => {

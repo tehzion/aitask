@@ -58,6 +58,8 @@ const dismissTransientOverlays = async (page: Page) => {
 
 const signInAs = async (page: Page, username: string) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => localStorage.clear());
   await page.reload();
   const demoAccount = page.getByRole('button', { name: `Use ${username}` });
@@ -180,6 +182,8 @@ test.describe('responsive role and route audit', () => {
     for (const scenario of scenarios) {
       await page.setViewportSize({ width: scenario.width, height: scenario.height });
       await page.goto('/login');
+      // Let the app finish its startup load so seeded state is not overwritten.
+      await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
       await page.evaluate(({ locale, theme }) => {
         localStorage.clear();
         localStorage.setItem('aitask:locale', locale);

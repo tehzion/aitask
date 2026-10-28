@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 
 const seedBoss = async (page: Page) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async () => {
     localStorage.setItem('aitask:locale', 'en');
     const { useStore } = await import('/src/store/index.ts');

@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test';
 for (const locale of ['en', 'zh']) test(`a task-free management fee can be put in progress and stays saved after reload (${locale})`, async ({ page }) => {
   await page.addInitScript(value => localStorage.setItem('aitask:locale', value), locale);
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   const clientId = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
@@ -48,6 +50,8 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
 
 test('a frozen workflow exposes only statuses allowed by its required task progress', async ({ page }) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   const clientId = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/lib/serviceManagement.ts');

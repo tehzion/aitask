@@ -4,6 +4,8 @@ const taskId = 'hod-status-task';
 const title = 'HOD assigned shooting task';
 const seed = async (page: Page, locale: 'en' | 'zh') => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async locale => {
     const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
@@ -40,25 +42,16 @@ for (const locale of ['en', 'zh'] as const) {
             useStore.setState(state => ({ backend: { ...state.backend, mode: 'supabase', status: 'retry_required', errorCode: code, error, hasLocalChanges: true, pendingMutations: 1 } }));
             return { ok: false, code, error };
           },
-          discardMutation: async () => { useStore.setState(state => ({ tasks: canonical, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0, pendingCommandType: undefined, errorCode: undefined, error: undefined } })); },
+          // The real restore reloads canonical data and returns the connection to live.
+          discardMutation: async () => { useStore.setState(state => ({ tasks: canonical, backend: { ...state.backend, mode: 'supabase', status: 'live', hasLocalChanges: false, pendingMutations: 0, pendingCommandType: undefined, errorCode: undefined, error: undefined } })); },
         }));
       }, code);
       await dialog.getByRole('button', { name: locale === 'zh' ? '提交审核' : 'Send for review', exact: true }).click();
       await expect(dialog.getByRole('alert')).toContainText(locale === 'zh' ? '您没有进行此更改的权限' : 'You do not have permission');
       await expect(dialog.getByRole('button', { name: locale === 'zh' ? '重试我的更改' : 'Retry my changes', exact: true })).toHaveCount(0);
-      await expect(dialog.getByRole('alert')).toContainText(locale === 'zh' ? '修正被拒绝的更改' : 'correct the rejected change');
-      await dialog.getByRole('button', { name: locale === 'zh' ? '恢复已保存数据' : 'Restore saved data', exact: true }).click();
-      const discard = page.getByRole('dialog', { name: locale === 'zh' ? '放弃未保存的更改？' : 'Discard unsaved changes?' });
-      await expect(discard).toBeVisible();
-      await discard.getByRole('button', { name: locale === 'zh' ? '放弃更改' : 'Discard changes', exact: true }).click();
-      await expect(dialog.getByRole('alert')).toHaveCount(0);
-      // The fixture replaces persistence with a command stub. Re-seed the
-      // canonical stage after exercising the UI restore path so the next
-      // action still models a fresh submission from In Progress.
-      await page.evaluate(async () => {
-        const { useStore } = await import('/src/store/index.ts');
-        useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'hod-status-task' ? { ...task, status: 'In Progress', isCompleted: false, completionPercentage: 30 } : task) }));
-      });
+      // A rejected quick status action restores the saved task immediately, so
+      // the HOD is not left on an optimistic status that cannot be saved.
+      await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === 'hod-status-task')?.status)).toBe('In Progress');
       await page.evaluate(async () => {
         const { useStore } = await import('/src/store/index.ts');
         useStore.setState({ commitPendingMutation: async () => ({ ok: true }) });

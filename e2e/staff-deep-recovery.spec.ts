@@ -4,6 +4,8 @@ const id = 'staff-deep-task';
 const title = 'Staff deep recovery task';
 const seed = async (page: Page, route = '/calendar') => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');

@@ -12,6 +12,8 @@ const openAs = async (page: Page, actorId: string) => {
 test('milestone progress follows role actions from assignment through revision and PM completion', async ({ page }) => {
   test.setTimeout(60_000);
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');

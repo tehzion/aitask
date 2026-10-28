@@ -4,6 +4,8 @@ test.use({ timezoneId: 'Asia/Kuala_Lumpur' });
 
 const seed = async (page: Page, waiting = false) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async isWaiting => {
     const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
@@ -58,6 +60,8 @@ test('Staff review enquiry notifies the displayed HOD contact and PM', async ({ 
 
 test('All work HOD scope and queue tablists control distinct panels', async ({ page }) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async () => {
     const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');

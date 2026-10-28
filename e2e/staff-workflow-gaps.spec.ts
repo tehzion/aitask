@@ -3,6 +3,7 @@ import AxeBuilder from '@axe-core/playwright';
 const title = 'Staff workflow artwork';
 const seed = async (page: Page, linked = false) => {
   await page.goto('/login');
+  await page.waitForFunction(() => Boolean(document.querySelector('form input')));
   await page.evaluate(async isLinked => {
     const { useStore } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');

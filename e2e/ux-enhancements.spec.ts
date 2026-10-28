@@ -109,6 +109,8 @@ test('saved personal views restore URL filters, update, delete, and preserve the
 test('Boss table and board preference stays URL-backed and persists per user', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 900 });
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async () => {
     const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');

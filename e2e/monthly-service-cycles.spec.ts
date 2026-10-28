@@ -5,6 +5,8 @@ test.use({ timezoneId: 'Asia/Kuala_Lumpur' });
 test('monthly plans roll over on their billing date and retain previous months after reload', async ({ page }) => {
   await page.clock.install({ time: new Date('2026-10-08T04:00:00Z') });
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   const clientId = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();

@@ -4,6 +4,8 @@ for (const mobile of [false, true]) {
   test(`${mobile ? 'mobile' : 'desktop'} PM manages milestones and closes and reopens an assigned project`, async ({ page }) => {
     await page.setViewportSize(mobile ? { width: 390, height: 844 } : { width: 1440, height: 1000 });
     await page.goto('/login');
+    // Let the app finish its startup load so seeded state is not overwritten.
+    await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
     await page.evaluate(async () => {
       const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
       const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');

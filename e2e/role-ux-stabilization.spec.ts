@@ -9,6 +9,8 @@ const dismissReleaseNotice = async (page: Page) => {
 
 const signIn = async (page: Page, username: string) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => localStorage.setItem('aitask:locale', 'en'));
   await page.reload();
   await page.getByLabel('Email or username').fill(username);

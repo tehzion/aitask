@@ -4,6 +4,8 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   await page.addInitScript(value => localStorage.setItem('aitask:locale', value), locale);
   await page.clock.install({ time: new Date('2026-10-15T04:00:00Z') });
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   const seeded = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');

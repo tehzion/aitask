@@ -73,6 +73,8 @@ test('release notice content follows the existing role workbench rules', async (
 test('the notice is Chinese, dark-mode readable, and usable on mobile', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => {
     localStorage.setItem('aitask:locale', 'zh');
     localStorage.setItem('aitask-color-theme', 'dark');

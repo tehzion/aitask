@@ -50,6 +50,8 @@ const promoteDemoToFreshMember = async (page: import('@playwright/test').Page, i
 
 test('role onboarding can be started, skipped, restarted, and persisted per user', async ({ page }) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => localStorage.clear());
   await page.evaluate(() => localStorage.setItem('aitask:locale', 'en'));
   await loginWithDemo(page, 'Project Manager Demo');
@@ -80,6 +82,8 @@ test('role onboarding can be started, skipped, restarted, and persisted per user
 
 test('role onboarding supports Back and Finish, then remains completed after refresh', async ({ page }) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => localStorage.clear());
   await loginWithDemo(page, 'Project Manager Demo');
   await promoteDemoToFreshMember(page, 'finished-project-manager');
@@ -108,6 +112,8 @@ test('role onboarding supports Back and Finish, then remains completed after ref
 
 test('client onboarding stays scoped to client-visible guidance', async ({ page }) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(() => localStorage.clear());
   await page.evaluate(() => localStorage.setItem('aitask:locale', 'en'));
   await loginWithDemo(page, 'UrbanEats Client Demo');

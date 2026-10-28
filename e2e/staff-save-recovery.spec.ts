@@ -7,6 +7,8 @@ const titleB = 'Staff save task B';
 
 const seedStaff = async (page: Page, service = false) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   const clientId = await page.evaluate(async keepServices => {
     const { useStore } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
@@ -114,11 +116,17 @@ for (const status of ['In Progress', 'Waiting Approval']) {
       useStore.setState({ users: [...useStore.getState().users, { id: 'status-recovery-hod', name: 'Review HOD', role: 'HOD', department: 'Designer', departments: ['Designer'] }], commitPendingMutation: async () => ({ ok: false, error: 'Status was not confirmed.' }), retryPendingSave: async () => ({ ok: true }) });
     });
     const sheet = page.getByRole('dialog', { name: titleA });
+    // The seeded demo task has a prior revision, so its start action reads "Start revision".
+    const start = sheet.getByRole('button', { name: /^Start (work|revision)$/ });
     if (status === 'In Progress') {
-      await sheet.getByRole('button', { name: 'Start work', exact: true }).click();
+      await start.click();
     } else {
-      await sheet.getByRole('button', { name: 'Start work', exact: true }).click();
-      await sheet.getByRole('button', { name: 'Send for review', exact: true }).click();
+      // Begin from started work so only the submission itself is rejected.
+      await page.evaluate(async id => {
+        const { useStore } = await import('/src/store/index.ts');
+        useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === id ? { ...task, status: 'In Progress' } : task) }));
+      }, taskA);
+      await sheet.getByRole('button', { name: /^(Send|Resubmit) for review$/ }).click();
     }
     await expect(sheet.getByRole('alert')).toContainText('Status was not confirmed.');
     const successIds = () => page.evaluate(async () => {
@@ -303,7 +311,9 @@ test('a pending activity can be retried even when its newer draft is empty or ha
 test('Use latest still resolves a workspace operation started outside the Staff sheet', async ({ page }) => {
   await seedStaff(page);
   await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
+    const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
+    // Keep the local sync loop from clearing the injected pending operation.
+    stopBackendAutoSync();
     (window as unknown as { externalDiscardCalls: number }).externalDiscardCalls = 0;
     useStore.setState(state => ({ backend: { ...state.backend, status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 },
       discardMutation: async () => {

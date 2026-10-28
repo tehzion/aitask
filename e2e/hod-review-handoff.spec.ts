@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 
 test('staff submission reaches the department HOD inbox and opens pending work', async ({ page }) => {
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
