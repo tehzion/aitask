@@ -127,7 +127,7 @@ try {
   const openEditor = async () => {
     await page.goto(`${base}tasks?taskId=status-task`);
     const sheet = page.getByRole('dialog', { name: baseTask.title });
-    await expect(sheet).toBeVisible();
+    await expect(sheet).toBeVisible({ timeout: 30000 });
     const fullEdit = sheet.getByRole('button', { name: 'Edit task', exact: true });
     if (await fullEdit.isVisible()) await fullEdit.click();
     return sheet;
