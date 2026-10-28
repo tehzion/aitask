@@ -205,6 +205,16 @@ test('Client pages stay free of internal review and management sections', async 
     }
     await expect(main(page).getByRole('button', { name: /^Approve/ })).toHaveCount(0);
   }
+  // Delivery cards name the agency team, never an internal member.
+  const internalNames = await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().users
+    .filter(user => user.role !== 'Client').map(user => user.name));
+  for (const path of ['/', '/tasks', '/clients']) {
+    await page.goto(path);
+    await expect(main(page).getByRole('heading', { level: 1 })).toBeVisible();
+    if (path === '/tasks') await expect(main(page).getByText(/Agency team/).first()).toBeVisible();
+    const visibleText = await main(page).innerText();
+    expect(internalNames.filter(name => visibleText.includes(name)), path).toEqual([]);
+  }
 });
 
 test('every role lands on pages whose headings match their navigation', async ({ page }) => {
