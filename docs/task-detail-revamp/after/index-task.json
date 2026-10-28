@@ -1,0 +1,146 @@
+[
+  {
+    "name": "staff-ordinary-inprogress",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 714,
+    "footer": "Edit task\nSend for review",
+    "file": "task-staff-ordinary-inprogress-1440.png"
+  },
+  {
+    "name": "staff-ordinary-pending",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 714,
+    "footer": "Edit task\nStart work",
+    "file": "task-staff-ordinary-pending-1440.png"
+  },
+  {
+    "name": "staff-linked-deliverable",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 890,
+    "footer": "Add the required output before submitting.\n\nEdit task\nSend for review",
+    "file": "task-staff-linked-deliverable-1440.png"
+  },
+  {
+    "name": "staff-waiting",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 714,
+    "footer": "Edit task\nAwaiting Review",
+    "file": "task-staff-waiting-1440.png"
+  },
+  {
+    "name": "hod-review",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 714,
+    "footer": "Edit task\nRequest revision\nAdd note\nApprove",
+    "file": "task-hod-review-1440.png"
+  },
+  {
+    "name": "pm-finalize",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 784,
+    "footer": "Edit task\nRequest revision\nAdd note\nConfirm completion",
+    "file": "task-pm-finalize-1440.png"
+  },
+  {
+    "name": "pm-completed",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 732,
+    "footer": "Edit task\nRequest revision\nAdd note",
+    "file": "task-pm-completed-1440.png"
+  },
+  {
+    "name": "superadmin-review",
+    "width": 1440,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 24,
+    "footer": "",
+    "file": "task-superadmin-review-1440.png"
+  },
+  {
+    "name": "staff-ordinary-inprogress",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 714,
+    "footer": "Edit task\nSend for review",
+    "file": "task-staff-ordinary-inprogress-390.png"
+  },
+  {
+    "name": "staff-ordinary-pending",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 762,
+    "footer": "Edit task\nStart work",
+    "file": "task-staff-ordinary-pending-390.png"
+  },
+  {
+    "name": "staff-linked-deliverable",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 974,
+    "footer": "Add the required output before submitting.\n\nEdit task\nSend for review",
+    "file": "task-staff-linked-deliverable-390.png"
+  },
+  {
+    "name": "staff-waiting",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 734,
+    "footer": "Edit task\nAwaiting Review",
+    "file": "task-staff-waiting-390.png"
+  },
+  {
+    "name": "hod-review",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 734,
+    "footer": "Edit task\nRequest revision\nAdd note\nApprove",
+    "file": "task-hod-review-390.png"
+  },
+  {
+    "name": "pm-finalize",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 784,
+    "footer": "Edit task\nRequest revision\nAdd note\nConfirm completion",
+    "file": "task-pm-finalize-390.png"
+  },
+  {
+    "name": "pm-completed",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 732,
+    "footer": "Edit task\nRequest revision\nAdd note",
+    "file": "task-pm-completed-390.png"
+  },
+  {
+    "name": "superadmin-review",
+    "width": 390,
+    "visible": true,
+    "overflowPx": 0,
+    "scrollHeight": 24,
+    "footer": "",
+    "file": "task-superadmin-review-390.png"
+  }
+]

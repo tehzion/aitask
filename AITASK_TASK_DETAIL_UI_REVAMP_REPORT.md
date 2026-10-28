@@ -30,8 +30,8 @@ Measured scroll height of the panel content at 1440px (from `index-task.json`):
 | Staff ordinary task | 1179 px | 714 px |
 | Staff linked task | 1259 px | 890 px |
 | HOD review | 1312 px | 714 px |
-| PM finalize | 1649 px | 768 px |
-| PM completed | 1565 px | 716 px |
+| PM finalize | 1649 px | 784 px |
+| PM completed | 1565 px | 732 px |
 
 ---
 
