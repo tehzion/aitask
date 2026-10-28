@@ -1,7 +1,7 @@
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
-import { canRequestTaskRevision, eligibleTaskHods, eligibleTaskStaff, getDepartmentReviewers, resolveTaskAssignmentState, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { canRequestTaskRevision, departmentHasHod, eligibleTaskHods, eligibleTaskStaff, getDepartmentReviewers, resolveTaskAssignmentState, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { clearRecoveredDrafts } from '../lib/draftRecovery';
 import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { create } from 'zustand';
@@ -3469,10 +3469,16 @@ export const useStore = create<StoreState>()(
         let resolvedAssignmentState = taskData.assignmentState;
         if (currentUser.role === 'Project Manager' && resolveTaskStatus(taskData.status, state.taskStatuses) !== 'Waiting Approval') {
           // UI-created tasks carry the explicit pending_hod marker and must
-          // resolve a HOD. Older programmatic/import paths without that marker
-          // remain compatible when no HOD has ever been configured.
-          if (!projectHods.length && (taskData.assignmentState !== undefined || taskData.responsibleHodId !== undefined)) return '';
-          if (!projectHods.length) {
+          // resolve a HOD. A department without any HOD keeps the PM
+          // fallback: the PM assigns Staff directly with no responsible HOD.
+          // Older programmatic/import paths without the marker remain
+          // compatible.
+          if (!projectHods.length && !departmentHasHod(taskData.department, state.users, state.rolePermissions)) {
+            resolvedResponsibleHodId = undefined;
+            resolvedAssignmentState = resolvedAssigneeId ? 'assigned_staff' : 'needs_hod';
+          } else if (!projectHods.length && (taskData.assignmentState !== undefined || taskData.responsibleHodId !== undefined)) {
+            return '';
+          } else if (!projectHods.length) {
             resolvedAssignmentState = taskData.assignmentState || 'needs_hod';
           } else {
           if (projectHods.length > 1 && !requestedHodId) return '';
@@ -3549,7 +3555,10 @@ export const useStore = create<StoreState>()(
             createdBy: currentUser.id,
             assignedTo: resolvedAssigneeId || '',
             responsibleHodId: resolvedResponsibleHodId,
-            assignmentState: resolvedAssignmentState || resolveTaskAssignmentState(resolvedAssigneeId, resolvedResponsibleHodId, assignee),
+            // Route state belongs to the PM -> HOD -> Staff flow. Work a member
+            // creates for themselves or their team carries no HOD route.
+            assignmentState: resolvedAssignmentState
+              || (resolvedResponsibleHodId ? resolveTaskAssignmentState(resolvedAssigneeId, resolvedResponsibleHodId, assignee) : undefined),
             assignedBy: currentUser.id,
             assignedAt: now,
             clientId,

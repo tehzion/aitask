@@ -16,7 +16,7 @@ import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignabl
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { assignableDepartments, getMemberDepartments } from '../lib/departments';
-import { assignableTaskAssignees, eligibleTaskHods } from '../lib/taskWorkflowAccess';
+import { assignableTaskAssignees, departmentHasHod, eligibleTaskHods } from '../lib/taskWorkflowAccess';
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { modalFooter } from './uiTokens';
@@ -128,6 +128,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     () => eligibleTaskHods(department || undefined, selectedProject, users, rolePermissions),
     [department, rolePermissions, selectedProject, users],
   );
+  // A PM routes new work through the department HOD. Departments without an
+  // HOD keep the PM fallback: the PM assigns Staff directly.
+  const routesThroughHod = isProjectManager && departmentHasHod(department || undefined, users, rolePermissions);
   const filteredUsers = department
     ? assignableTaskAssignees(currentUser, department, users, rolePermissions)
         .filter(user => canAssignOthers || user.id === currentUser?.id)
@@ -394,7 +397,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    if (isProjectManager) {
+    if (routesThroughHod) {
       if (!eligibleHods.length) {
         setAssignmentError('No eligible HOD is configured for this project and department. Assign an HOD to the project before creating this task.');
         return;
@@ -416,7 +419,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
-    const resolvedAssignedTo = isProjectManager ? responsibleHodId : assignedTo;
+    const resolvedAssignedTo = routesThroughHod ? responsibleHodId : assignedTo;
     const taskId = addTask({
       title: trimmedTitle,
       description: description.trim(),
@@ -434,8 +437,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       visibility,
       department,
       assignedTo: resolvedAssignedTo,
-      responsibleHodId: isProjectManager ? responsibleHodId : undefined,
-      assignmentState: isProjectManager ? 'pending_hod' : undefined,
+      responsibleHodId: routesThroughHod ? responsibleHodId : undefined,
+      assignmentState: routesThroughHod ? 'pending_hod' : undefined,
       serviceType: trimmedServiceType,
       priority,
       startDate: finalStartDate,
@@ -632,22 +635,22 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   </div>
                 </div>
                 <div>
-                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">{t(isProjectManager ? 'Responsible HOD' : 'Assignee')}</label>
+                  <label htmlFor={assigneeId} className="block text-sm font-medium text-slate-700 mb-1">{t(routesThroughHod ? 'Responsible HOD' : 'Assignee')}</label>
                   <div className="relative">
                     <select
                       id={assigneeId}
-                      value={isProjectManager ? responsibleHodId : assignedTo}
-                      onChange={e => isProjectManager ? setResponsibleHodId(e.target.value) : setAssignedTo(e.target.value)}
+                      value={routesThroughHod ? responsibleHodId : assignedTo}
+                      onChange={e => routesThroughHod ? setResponsibleHodId(e.target.value) : setAssignedTo(e.target.value)}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                     >
-                      <option value="">{t(isProjectManager ? (eligibleHods.length ? 'Choose responsible HOD' : 'No eligible HOD configured') : 'Unassigned')}</option>
-                      {(isProjectManager ? eligibleHods : filteredUsers).map(u => (
+                      <option value="">{t(routesThroughHod ? (eligibleHods.length ? 'Choose responsible HOD' : 'No eligible HOD configured') : 'Unassigned')}</option>
+                      {(routesThroughHod ? eligibleHods : filteredUsers).map(u => (
                         <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>
                       ))}
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                   </div>
-                  {isProjectManager && eligibleHods.length > 0 && <p className="mt-1 text-xs text-slate-500">{t('The HOD will assign Staff after reviewing this task.')}</p>}
+                  {routesThroughHod && eligibleHods.length > 0 && <p className="mt-1 text-xs text-slate-500">{t('The HOD will assign Staff after reviewing this task.')}</p>}
                   {assignmentError && (
                     <p className="text-xs text-red-500 mt-1"><SystemMessage message={assignmentError} /></p>
                   )}

@@ -75,9 +75,20 @@ describe('PM to HOD routing', () => {
     expect(useStore.getState().tasks[0].responsibleHodId).toBe(secondHod.id);
   });
 
-  it('blocks the explicit new-task route when no HOD is configured', () => {
-    useStore.setState({ users: [pm, staff, client], projects: [{ ...project, hodMemberIds: [] }] });
+  it('blocks the explicit new-task route when the department HOD is not on the project', () => {
+    useStore.setState({ projects: [{ ...project, hodMemberIds: [] }] });
     expect(useStore.getState().addTask({ ...taskDraft, assignmentState: 'pending_hod' })).toBe('');
+  });
+
+  it('lets the PM assign Staff directly when the department has no HOD', () => {
+    useStore.setState({ users: [pm, staff, client], projects: [{ ...project, hodMemberIds: [] }] });
+    const id = useStore.getState().addTask({ ...taskDraft, assignedTo: staff.id });
+    expect(id).toBeTruthy();
+    expect(useStore.getState().tasks.find(task => task.id === id)).toMatchObject({
+      assignedTo: staff.id,
+      responsibleHodId: undefined,
+      assignmentState: 'assigned_staff',
+    });
   });
 });
 
