@@ -159,12 +159,14 @@ test.describe('responsive role and route audit', () => {
     }
   });
 
-  test('keeps approvals Boss-only and exposes the HOD workbench copy', async ({ page }) => {
+  test('keeps registration approvals Boss-only and exposes the HOD workbench copy', async ({ page }) => {
+    // Project Managers manage their own team members there; registrations and
+    // role controls stay with the Boss Koo admin account.
     await signInAs(page, 'Project Manager Demo');
     await page.goto('/approvals', { waitUntil: 'domcontentloaded' });
-    await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
-    await expect(page.getByText('Approvals are restricted to Boss Koo')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Add Member' })).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: 'Team members', level: 1 })).toBeVisible();
+    await expect(page.getByRole('tab', { name: /Pending registrations|Registrations/ })).toHaveCount(0);
+    await expect(page.getByText('Pending registrations', { exact: true })).toHaveCount(0);
 
     await signInAs(page, 'HOD Demo');
     await page.goto('/tasks', { waitUntil: 'domcontentloaded' });

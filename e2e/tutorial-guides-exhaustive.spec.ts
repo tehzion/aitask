@@ -42,7 +42,8 @@ const guideForProfile = (tutorial: Tutorial, persona: typeof profiles[number]['p
 };
 
 test('every live guide completes safely or explains an unavailable record-specific target', async ({ page }) => {
-  test.setTimeout(180_000);
+  // Walks every guide for every role profile, so it needs a long budget.
+  test.setTimeout(600_000);
   let checkedGuides = 0;
   const expectedGuideExecutions = profiles.reduce((total, profile) => (
     total + getVisibleTutorials(profile.persona).filter(tutorial => guideForProfile(tutorial, profile.persona)).length

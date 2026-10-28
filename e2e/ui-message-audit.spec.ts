@@ -3,7 +3,12 @@ import { expect, test, type Page } from '@playwright/test';
 const rawTechnicalText = /\[object Object\]|row-level security|aitask_entities|PGRST\d+|Cannot read properties|Failed to fetch/;
 const seed = async (page: Page, role: string, locale: 'en' | 'zh') => {
   await page.clock.install({ time: new Date('2026-10-19T12:00:00.000Z') });
+  // Demo avatars point at a third-party image host; serve a local pixel so a
+  // blocked or slow network cannot raise a photo-preview alert.
+  await page.route('https://i.pravatar.cc/**', route => route.fulfill({ status: 200, contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64') }));
   await page.goto('/login');
+  // Let the app finish its startup load so seeded state is not overwritten.
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
   return page.evaluate(async ({ role, locale }) => {
     const { useStore, stopBackendAutoSync } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
@@ -102,6 +107,7 @@ for (const locale of ['en', 'zh'] as const) {
   test(`App update ${locale}: software refresh is distinct from saved-data recovery`, async ({ page }) => {
     await seed(page, 'Staff', locale);
     await page.goto('/settings');
+    await expect(page.locator('main h1').first()).toBeVisible();
     await page.evaluate(() => window.dispatchEvent(new Event('aitask:pwa-update-ready')));
     await expect(page.getByText(locale === 'zh' ? '应用有新版本' : 'App update available', { exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: locale === 'zh' ? '立即刷新' : 'Refresh now', exact: true })).toBeEnabled();
