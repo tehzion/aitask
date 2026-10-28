@@ -226,7 +226,53 @@ Screenshots are in `docs/ui-ux-revamp/`:
 
 ## 10. Automated test results
 
-RESULTS_PLACEHOLDER
+All commands ran in this Linux cloud container (Node 22.22.0, pnpm 10.4.1). Playwright used the pre-installed Chromium through an uncommitted wrapper config: same tests, webServer and settings, with `launchOptions.executablePath` added, because the pinned browser build is not installed here. Runs used `--retries=0`, and skipped tests were not counted as passed.
+
+| Check | Command | Baseline `f39c335` | This branch |
+| --- | --- | --- | --- |
+| TypeScript | `pnpm check` | pass | **pass** |
+| ESLint | `pnpm lint` | pass | **pass** (0 problems) |
+| Unit tests | `pnpm test` | 918/921 (3 failing in `hodCrossRoleSync.test.ts`: the mock lacked an export added by `e5f5b5a`) | **957/957** (122 files; 36 new tests; mock completed) |
+| Strict i18n | `pnpm verify:i18n:strict` | 0 findings | **0 findings** (199 files) |
+| Production build | `pnpm build` | pass | **pass** |
+| Bundle budgets | `node scripts/verify-bundle-size.mjs` | — | **pass** (eager 296.1 / 300 KiB gzip) |
+| Migrations non-empty | `node scripts/verify-migrations-nonempty.mjs` | — | **pass** (124) |
+| PWA | `node scripts/verify-pwa.mjs` | — | **pass** |
+| Playwright (full) | `npx playwright test --retries=0` | **223 passed, 138 failed, 4 did not run** (365) | **244 passed, 130 failed, 4 did not run** (378 = 365 + 13 new) |
+
+**Regression comparison (test by test against the baseline run).**
+- **Newly failing:** 1 test, `ui-message-audit` "Calendar en: network failure". It also fails on the untouched baseline when run alone (all 4 Calendar variants failed there), so it is a pre-existing intermittent failure, not a regression.
+- **Fixed:** 9 baseline failures pass. Five are `dashboard-accuracy`: the baseline failed with strict-mode violations because "Overdue tasks" was rendered twice, which is exactly the duplication removed here. The other four vary between runs in this environment.
+- **New revamp spec** (`e2e/ui-revamp.spec.ts`, 13 tests): all pass.
+
+**New regression tests** (requirement → test):
+
+| # | Requirement | Test |
+| --- | --- | --- |
+| 1 | Completed tasks leave active lists | `taskListScope.test.ts`; e2e "Super Admin task list defaults to active work…", PM/HOD/Staff `/tasks` assertions |
+| 2 | Completed tasks remain in history | Completed / All tasks chips, `?show=completed` survives reload, deep link `?taskId=rv-done`, Done tabs |
+| 3 | Dashboard metrics update on completion | e2e "completing work updates dashboard counts…" (Overdue 1→0); PM "Ready to finalize" 1→0 and "1/6 → 2/6 tasks complete" after UI completion |
+| 4 | PM queue only actionable reviews | `reviewQueues.test.ts`; e2e "PM sees PM-lane reviews as their own…"; updated `pm-portfolio.spec.ts` |
+| 5 | HOD review scope | e2e "HOD acts on department reviews only…" (PM-approval task under *Waiting*, not *Needs action*) |
+| 6 | Staff task filtering | e2e "Staff see their active work without management approval controls" |
+| 7 | Client privacy | e2e "Client pages stay free of internal review and management sections" |
+| 8 | Navigation consistency | e2e "every role lands on pages whose headings match their navigation" |
+| 9 | Mobile layouts | e2e "dashboards fit and stay accessible at 320/390/768/1024/1440px" (overflow, title width, Axe at 390/1440) |
+| 10 | English and Chinese labels | `i18n.test.ts` "UI revamp copy"; e2e Chinese chips and headings |
+
+**Updated existing e2e specs.** These were updated to follow intended UI changes, keeping their assertions:
+- New headings: Dashboard, Tasks, All work, Department tasks.
+- The Super Admin Portfolio tab now sits between Overview and Agency pulse.
+- Recent activity appears on Overview only.
+- The "Renewals in 30 days" assertions now check the contract-renewals list.
+- `hod-permission-parity` skips the onboarding card in its seed, as other HOD specs do.
+
+No test was skipped, disabled or quarantined.
+
+**Pre-existing failures (138 on baseline).** They cluster in `ui-message-audit` (19), `staff-save-recovery` (16), `staff-deep-recovery` (15), `staff-hod-ui-feedback` (14), `staff-workflow-gaps` (13) and `task-role-readiness` (12).
+- The five worst spec files fail identically on the **live** commit `8eeba61` (70/70).
+- Timezone and the onboarding card were tested as causes and excluded.
+- See section 11.
 
 ---
 
