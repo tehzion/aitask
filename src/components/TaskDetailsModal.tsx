@@ -38,6 +38,7 @@ import { useI18n } from './I18nProvider';
 import { formatLocalizedDate } from '../lib/i18n';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { Button, ProgressBar } from './ui';
+import { TaskWorkflowSteps } from './TaskCard';
 import { fieldLabel, inputBase } from './uiTokens';
 import ContextualTutorialLink from './ContextualTutorialLink';
 import ActionAvailabilityNotice from './ActionAvailabilityNotice';
@@ -759,7 +760,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
               </section>}
 
               {!isClientTaskViewer && <div className="space-y-3">
-                <ProgressBar label={t('Task progress')} value={taskProgress} />
+                <TaskWorkflowSteps task={task} label={t('Task progress')} progress={taskProgress} />
                 {canEditTask && workflowKind !== 'internal_review' && guidedAction.kind === 'advance' && guidedAction.targetStatus && <Button
                   type="button"
                   disabled={isSubmitting || Boolean(guidedActionError)}

@@ -1,6 +1,7 @@
 import { getLocalizedDepartment, getLocalizedTaskStatus } from '../lib/localeLabels';
 import UnavailableWork from './UnavailableWork';
 import '../lib/staffWorkflowCopy';
+import '../lib/taskStageCopy';
 import React from 'react';
 import { Filter, ListFilter, Plus, Search, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -239,7 +240,7 @@ const StaffAllWork: React.FC = () => {
           {taskId && !selectedTask && <UnavailableWork onDismiss={() => setTaskId()} />}
           <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
             {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={visibleTasks} users={users} onOpen={item => setTaskId(item.id)} />)}
-            {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t(activeFilterCount > 0 ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : bucket === 'all' ? 'No active work. Finished tasks are under Done.' : bucket === 'needs_action' ? 'feedback.noNeedsAction' : bucket === 'up_next' ? 'feedback.noUpNext' : bucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
+            {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter aria-hidden="true" className="mx-auto h-6 w-6 text-muted" /><p className="mt-3 font-semibold text-ink">{t(activeFilterCount > 0 ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : bucket === 'all' ? 'No active work. Finished tasks are under Done.' : bucket === 'needs_action' ? 'feedback.noNeedsAction' : bucket === 'up_next' ? 'feedback.noUpNext' : bucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p>{activeFilterCount > 0 ? <button type="button" onClick={clearFilters} className="mt-2 min-h-11 px-2 text-sm font-semibold text-accent hover:underline">{t('Clear filters')}</button> : tasks.length > 0 && bucket !== 'all' && <p className="mt-1 text-sm text-muted">{t('Choose another queue to see more work.')}</p>}</div>}
           </Surface>
         </div>
       </section>

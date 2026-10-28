@@ -53,7 +53,7 @@ test('dashboard overdue drilldown and task quick filters use the same task set',
   for (const title of ['Followup today', 'Followup completed', 'Followup invalid', 'Followup cancelled']) {
     await expect(page.getByText(title, { exact: true })).toHaveCount(0);
   }
-  const filters = page.getByRole('group', { name: 'Quick task filters' });
+  const filters = page.getByRole('group', { name: 'Deadline filters' });
   await filters.getByRole('button', { name: 'Due today', exact: true }).click();
   await expect(page).toHaveURL(/period=today/);
   await expect(page.getByText('Followup today', { exact: true }).first()).toBeVisible();
@@ -64,7 +64,8 @@ test('dashboard overdue drilldown and task quick filters use the same task set',
   await expect(page.getByText('Followup completed', { exact: true })).toHaveCount(0);
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.locator('article').filter({ hasText: 'Followup overdue' })).toBeVisible();
-  await filters.getByRole('button', { name: 'All', exact: true }).click();
+  // Deadline chips toggle; turning Overdue off returns to every active task.
+  await filters.getByRole('button', { name: 'Overdue', exact: true }).click();
   await expect(page).not.toHaveURL(/focus=|period=/);
   await expect(page.locator('article').filter({ hasText: 'Followup tomorrow' })).toBeVisible();
 });

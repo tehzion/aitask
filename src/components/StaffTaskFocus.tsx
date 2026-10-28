@@ -16,7 +16,8 @@ import { getStaffGuidedAction, getTaskBlockers, getUnavailableTaskDependencyCoun
 import { safeHttpsUrl } from '../lib/security';
 import { getRelativeDueDateString } from '../lib/utils';
 import { inputBase } from './uiTokens';
-import { Button, ProgressBar, StatusChip } from './ui';
+import { Button } from './ui';
+import { TaskStatusBadges, TaskWorkflowSteps } from './TaskCard';
 import SideSheet from './SideSheet';
 import BackendFreshness from './BackendFreshness';
 import { useI18n } from './I18nProvider';
@@ -428,12 +429,12 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         <section aria-labelledby="staff-task-state" className="space-y-3">
           <h3 id="staff-task-state" className="sr-only">{t('Status')}</h3>
           <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-            <StatusChip tone={liveTask.status === 'Waiting Approval' ? 'amber' : liveTask.isCompleted ? 'emerald' : liveTask.status === 'Cancelled' ? 'slate' : 'blue'}>{getLocalizedTaskStatus(liveTask.status, locale)}</StatusChip>
+            <TaskStatusBadges task={liveTask} />
             <span className="text-muted">{t(liveTask.priority)} {t('priority')}</span>
-            <span className={overdue ? 'font-semibold text-red-700' : 'text-muted'}>{getRelativeDueDateString(liveTask.dueDate, liveTask.isCompleted, liveTask.status, locale)}</span>
+            <span className={overdue ? 'font-semibold text-red-700 dark:text-red-300' : 'text-muted'}>{getRelativeDueDateString(liveTask.dueDate, liveTask.isCompleted, liveTask.status, locale)}</span>
             {liveTask.revisionCount > 0 && <span className="font-medium text-amber-700">{t('Revision')} {liveTask.revisionCount}</span>}
           </div>
-          {liveTask.status !== 'Cancelled' && <ProgressBar label={t('Task progress')} value={taskProgress} />}
+          {liveTask.status !== 'Cancelled' && <TaskWorkflowSteps task={liveTask} label={t('Task progress')} progress={taskProgress} />}
         </section>
 
         {incompletePredecessors.length > 0 && (

@@ -83,17 +83,6 @@ interface MetricCardProps {
   className?: string;
 }
 
-const toneClasses: Record<string, string> = {
-  indigo:  'bg-accent-soft text-accent',
-  emerald: 'bg-emerald-50 text-emerald-600',
-  amber:   'bg-amber-50   text-amber-600',
-  orange:  'bg-amber-50  text-amber-700',
-  red:     'bg-red-50     text-red-600',
-  blue:    'bg-accent-soft text-accent',
-  purple:  'bg-accent-soft text-accent',
-  slate:   'bg-slate-100  text-slate-600',
-};
-
 export const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon: Icon, tone = 'blue', footer, className }) => (
   <div className={cn(cardBase, 'app-metric-card p-4 sm:p-5', className)}>
     <div className="flex items-start justify-between gap-3">
@@ -101,9 +90,8 @@ export const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon: Icon
         <p className="text-sm font-medium leading-5 text-muted">{title}</p>
         <div className="calm-number mt-1.5 text-2xl font-semibold leading-8 tracking-[-0.035em] text-ink">{value}</div>
       </div>
-      {Icon && <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', toneClasses[tone])}>
-        <Icon className="h-4 w-4" aria-hidden="true" />
-      </div>}
+      {/* The value carries the meaning; the icon stays a quiet, neutral marker. */}
+      {Icon && <Icon className={cn('mt-0.5 h-[18px] w-[18px] shrink-0', tone === 'red' ? 'text-red-600 dark:text-red-300' : 'text-muted')} aria-hidden="true" />}
     </div>
     {footer && <div className="mt-3 text-xs text-muted">{footer}</div>}
   </div>
@@ -341,7 +329,7 @@ export const DataRow: React.FC<Omit<React.HTMLAttributes<HTMLElement>, 'title'> 
 
 export const EmptyState: React.FC<{ title: string; description: string; action?: React.ReactNode; icon?: LucideIcon; className?: string }> = ({ title, description, action, icon: Icon = ArrowUpRight, className }) => (
   <div className={cn('app-empty-state rounded-panel bg-inset px-5 py-12 text-center', className)}>
-    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-5 w-5" aria-hidden="true" /></div>
+    <Icon className="mx-auto h-6 w-6 text-muted" aria-hidden="true" />
     <h3 className="mt-4 font-semibold text-ink">{title}</h3><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">{description}</p>{action && <div className="mt-5">{action}</div>}
   </div>
 );

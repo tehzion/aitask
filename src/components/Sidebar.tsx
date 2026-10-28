@@ -123,7 +123,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
             <>
               <span className={clsx(
                 'flex h-8 w-8 shrink-0 items-center justify-center rounded-control transition-colors',
-                isActive ? 'bg-surface/80 text-accent' : 'bg-inset/70 text-muted group-hover:bg-surface group-hover:text-ink',
+                isActive ? 'text-accent' : 'text-muted group-hover:text-ink',
               )}>
                 <item.icon aria-hidden="true" className="h-[18px] w-[18px]" />
               </span>
@@ -262,7 +262,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                   moreActive ? 'bg-accent-soft font-semibold text-ink before:absolute before:bottom-2 before:left-0 before:top-2 before:w-0.5 before:rounded-full before:bg-accent' : 'text-muted hover:bg-inset hover:text-ink',
                 )}
               >
-                <span className={clsx('flex h-8 w-8 shrink-0 items-center justify-center rounded-control', moreActive ? 'bg-surface/80 text-accent' : 'bg-inset/70 text-muted group-hover:bg-surface group-hover:text-ink')}>
+                <span className={clsx('flex h-8 w-8 shrink-0 items-center justify-center rounded-control', moreActive ? 'text-accent' : 'text-muted group-hover:text-ink')}>
                   <MoreHorizontal aria-hidden="true" className="h-[18px] w-[18px]" />
                 </span>
                 <span className={clsx('flex min-w-0 flex-1 items-center justify-between gap-2 text-left text-sm', isCollapsed && 'md:hidden')}>
@@ -283,7 +283,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                       title={isCollapsed ? t('New task') : undefined}
                       className={clsx('group flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-accent transition-[background-color,color,box-shadow] duration-160 hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface', isCollapsed && 'md:justify-center md:px-2')}
                     >
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"><Plus aria-hidden="true" className="h-[18px] w-[18px]" /></span>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control text-accent"><Plus aria-hidden="true" className="h-[18px] w-[18px]" /></span>
                       <span className={clsx('min-w-0 truncate text-left text-sm font-semibold', isCollapsed && 'md:hidden')}>{t('New task')}</span>
                     </button>
                   </div>
@@ -303,7 +303,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
               aria-label={isCollapsed ? t('Logout') : undefined}
               className={clsx('group relative flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-red-700 transition-[background-color,color,box-shadow] duration-160 hover:bg-red-50 hover:text-red-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-red-500/35 focus-visible:ring-offset-2 focus-visible:ring-offset-surface', isCollapsed && 'md:justify-center md:px-2')}
             >
-              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control bg-red-50 text-red-700"><LogOut aria-hidden="true" className="h-[18px] w-[18px]" /></span>
+              <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control"><LogOut aria-hidden="true" className="h-[18px] w-[18px]" /></span>
               <span className={clsx('min-w-0 truncate text-sm font-medium', isCollapsed && 'md:hidden')}>{t('Logout')}</span>
             </button>
           </div>
