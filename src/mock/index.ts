@@ -23,6 +23,7 @@ export const mockUsers: User[] = [
 export const mockProjects: Project[] = [
   {
     id: 'p1',
+    projectManagerIds: ['u-admin'],
     clientName: 'TechNova',
     projectName: 'Q3 Brand Awareness',
     services: ['Social Media', 'Design', 'Ads'],
@@ -31,6 +32,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: 'p2',
+    projectManagerIds: ['u-admin'],
     clientName: 'EcoLife',
     projectName: 'Website Revamp',
     services: ['Website', 'SEO', 'Design'],
@@ -39,6 +41,7 @@ export const mockProjects: Project[] = [
   },
   {
     id: 'p3',
+    projectManagerIds: ['u-admin'],
     clientName: 'UrbanEats',
     projectName: 'Promo Video Campaign',
     services: ['Video', 'Social Media'],
