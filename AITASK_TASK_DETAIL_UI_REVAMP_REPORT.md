@@ -194,13 +194,36 @@ The failures were compared with the baseline by test title, ignoring line number
   - *Calendar en: network failure explains recovery* (`ui-message-audit`). Not caused by this change: it also failed in the previous revamp's final run, and its sibling Calendar cases (permission failure, zh) fail on the baseline. They time out waiting for the calendar's "Edit dates" button, which this change does not touch.
 - The other 127 failures and the 4 that did not run are pre-existing. They match the baseline, also occur on the live commit `8eeba61`, and are recorded unchanged; none were skipped or weakened.
 
+**Independent macOS rerun on 2026-10-28.** This used the repository Playwright config with its installed macOS Chromium (`CI=true`), rather than the sandbox wrapper above. Counts differ by host, so compare titles within each run:
+
+| Run | Total | Passed | Failed | Did not run | Duration |
+| --- | --- | --- | --- | --- | --- |
+| Feature `820567b`, before the Chinese assertion correction | 392 | 266 | 122 | 4 | 30.8 min |
+| Same-host baseline `f39c335` | 365 | 236 | 126 | 3 | 32.6 min |
+| Follow-up after the assertion correction | 20 | 20 | 0 | 0 | 56.3 s |
+
+The full-run commands were:
+
+```sh
+PLAYWRIGHT_PORT=4201 CI=true PLAYWRIGHT_JSON_OUTPUT_NAME=/private/tmp/aitask-task-detail-regression-results.json pnpm exec playwright test -c playwright.config.ts --retries=0 --reporter=line,json
+PLAYWRIGHT_PORT=4202 CI=true PLAYWRIGHT_JSON_OUTPUT_NAME=/private/tmp/aitask-task-detail-baseline-results.json pnpm exec playwright test -c playwright.config.ts --retries=0 --reporter=line,json
+```
+
+The follow-up command was:
+
+```sh
+PLAYWRIGHT_PORT=4204 CI=true PLAYWRIGHT_JSON_OUTPUT_NAME=/private/tmp/aitask-task-detail-focused-results.json pnpm exec playwright test -c playwright.config.ts e2e/role-ux-stabilization.spec.ts e2e/task-detail.spec.ts --retries=0 --reporter=line,json
+```
+
+In the same-host title comparison, **119 failures were shared**, and six baseline failures passed on the feature branch. Three feature failures had passed on `f39c335`; rerunning those titles on the immediate base `3b1f276` showed that `client-service-workspace` and the responsive route matrix already failed there. The Staff Chinese test passed on `3b1f276`; its stale Brief heading assertion was corrected on the feature branch. The follow-up passed all 20 tests, including all 14 task-detail e2e tests. This targeted rerun verifies the assertion correction; the full suite was not rerun after that test-only edit.
+
 ---
 
 ## 11. Remaining risks
 
 - **Delivery-linked tasks still require output.** This is intentional and enforced in production. If the business wants linked tasks to be completable without proof, that needs a product decision and a new, reviewed migration (the trigger in `staff_workflow_recovery` and its successors). It was not changed here.
 - **Full editor.** It is lighter but still long (review settings, links form and client approval live there). A deeper restructure was out of scope.
-- **Browser suite baseline.** The same pre-existing failures as the previous report (section 10 of `AITASK_UI_UX_REVAMP_REPORT.md`) remain in this environment and need a run on the reference release host.
+- **Browser suite baseline.** The isolated-sandbox run and same-host macOS rerun are both non-green; their counts and title comparisons are in section 10. The reference release host still needs a run.
 - **CI on `master`.** Two jobs fail independently of this work: the database job replaying migration `20261023150000_hod_task_execution_permissions` ("HOD assignment boundary was not found"), and the PWA offline Reports deep-link test.
 
 ---
