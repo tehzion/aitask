@@ -44,7 +44,7 @@ test('Staff Chinese workspace localizes dynamic copy and preserves work content'
   const taskSheet = page.getByRole('dialog', { name: /6\. Video Editing/ });
   await expect(taskSheet).toBeVisible();
   await expect(taskSheet.getByText('6. Video Editing', { exact: true })).toBeVisible();
-  await expect(taskSheet.getByText('任务说明', { exact: true })).toBeVisible();
+  await expect(taskSheet.getByRole('heading', { name: '详情', exact: true })).toBeVisible();
 });
 
 test('Boss and Staff queues move focus with keyboard tabs', async ({ page }) => {

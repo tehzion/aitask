@@ -154,7 +154,45 @@ The existing SideSheet width (`sm:max-w-xl`) is sufficient once the cards are re
 
 ## 10. Automated regression results
 
-RESULTS_PLACEHOLDER
+**Fast gates** (on the feature branch):
+
+| Check | Command | Result |
+| --- | --- | --- |
+| Typecheck | `pnpm check` | Pass |
+| Lint | `pnpm lint` | 0 problems |
+| Unit tests | `pnpm test` | 962 / 962 pass (123 files) |
+| Strict i18n scan | `pnpm verify:i18n:strict` | 0 findings (199 files) |
+| Build and bundle budget | `pnpm verify:bundle` | Pass (296.4 of 300 KiB gzip) |
+
+**New tests:**
+- `src/store/optionalEvidence.test.ts`: 5 unit tests. An ordinary task submits for review and completes without evidence, and its controls show no evidence block. A delivery-linked task stays blocked until an output link exists.
+- `e2e/task-detail.spec.ts`: 14 tests. Scenarios A–H; responsive checks at 320, 390, 768, 1024 and 1440px; Axe at 390 and 1440px; Chinese labels. All 14 pass.
+
+**Updated tests:** these follow renamed labels; no assertion was removed or loosened.
+- "Full edit" → "Edit task" (zh 完整编辑 → 编辑任务).
+- "Request Revision" → "Request revision".
+- `hod-remediation` expands the collapsed "Review settings" before using it.
+- `role-ux-stabilization` "Staff Chinese workspace…" now checks for the panel's localized **详情** (Details) heading instead of the removed 任务说明 (Brief) heading.
+
+**Full browser suite**, run on `820567b` in this sandbox:
+
+```
+PLAYWRIGHT_PORT=4201 npx playwright test -c pw-sandbox.config.ts --retries=0 --reporter=line
+```
+
+`pw-sandbox.config.ts` is a local wrapper around `playwright.config.ts`. It only points Playwright at the sandbox Chromium.
+
+| Run | Total | Passed | Failed | Did not run |
+| --- | --- | --- | --- | --- |
+| Baseline `f39c335` (before both revamps) | 365 | 223 | 138 | 4 |
+| This change `820567b` | 392 | 259 | 129 | 4 |
+
+The failures were compared with the baseline by test title, ignoring line numbers:
+- **11 baseline failures now pass.** Calendar and dashboard midnight refresh (6), the tutorial-guides sweep, and four `ui-message-audit` cases.
+- **2 failures do not appear in the baseline:**
+  - *Staff Chinese workspace localizes dynamic copy* (`role-ux-stabilization`). Caused by this change: the test looked for the removed "Brief" heading. The test was updated as listed above, and it now passes (`1 passed`).
+  - *Calendar en: network failure explains recovery* (`ui-message-audit`). Not caused by this change: it also failed in the previous revamp's final run, and its sibling Calendar cases (permission failure, zh) fail on the baseline. They time out waiting for the calendar's "Edit dates" button, which this change does not touch.
+- The other 127 failures and the 4 that did not run are pre-existing. They match the baseline, also occur on the live commit `8eeba61`, and are recorded unchanged; none were skipped or weakened.
 
 ---
 
