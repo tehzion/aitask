@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-10-28T00:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "Production verified through repository 20261028150000_hod_patch_empty_defaults. The 20261028 migrations were applied with the same versions on 2026-10-28; the earlier tail resolves through connector-generated migration aliases. 20261028160000_optional_task_output (optional task output) is pending production.",
+  "status": "Production verified through repository 20261028150000_hod_patch_empty_defaults. The 20261028 migrations were applied with the same versions on 2026-10-28; the earlier tail resolves through connector-generated migration aliases. 20261028160000_optional_task_output was applied to production on 2026-10-28 in one transaction and recorded with the same version.",
   "validatedMigrationTail": [
     "20261021110000_monthly_plan_renewal_integrity",
     "20261023120000_pm_hod_staff_assignment_state",
@@ -18,9 +18,7 @@
     "20261028150000_hod_patch_empty_defaults",
     "20261028160000_optional_task_output"
   ],
-  "pendingProductionMigrations": [
-    "20261028160000_optional_task_output"
-  ],
+  "pendingProductionMigrations": [],
   "productionVerification": {
     "historyAligned": false,
     "historyThrough": "20261028150000_hod_patch_empty_defaults",
