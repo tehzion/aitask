@@ -27,7 +27,7 @@ for (const width of [320, 375, 390, 414, 768, 1024]) {
         tasks: [...state.tasks, { ...state.tasks[0], id: 'ux-context', clientId: 'ux-company', clientName: 'UX company', projectId: 'ux-project', assignedTo: actor.id, createdBy: actor.id, department: 'Designer' }],
       });
     }, role);
-    await page.getByRole('button', { name: 'New task', exact: true }).click();
+    await page.locator('#main-content').getByRole('button', { name: 'New task', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: /^Create task$/i });
     await dialog.getByLabel(/Link to Company/).selectOption('ux-project');
     await dialog.getByLabel('Task Title').fill(`UX creation ${width}`);
