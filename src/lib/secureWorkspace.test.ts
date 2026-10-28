@@ -402,6 +402,19 @@ describe('secure command retry identity', () => {
     expect(byType.get('service_cycle.manage')).toEqual(['service_cycle']);
   });
 
+  it('sends a pending catalog template in its own command beside a deliverable update', () => {
+    const operations = [
+      operation('task'),
+      operation('service_workflow_template', 'insert'),
+      operation('deliverable'),
+    ];
+    const groups = partitionOperationsWithExplicitType(operations, 'task.update');
+    const byType = new Map(groups.map(group => [group.type, group.operations.map(item => item.entityType)]));
+    expect(byType.get('task.update')).toEqual(['task']);
+    expect(byType.get('service_workflow.manage')).toEqual(['service_workflow_template']);
+    expect(byType.get('deliverable.manage')).toEqual(['deliverable']);
+  });
+
   it('keeps a service-typed command whole', () => {
     const operations = [operation('deliverable'), operation('service_cycle')];
     const groups = partitionOperationsWithExplicitType(operations, 'deliverable.manage');

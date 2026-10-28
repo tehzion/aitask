@@ -1090,6 +1090,32 @@ export const inferSecureCommandType = (
   return 'workspace.patch';
 };
 
+// Group service rows for the service RPC. Catalog rows (workflow templates,
+// service packages) can only be written by their own command type, so a
+// pending default template must not ride along with a deliverable or cycle
+// update.
+const serviceCommandGroups = (
+  serviceOperations: WorkspaceOperation[],
+  selfMemberId?: string,
+): { type: SecureCommandType; operations: WorkspaceOperation[] }[] => {
+  const groups: { type: SecureCommandType; operations: WorkspaceOperation[] }[] = [];
+  const catalogCommandTypes: [string, SecureCommandType][] = [
+    ['service_workflow_template', 'service_workflow.manage'],
+    ['service_package', 'service_package.manage'],
+  ];
+  let remaining = serviceOperations;
+  catalogCommandTypes.forEach(([entityType, commandType]) => {
+    const catalogOperations = remaining.filter(operation => operation.entityType === entityType);
+    if (catalogOperations.length === 0 || catalogOperations.length === remaining.length) return;
+    groups.push({ type: commandType, operations: catalogOperations });
+    remaining = remaining.filter(operation => operation.entityType !== entityType);
+  });
+  if (remaining.length > 0) {
+    groups.push({ type: inferSecureCommandType(remaining, { selfMemberId }), operations: remaining });
+  }
+  return groups;
+};
+
 // Split a mixed local diff into command groups that each map to a single RPC.
 // The generic command RPC rejects service entity types, and the service RPC
 // rejects member rows, so an unpartitioned diff could otherwise be sent to the
@@ -1108,12 +1134,7 @@ const partitionOperationsForRpc = (
       operations: genericOperations,
     });
   }
-  if (serviceOperations.length > 0) {
-    groups.push({
-      type: inferSecureCommandType(serviceOperations, { selfMemberId }),
-      operations: serviceOperations,
-    });
-  }
+  groups.push(...serviceCommandGroups(serviceOperations, selfMemberId));
   return groups;
 };
 
@@ -1139,12 +1160,7 @@ export const partitionOperationsWithExplicitType = (
   if (genericOperations.length > 0) {
     groups.push({ type, operations: genericOperations });
   }
-  if (serviceOperations.length > 0) {
-    groups.push({
-      type: inferSecureCommandType(serviceOperations, { selfMemberId }),
-      operations: serviceOperations,
-    });
-  }
+  groups.push(...serviceCommandGroups(serviceOperations, selfMemberId));
   return groups;
 };
 
