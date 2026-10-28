@@ -64,7 +64,7 @@ test('a first-time offline Reports deep link renders the report shell and data f
     window.localStorage.setItem('market-task-storage', JSON.stringify(persisted));
   });
   await page.reload({ waitUntil: 'domcontentloaded' });
-  await expect(page.getByRole('heading', { name: 'Portfolio work' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
   await page.evaluate(async () => {
     await navigator.serviceWorker.ready;
     if (!navigator.serviceWorker.controller) {

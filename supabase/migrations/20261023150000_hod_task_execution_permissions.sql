@@ -86,7 +86,7 @@ begin
       return false;
     end if;
   end if;
-    $block$,
+$block$,
     $block$
   if p_action = 'update' and v_actor_is_hod and v_new_assignee <> v_old_assignee then
     if v_old_hod <> v_actor_member_id
