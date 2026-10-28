@@ -46,6 +46,8 @@ try {
   await page.goto(`${base}login`);
   const login = async id => {
     const account = accounts.find(a => a.id===id);
+    // Let the app finish starting before signing in through its store.
+    await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
     const result = await page.evaluate(async ({ email, password, id }) => {
       localStorage.setItem('aitask:locale','en');
       localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${id}`,'acknowledged');
@@ -131,7 +133,7 @@ try {
   paths.push(...stored.map(item => item.path));
   await login('output-worker');
   await page.getByRole('button',{name:'Send for review',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Waiting for review',exact:true})).toBeDisabled();
+  await expect(page.getByRole('status').filter({ hasText: 'Awaiting Review' })).toBeVisible();
   await page.getByRole('button', { name: 'Request review update', exact: true }).click();
   await page.getByLabel('What review update do you need?').fill('Please share a review update');
   await page.getByRole('button', { name: 'Request review update', exact: true }).last().click();
@@ -146,7 +148,7 @@ try {
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   if (process.env.AITASK_HOD_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.AITASK_HOD_EVIDENCE_DIR}/output-review-mobile.png`, fullPage:true });
   await page.getByRole('button',{name:'Approve',exact:true}).click();
-  await expect(page.getByRole('button',{name:'Awaiting final completion',exact:true})).toBeDisabled();
+  await expect(page.getByRole('status').filter({ hasText: 'Awaiting final completion' })).toBeVisible();
   await login('output-client');
   const clientDownload = page.waitForEvent('download');
   await page.getByRole('button',{name:/Artwork\.pdf/}).click();

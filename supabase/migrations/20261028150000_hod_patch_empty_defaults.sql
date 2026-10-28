@@ -5,7 +5,11 @@
 --     generatedFromDeliverable: false, requiresInternalApproval: true,
 --     recurrenceFrequency: "None");
 --   * it omits accountableLeadId and reviewCover, which
---     aitask_guard_task_review_config restores from the stored task.
+--     aitask_guard_task_review_config restores from the stored task;
+--   * it strips server-owned review and workflow state (workflowStepKind,
+--     workflowOutputVersion, workflowDependenciesReady, internalReview,
+--     reviewDecision, reviewAccess, reviewEvidence), which the server
+--     recomputes or stamps on every write.
 -- Treat those as unchanged. Any real change to a restricted field is still
 -- denied.
 --
@@ -18,6 +22,13 @@ immutable
 set search_path = ''
 as $$
   select case
+    -- Server-owned review and workflow state: aitask_guard_workflow_task and
+    -- aitask_stamp_task_review_decision replace whatever a client sends, and
+    -- the app strips these fields before saving.
+    when p_field in (
+      'workflowStepKind', 'workflowOutputVersion', 'workflowDependenciesReady', 'internalReview',
+      'reviewDecision', 'reviewAccess', 'reviewEvidence'
+    ) then false
     -- aitask_guard_task_review_config restores an omitted lead or cover from
     -- the stored task, so leaving them out of a payload changes nothing.
     when p_field in ('accountableLeadId', 'reviewCover') and p_new is null then false

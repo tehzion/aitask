@@ -64,7 +64,7 @@
     "20261028150000_hod_patch_empty_defaults": "HOD saves are no longer rejected when the app fills absent fields with defaults or omits the server-kept accountableLeadId/reviewCover; real changes to restricted fields stay denied."
   },
   "qualityGates": {
-    "disposableSupabaseStack": "PENDING: record the pnpm verify:supabase:rollout result here",
+    "disposableSupabaseStack": "PASS (2026-10-28): CI=true pnpm verify:supabase:rollout \u2014 77 pgTAP files / 1148 tests, storage, staff saves, HOD status, onboarding, workflow review gate, HOD output UI and security audit checks.",
     "productionApply": "PENDING: owner-reviewed apply to production; then record production versions in productionVerification and clear pendingProductionMigrations"
   }
 }

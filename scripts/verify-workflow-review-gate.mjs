@@ -55,6 +55,12 @@ try {
     const saved = await useStore.getState().commitPendingMutation(type);
     assert.equal(saved.ok, true, `${label}: save failed: ${saved.error}`);
   };
+  // Staff move work forward through task actions: start it before submitting.
+  const start = async (label, id) => {
+    if (['Pending', 'Revision'].includes(useStore.getState().tasks.find(item => item.id === id)?.status)) {
+      await save(label, useStore.getState().updateTaskStatus(id, 'In Progress'));
+    }
+  };
   await login('review-boss');
   assert.equal((await secure.loadSecureBackendCapabilities()).compatible, true);
   const generated = useStore.getState().generateDeliverableTaskChain('review-output');
@@ -66,6 +72,7 @@ try {
   }
   await login('review-worker');
   assert.equal(useStore.getState().updateTaskStatus(reviewId, 'Completed').ok, false);
+  await start('Work submission start', workId);
   await save('Work submission', useStore.getState().updateTaskStatus(workId, 'Waiting Approval'));
   await login('review-pm');
   await save('Designer PM review fallback', useStore.getState().updateTaskStatus(workId, 'Approved'));
@@ -77,6 +84,7 @@ try {
   const review = useStore.getState().tasks.find(item => item.id === reviewId);
   const forged = await supabase.rpc('aitask_execute_command', { p_workspace_id: 'aitask-main', p_command_id: randomUUID(), p_command_type: 'task.update', p_operations: [{ kind: 'entity', action: 'update', entityType: 'task', entityId: reviewId, expectedVersion: review.version, data: { ...review, status: 'Completed', isCompleted: true, workflowStepKind: 'work', internalReview: { reviewedBy: 'review-hod' } } }] });
   assert.equal(forged.data?.ok, false, 'canonical SQL must reject a crafted browser request');
+  await start('Review submission start', reviewId);
   await save('Review submission', useStore.getState().updateTaskStatus(reviewId, 'Waiting Approval'));
   await login('review-hod');
   assert.equal(useStore.getState().tasks.find(item => item.id === reviewId).reviewEvidence.links[0].url, 'https://example.com/output.pdf');
@@ -102,6 +110,7 @@ try {
   assert.equal(useStore.getState().tasks.find(item => item.id === reviewId).internalReview, undefined);
   await save('Return unsigned legacy review', useStore.getState().requestRevision(reviewId, 'Review legacy output again'), 'approval.revision');
   await login('review-worker');
+  await start('Legacy resubmission start', reviewId);
   await save('Legacy resubmission', useStore.getState().updateTaskStatus(reviewId, 'Waiting Approval'));
   await login('review-hod');
   await save('Explicit legacy sign-off', useStore.getState().updateTaskStatus(reviewId, 'Approved'));
@@ -114,6 +123,7 @@ try {
   const completedDecision = useStore.getState().tasks.find(item => item.id === reviewId).internalReview.decisionId;
   await save('Private retrospective', useStore.getState().updateTask(reviewId, { notes: 'Private retrospective' }));
   assert.equal(useStore.getState().tasks.find(item => item.id === reviewId).internalReview.decisionId, completedDecision);
+  await start('Publication submission start', publishId);
   await save('Publication submission', useStore.getState().updateTaskStatus(publishId, 'Waiting Approval'));
   await login('review-pm');
   await save('Publication review', useStore.getState().updateTaskStatus(publishId, 'Approved'));
