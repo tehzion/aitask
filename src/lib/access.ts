@@ -494,6 +494,13 @@ export const canManageClientProfiles = (
 export const canCreateClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   Boolean(user) && (isBossKoo(user) || hasPermission(user, 'createClients', customRoles))
 );
+/** A Project Manager who owns a company may hand it to another Project Manager. */
+export const canHandOverClientProfile = (user: User | null | undefined, profile: Pick<ClientProfile, 'createdBy'> | null | undefined) => (
+  Boolean(user && profile) && user!.role === 'Project Manager' && !isBossKoo(user) && profile!.createdBy === user!.id
+);
+export const isClientHandoverTarget = (user: User | null | undefined, previousOwnerId?: string) => (
+  Boolean(user) && user!.role === 'Project Manager' && !isBossKoo(user) && user!.id !== previousOwnerId
+);
 export const canDeleteClientProfiles = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   Boolean(user) && (isBossKoo(user) || hasPermission(user, 'deleteClients', customRoles))
 );
