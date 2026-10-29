@@ -1,5 +1,6 @@
 import '../lib/actionFeedbackCopy';
 import { msg, type MessageDescriptor } from '../lib/messages';
+import { getCycleExtras } from '../lib/opsSignals';
 import type { UiFeedback } from '../lib/actionFeedback';
 import UnavailableWork from '../components/UnavailableWork';
 import SystemMessage from '../components/SystemMessage';
@@ -140,6 +141,7 @@ const OperationsClientWorkspace = () => {
   const [downloadingFileId, setDownloadingFileId] = React.useState<string | null>(null);
   const [activityFeedback, setActivityFeedback] = React.useState<ActivityFeedback | null>(null);
   const [addonSheetOpen, setAddonSheetOpen] = React.useState(false);
+  const [generatingAll, setGeneratingAll] = React.useState(false);
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
   const { busy: addonSaving, run: runServiceAction } = useSaveAction(clientId);
   const pendingAddon = React.useRef<(typeof store.addons)[number] | null>(null);
@@ -284,6 +286,14 @@ const OperationsClientWorkspace = () => {
       (!isClient || item.visibility === "client-visible") && item.cycleId === selectedCycle?.id,
   );
   const addons = store.addons.filter((item) => item.clientId === client.id);
+  // Extra requests outside the plan are one-off add-ons in the month they were asked for.
+  const extrasCycle = selectedCycle && ['Draft', 'Published', 'Completed'].includes(selectedCycle.status) ? selectedCycle : undefined;
+  const cycleExtras = extrasCycle ? getCycleExtras(addons, extrasCycle.id) : undefined;
+  const logExtraRequest = () => {
+    if (!extrasCycle) return;
+    setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: extrasCycle.periodStart, targetCycleId: extrasCycle.id });
+    setAddonSheetOpen(true);
+  };
   const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }).filter(
     (item) =>
       item.clientId === client.id &&
@@ -481,6 +491,20 @@ const OperationsClientWorkspace = () => {
     if (addonSaving) return;
     const result = store.generateDeliverableTaskChain(deliverableId);
     await saveAndCommit(result, "deliverable.workflow.generate");
+  };
+  // One deliverable at a time: each chain is confirmed before the next starts,
+  // and the run stops at the first failure so nothing is left half-saved.
+  const generateAllTaskChains = async (deliverableIds: string[]) => {
+    if (addonSaving || generatingAll) return;
+    setGeneratingAll(true);
+    try {
+      for (const deliverableId of deliverableIds) {
+        const saved = await saveAndCommit(useStore.getState().generateDeliverableTaskChain(deliverableId), "deliverable.workflow.generate");
+        if (!saved) return;
+      }
+    } finally {
+      setGeneratingAll(false);
+    }
   };
   const carryForward = async (taskId: string, targetCycleId: string, targetDeliverableId?: string) => {
     if (addonSaving || carryPending) return;
@@ -818,6 +842,15 @@ const OperationsClientWorkspace = () => {
                     </div>
                   </section>
                 </div>
+                {(() => {
+                  const ungenerated = cycleDeliverables.filter(deliverable => deliverable.status !== "Delivered"
+                    && cycle.serviceItems.find(item => item.id === deliverable.serviceItemId)?.workflow?.steps.length
+                    && !tasks.some(task => task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)));
+                  return !isClient && canManageCycles && ungenerated.length > 1 && <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line px-5 py-3">
+                    <p className="text-sm text-muted">{t("{count} deliverables have no tasks yet.", { count: ungenerated.length })}</p>
+                    <Button variant="secondary" disabled={generatingAll} onClick={() => void generateAllTaskChains(ungenerated.map(item => item.id))}><ListChecks className="h-4 w-4" />{t("Generate all task chains")}</Button>
+                  </div>;
+                })()}
                 <div className="divide-y divide-line/70">
                   {cycleDeliverables.map((deliverable) => {
                     const linkedTasks = tasks
@@ -989,7 +1022,17 @@ const OperationsClientWorkspace = () => {
 
       {tab === "addons" && canManagePlans && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-addons`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-addons`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold text-ink">{t("Service add-ons")}</h2><p className="mt-1 text-sm text-muted">{t("One-off and recurring scope changes remain visible in the history.")}</p></div><Button onClick={() => setAddonSheetOpen(true)}><Plus className="h-4 w-4" />{t("Add service add-on")}</Button></div>
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold text-ink">{t("Service add-ons")}</h2><p className="mt-1 text-sm text-muted">{t("One-off and recurring scope changes remain visible in the history.")}</p></div><div className="flex flex-wrap gap-2">{extrasCycle && <Button variant="secondary" onClick={logExtraRequest}><Plus className="h-4 w-4" />{t("Log extra request")}</Button>}<Button onClick={() => setAddonSheetOpen(true)}><Plus className="h-4 w-4" />{t("Add service add-on")}</Button></div></div>
+          {extrasCycle && cycleExtras && <section aria-labelledby="cycle-extras-title" className={cn(cardBase, "p-5")}>
+            <h3 id="cycle-extras-title" className="font-semibold text-ink">{t("Extra requests this month")}</h3>
+            <p className="mt-1 text-sm text-muted">{t("Work asked for outside the plan. Log it at no charge to keep a record, or with a price to bill it.")}</p>
+            <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
+              <div><dt className="text-muted">{t("Requests")}</dt><dd className="calm-number text-lg font-semibold text-ink">{cycleExtras.extras.length}</dd></div>
+              <div><dt className="text-muted">{t("At no charge")}</dt><dd className="calm-number text-lg font-semibold text-ink">{cycleExtras.free}</dd></div>
+              <div><dt className="text-muted">{t("Billable")}</dt><dd className="calm-number text-lg font-semibold text-ink">{cycleExtras.billable}{canSeePrices && cycleExtras.billableMinor > 0 ? ` · ${formatMoney(cycleExtras.billableMinor, 'MYR', locale)}` : ''}</dd></div>
+            </dl>
+            {cycleExtras.free >= 2 && <p className="mt-3 text-sm text-amber-800">{t("Several requests were done at no charge this month. Consider billing them or discussing a larger plan.")}</p>}
+          </section>}
           <section className={cn(cardBase, "divide-y divide-line/70")}>
             {addons.map((item) => (
               <div
