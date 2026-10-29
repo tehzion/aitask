@@ -1356,6 +1356,9 @@ export const overlayRetainedWorkspaceEntities = (
   };
 };
 
+/** One automatic resend after a network error or timeout, after a short pause. */
+export const transientRetryPolicy = { attempts: 1, delayMs: 1500 };
+
 /** The newer workspace version when a command was rejected only because the workspace moved on. */
 export const staleWorkspaceVersion = (data: unknown): number | undefined => {
   const response = data as CommandResponse | null;
@@ -1396,7 +1399,19 @@ const executeCommand = async (
 
   let rpcResult: Awaited<ReturnType<typeof invoke>>;
   try {
-    rpcResult = await invoke();
+    // A dropped connection or a slow response. The command id makes a resend
+    // safe (the server replays its stored receipt instead of applying the
+    // change twice), so try again before asking the user.
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        rpcResult = await invoke();
+        break;
+      } catch (failure) {
+        if (attempt >= transientRetryPolicy.attempts || (typeof navigator !== 'undefined' && navigator.onLine === false)) throw failure;
+        await new Promise(resolve => setTimeout(resolve, transientRetryPolicy.delayMs));
+        assertWorkspaceSession(sessionToken);
+      }
+    }
     if (isAuthError(rpcResult.error) && await refreshSecureSession()) {
       rpcResult = await invoke();
     }

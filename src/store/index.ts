@@ -6706,6 +6706,13 @@ export const startBackendAutoSync = () => {
       syncNotificationRealtime();
     }
     const state = useStore.getState();
+    // A change that was waiting while offline is resent once automatically;
+    // the server deduplicates it by command id. Only if that fails does the
+    // user see the retry controls.
+    if (shouldUseSecureSupabase() && state.currentUser && getRetainedSecureCommand()) {
+      void state.retryPendingSave().finally(() => { void useStore.getState().pullBackendNow({ silent: true }); });
+      return;
+    }
     if (!shouldUseSecureSupabase() || state.currentUser) {
       void state.pullBackendNow({ silent: true });
     }

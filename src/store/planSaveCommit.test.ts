@@ -21,8 +21,13 @@ vi.mock('../lib/supabaseClient', () => ({
 import { isPendingMutationResolution, pendingMutationMessage, useStore } from './index';
 import type { User } from '../types';
 import { invalidateWorkspaceSession } from '../lib/workspaceSession';
+import { transientRetryPolicy } from '../lib/secureWorkspace';
 
-beforeEach(() => invalidateWorkspaceSession());
+beforeEach(() => {
+  invalidateWorkspaceSession();
+  // These cases cover the manual retry path after an outage.
+  transientRetryPolicy.attempts = 0;
+});
 
 const initialState = useStore.getState();
 
