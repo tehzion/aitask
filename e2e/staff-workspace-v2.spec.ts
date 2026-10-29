@@ -70,9 +70,10 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
     await expect(page).toHaveScreenshot('staff-v2-all-work-desktop-light.png', screenshotOptions(page));
   }
 
-  const taskRow = page.getByRole('button', { name: /6\. Video Editing/ });
-  await expect(taskRow.getByText('Dependency status unavailable', { exact: true })).toBeVisible();
-  await taskRow.click();
+  // The task card shows its flags beside the title button that opens it.
+  const taskRow = page.locator('article').filter({ has: page.getByRole('button', { name: /6\. Video Editing/ }) });
+  await expect(taskRow).toContainText('Dependency status unavailable');
+  await taskRow.getByRole('button', { name: /6\. Video Editing/ }).click();
   await expect(page.getByRole('button', { name: /^(Send|Resubmit) for review$/ })).toBeVisible();
   const taskFocusAxe = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();
   expect(taskFocusAxe.violations, `Staff task focus: ${taskFocusAxe.violations.map(item => item.id).join(', ')}`).toEqual([]);

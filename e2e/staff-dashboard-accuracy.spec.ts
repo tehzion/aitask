@@ -70,7 +70,7 @@ for (const department of ['Operation', 'Designer'] as const) {
   });
   expect(actualVisibleBlockers).toBe(1);
   await expect(metric(page, 'Blocked steps')).toHaveText('1');
-  await expect(page.getByRole('button').filter({ hasText: 'Assigned dependency task' })).toContainText('1 blocker');
+  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).toContainText('1 blocker');
  });
 }
 
@@ -118,7 +118,7 @@ test('blocker metrics do not expose an inaccessible predecessor', async ({ page 
   });
   await expect(metric(page, 'Blocked steps')).toHaveText('0');
   await expect(page.locator('[aria-labelledby="staff-role-context"]')).toContainText('Dependency status unavailable · Tasks: 1');
-  await expect(page.getByRole('button').filter({ hasText: 'Assigned dependency task' })).toContainText('Dependency status unavailable');
+  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).toContainText('Dependency status unavailable');
   await expect(page.getByText('Foreign task', { exact: true })).toHaveCount(0);
 });
 
@@ -184,7 +184,7 @@ test('unavailable dependency notices clear when visible and exclude closed tasks
   await expect(context).not.toContainText('Dependency status unavailable');
   await expect(metric(page, 'Blocked steps')).toHaveText('0');
   await page.getByRole('tab', { name: /Done/ }).click();
-  await expect(page.getByRole('button').filter({ hasText: 'Assigned dependency task' })).not.toContainText('Dependency status unavailable');
+  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).not.toContainText('Dependency status unavailable');
 });
 
 test('account metrics and queue counts react to reassignment and plan changes', async ({ page }) => {
@@ -248,6 +248,6 @@ test('HOD dependency context follows department work across personal scope chang
   await expect(context).toContainText('Dependency status unavailable · Tasks: 1');
   await page.getByRole('tab', { name: /My assignments/ }).click();
   await expect(context).toContainText('Dependency status unavailable · Tasks: 1');
-  await expect(page.getByRole('button').filter({ hasText: 'Assigned dependency task' })).not.toContainText('Dependency status unavailable');
+  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).not.toContainText('Dependency status unavailable');
   await expect(page.getByRole('button').filter({ hasText: 'Creator visible predecessor' })).toHaveCount(0);
 });
