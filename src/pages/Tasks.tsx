@@ -10,6 +10,7 @@ import { ArrowLeft, Building2, ExternalLink, Search, Paperclip, MoreHorizontal, 
 import { format } from 'date-fns/format';
 import { Priority, Task } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
+import SideSheet from '../components/SideSheet';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
@@ -44,7 +45,7 @@ const CLIENT_BOARD_COLUMNS = [
 ] as const;
 
 const PRIORITY_OPTIONS: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 20;
 const normalizeClientName = (value: string) => value.trim().toLowerCase();
 
 const statusColors: Record<string, string> = {
@@ -69,10 +70,10 @@ const priorityText: Record<Priority, string> = {
 const NextStepText: React.FC<{ task: Task }> = ({ task }) => {
   const { t } = useI18n();
   const nextStep = useTaskNextStep(task);
-  return nextStep ? <div className="mt-1 text-xs font-semibold text-accent">{t('Next')}: {t(nextStep)}</div> : null;
+  return nextStep ? <div className="mt-1 text-xs font-semibold text-ink"><span className="font-medium text-muted">{t('Next')}:</span> {t(nextStep)}</div> : null;
 };
 
-const TasksWorkspace: React.FC = () => {
+const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }) => {
   const { locale, t } = useI18n();
   const today = useLocalToday();
   const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation, serviceCycles, deliverables } = useStore(useShallow(state => ({
@@ -476,6 +477,8 @@ const TasksWorkspace: React.FC = () => {
           ? t('Track your company work, review deliverables, and share feedback.')
           : t('Active assignments, reviews, and deadlines across the agency.')}
         onboardingTarget="tasks-overview"
+        hideDescriptionOnMobile
+        meta={viewsSlot}
         action={canCreateTasks(currentUser, rolePermissions) ? (
           <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
             <Plus className="h-4 w-4" />
@@ -674,7 +677,7 @@ const TasksWorkspace: React.FC = () => {
             </div>
 
             {/* View Toggle */}
-            <div className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-white p-1 sm:ml-auto" role="group" aria-label={t('Task view')}>
+            <div className="flex w-fit shrink-0 items-center rounded-control border border-line bg-surface p-1 md:ml-auto" role="group" aria-label={t('Task view')}>
               <button
                 type="button"
                 onClick={() => setViewType('table')}
@@ -704,17 +707,9 @@ const TasksWorkspace: React.FC = () => {
               </button>
             </div>
 
-            <Button
-              variant="secondary"
-              onClick={() => setFiltersOpen(value => !value)}
-              className="justify-between lg:hidden"
-              aria-expanded={filtersOpen}
-            >
-              <span className="inline-flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4" />
-                {t('Filters')} {activeFilterLabels.length > 0 && `(${activeFilterLabels.length})`}
-              </span>
-              <ChevronDown className={cn('w-4 h-4 transition-transform', filtersOpen && 'rotate-180')} />
+            <Button variant="secondary" onClick={() => setFiltersOpen(true)} aria-haspopup="dialog">
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+              {t('Filters')}{activeFilterLabels.length > 0 ? ` · ${activeFilterLabels.length}` : ''}
             </Button>
 
             {hasAnyFilter && (
@@ -730,54 +725,6 @@ const TasksWorkspace: React.FC = () => {
             </div>
           )}
 
-          <div className={cn('grid-cols-1 gap-3 sm:grid-cols-2', isClientUser ? 'lg:grid-cols-3' : 'lg:grid-cols-4', filtersOpen ? 'grid' : 'hidden lg:grid')}>
-            {!isClientUser && <div className="relative">
-              <select aria-label={t('Filter by department')} value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">{t('All departments')}</option>
-                {departmentOptions.map(dept => <option key={dept} value={dept}>{getLocalizedDepartment(dept, locale)}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            {!isClientUser && <div className="relative">
-              <select
-                aria-label={t('Filter by assignee')}
-                value={filterAssignee}
-                onChange={(e) => {
-                  setFilterAssignee(e.target.value);
-                }}
-                className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}
-              >
-                <option value="All">{t('All assignees')}</option>
-                {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            {!isClientUser && <div className="relative">
-              <select aria-label={t('Filter by client')} value={filterClient} onChange={(e) => {
-                setFilterClient(e.target.value);
-              }} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">{t('All clients')}</option>
-                {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            {!isClientUser && <div className="relative">
-              <select aria-label={t('Filter by status')} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">{t('All statuses')}</option>
-                {[...new Set([...taskStatuses, 'Approved'])].map(status => <option key={status} value={status}>{getLocalizedTaskStatus(status, locale)}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            {!isClientUser && <div className="relative">
-              <select aria-label={t('Filter by priority')} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">{t('All priorities')}</option>
-                {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{getLocalizedPriority(priority, locale)}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due from')} />
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due to')} />
-          </div>
         </div>
 
         {viewType === 'table' ? (
@@ -1021,6 +968,63 @@ const TasksWorkspace: React.FC = () => {
         )}
       </div>
 
+      <SideSheet
+        isOpen={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title={t('Filter visible work')}
+        description={t('Choose which work to show.')}
+        footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={clearAllFilters}>{t('Clear')}</Button><Button className="flex-1" onClick={() => setFiltersOpen(false)}>{t('Show')} {filteredTasks.length}</Button></div>}
+      >
+              <div className="grid grid-cols-1 gap-4">
+                {!isClientUser && <div className="relative">
+                  <select aria-label={t('Filter by department')} value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                    <option value="All">{t('All departments')}</option>
+                    {departmentOptions.map(dept => <option key={dept} value={dept}>{getLocalizedDepartment(dept, locale)}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                {!isClientUser && <div className="relative">
+                  <select
+                    aria-label={t('Filter by assignee')}
+                    value={filterAssignee}
+                    onChange={(e) => {
+                      setFilterAssignee(e.target.value);
+                    }}
+                    className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}
+                  >
+                    <option value="All">{t('All assignees')}</option>
+                    {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                {!isClientUser && <div className="relative">
+                  <select aria-label={t('Filter by client')} value={filterClient} onChange={(e) => {
+                    setFilterClient(e.target.value);
+                  }} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                    <option value="All">{t('All clients')}</option>
+                    {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                {!isClientUser && <div className="relative">
+                  <select aria-label={t('Filter by status')} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                    <option value="All">{t('All statuses')}</option>
+                    {[...new Set([...taskStatuses, 'Approved'])].map(status => <option key={status} value={status}>{getLocalizedTaskStatus(status, locale)}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                {!isClientUser && <div className="relative">
+                  <select aria-label={t('Filter by priority')} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                    <option value="All">{t('All priorities')}</option>
+                    {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{getLocalizedPriority(priority, locale)}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due from')} />
+                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due to')} />
+              </div>
+      </SideSheet>
+
       <TaskDetailsModal
         isOpen={!!selectedTask}
         onClose={() => {
@@ -1151,10 +1155,8 @@ const Tasks: React.FC = () => {
   const backendMode = useStore(state => state.backend.mode);
   if (currentUser?.role === 'Client') return <ClientDeliveries />;
   const key = currentUser ? taskPreferencesKey(currentUser, backendMode) : '';
-  return <>
-    {currentUser && <PersonalTaskViews key={key} storageKey={key} supportsBoard={isBossKoo(currentUser)} />}
-    {currentUser && !isBossKoo(currentUser) ? <StaffAllWork /> : <TasksWorkspace />}
-  </>;
+  const views = currentUser ? <PersonalTaskViews key={key} storageKey={key} supportsBoard={isBossKoo(currentUser)} /> : null;
+  return currentUser && !isBossKoo(currentUser) ? <StaffAllWork viewsSlot={views} /> : <TasksWorkspace viewsSlot={views} />;
 };
 
 export default Tasks;

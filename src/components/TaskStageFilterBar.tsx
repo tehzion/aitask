@@ -68,7 +68,7 @@ const TaskStageFilterBar: React.FC<TaskStageFilterBarProps> = ({ value, counts, 
             aria-pressed={filter.active}
             onClick={filter.onToggle}
             className={cn(
-              'min-h-9 rounded-full border px-3 text-xs font-semibold transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+              'min-h-10 rounded-full border px-3 text-xs font-semibold transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
               filter.active ? 'border-ink bg-ink text-canvas' : 'border-line bg-surface text-muted hover:text-ink',
             )}
           >

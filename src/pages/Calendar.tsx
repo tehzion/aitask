@@ -1341,7 +1341,7 @@ const Calendar: React.FC = () => {
           panelClassName="max-w-md"
         >
           <div className={panelHeader}>
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center text-muted">
               <CalendarRange className="h-5 w-5" aria-hidden="true" />
             </div>
             <div className="min-w-0 flex-1">

@@ -113,8 +113,8 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
       </dl>
       {flags.length > 0 && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{flags.join(' · ')}</p>}
       {nextStep && <div className="mt-1 flex items-center justify-between gap-3 border-t border-line/60 pt-2.5">
-        <span className="text-sm font-semibold text-accent">{t('Next')}: {t(nextStep)}</span>
-        <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted transition-transform duration-160 group-hover:translate-x-0.5" />
+        <span className="text-sm font-semibold text-ink"><span className="font-medium text-muted">{t('Next')}:</span> {t(nextStep)}</span>
+        <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted transition-transform duration-160 group-hover:translate-x-0.5 group-hover:text-ink" />
       </div>}
     </article>
   );

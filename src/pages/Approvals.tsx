@@ -1232,7 +1232,7 @@ const Approvals: React.FC = () => {
       <div className={`${cardBase} min-w-0 overflow-hidden`}>
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/80 px-4 py-4 sm:px-5">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center text-muted">
               <UserPlus className="h-5 w-5" aria-hidden="true" />
             </span>
             <div className="min-w-0">

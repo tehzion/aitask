@@ -9,7 +9,7 @@ import {
 import { isSameDay } from 'date-fns/isSameDay';
 import { isWithinInterval } from 'date-fns/isWithinInterval';
 import { isBefore } from 'date-fns/isBefore';
-import { AlertCircle, LayoutList, ArrowRight, Plus, FolderKanban, Users } from 'lucide-react';
+import { ArrowRight, Plus, FolderKanban } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
@@ -589,10 +589,10 @@ const Dashboard: React.FC = () => {
           <>
             <SegmentedTabs<BossTab>
               items={[
-                { id: 'overview' as const, label: t('Overview'), icon: LayoutList },
-                { id: 'portfolio' as const, label: t('Portfolio'), icon: FolderKanban },
-                { id: 'pulse' as const, label: t('Agency pulse'), icon: AlertCircle },
-                { id: 'workload' as const, label: t('Team workload'), icon: Users },
+                { id: 'overview' as const, label: t('Overview') },
+                { id: 'portfolio' as const, label: t('Portfolio') },
+                { id: 'pulse' as const, label: t('Agency pulse') },
+                { id: 'workload' as const, label: t('Team workload') },
               ]}
               value={bossTab}
               onChange={setBossTab}

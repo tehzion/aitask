@@ -13,9 +13,9 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import { cardBase } from './uiTokens';
 
 const severityStyles = {
-  critical: { icon: AlertTriangle, className: 'bg-red-50 text-red-700' },
-  attention: { icon: Clock3, className: 'bg-amber-50 text-amber-700' },
-  information: { icon: Info, className: 'bg-blue-50 text-blue-700' },
+  critical: { icon: AlertTriangle, className: 'text-red-700 dark:text-red-300' },
+  attention: { icon: Clock3, className: 'text-amber-700 dark:text-amber-300' },
+  information: { icon: Info, className: 'text-muted' },
 } as const;
 
 type Translate = ReturnType<typeof useI18n>['t'];
@@ -116,7 +116,7 @@ const NeedsMyAttention: React.FC<NeedsMyAttentionProps> = ({ excludeProjectRisks
           const dueDate = parseOptionalDate(item.dueDate);
           return (
             <Link key={item.id} to={item.to} className="group flex items-start gap-3 px-5 py-3 transition-colors hover:bg-inset/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/35">
-              <span className={cn('mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-control', style.className)}><Icon className="h-3.5 w-3.5" aria-hidden="true" /><span className="sr-only">{t(item.severity === 'critical' ? 'Critical' : item.severity === 'attention' ? 'Attention' : 'Information')}</span></span>
+              <span className={cn('mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center', style.className)}><Icon className="h-4 w-4" aria-hidden="true" /><span className="sr-only">{t(item.severity === 'critical' ? 'Critical' : item.severity === 'attention' ? 'Attention' : 'Information')}</span></span>
               <span className="min-w-0 flex-1">
                 <span data-i18n-skip className="block truncate text-sm font-semibold text-ink">{item.subject}</span>
                 <span className="mt-1 block truncate text-xs text-muted">{item.context ? <span data-i18n-skip>{item.context}</span> : null}{item.context && describeItem(item, t) ? ' · ' : ''}{describeItem(item, t)}{dueDate ? ` · ${formatLocalizedDate(dueDate, locale)}` : ''}</span>

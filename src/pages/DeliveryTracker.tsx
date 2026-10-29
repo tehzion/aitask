@@ -247,7 +247,7 @@ const DeliveryTracker: React.FC = () => {
               )}
             </div>
             <div className="flex flex-wrap gap-2" aria-label={t('Filter tracker status')}>
-              {STATUS_FILTERS.map(filter => <button key={filter.id} type="button" aria-pressed={statusFilter === filter.id} onClick={() => setStatusFilter(filter.id)} className={cn('min-h-11 rounded-control px-3 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35', statusFilter === filter.id ? 'bg-accent text-white dark:text-[rgb(var(--calm-accent-ink))]' : 'bg-surface text-muted ring-1 ring-line hover:bg-inset hover:text-ink')}>{t(filter.label)}</button>)}
+              {STATUS_FILTERS.map(filter => <button key={filter.id} type="button" aria-pressed={statusFilter === filter.id} onClick={() => setStatusFilter(filter.id)} className={cn('min-h-10 rounded-full border px-3 text-xs font-semibold transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40', statusFilter === filter.id ? 'border-ink bg-ink text-canvas' : 'border-line bg-surface text-muted hover:text-ink')}>{t(filter.label)}</button>)}
             </div>
           </div>
         </div>

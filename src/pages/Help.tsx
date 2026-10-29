@@ -126,7 +126,7 @@ const Help: React.FC = () => {
       <section className="grid gap-4 lg:grid-cols-[1.05fr_1.95fr]" aria-labelledby="help-role-guide-title">
         <Surface className="overflow-hidden p-5 sm:p-6">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"><CircleHelp className="h-5 w-5" aria-hidden="true" /></div>
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center text-muted"><CircleHelp className="h-5 w-5" aria-hidden="true" /></div>
             <div>
               <p className="calm-eyebrow">{t('Matched to your access')}</p>
               <h2 id="help-role-guide-title" className="mt-1 text-xl font-semibold tracking-[-0.03em] text-ink">{roleGuide.title}</h2>
@@ -245,7 +245,7 @@ const Help: React.FC = () => {
       </section>
 
       {visibleWorkflowGuides.length > 0 && <section className="rounded-panel bg-surface p-5 ring-1 ring-line/80 sm:p-6" aria-labelledby="workflow-guides-title">
-        <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"><GitBranch className="h-5 w-5" aria-hidden="true" /></div><div><p className="calm-eyebrow">{t('Practical scenarios')}</p><h2 id="workflow-guides-title" className="mt-1 text-xl font-semibold tracking-[-0.03em] text-ink">{t('Workflow learning guides')}</h2><p className="mt-1 text-sm leading-6 text-muted">{t('See who owns each handoff, what action is expected, and what outcome to check.')}</p></div></div>
+        <div className="flex items-start gap-3"><div className="flex h-6 w-6 shrink-0 items-center justify-center text-muted"><GitBranch className="h-5 w-5" aria-hidden="true" /></div><div><p className="calm-eyebrow">{t('Practical scenarios')}</p><h2 id="workflow-guides-title" className="mt-1 text-xl font-semibold tracking-[-0.03em] text-ink">{t('Workflow learning guides')}</h2><p className="mt-1 text-sm leading-6 text-muted">{t('See who owns each handoff, what action is expected, and what outcome to check.')}</p></div></div>
         <div className="mt-5 grid gap-4 xl:grid-cols-3">
           {visibleWorkflowGuides.map(guide => <details key={guide.id} className="group rounded-control border border-line/80 bg-inset/35 p-4 open:bg-surface">
             <summary className="cursor-pointer list-none text-base font-semibold text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{getLocalizedCopy(guide.title, locale)}<span className="mt-1 block text-sm font-normal leading-5 text-muted">{getLocalizedCopy(guide.summary, locale)}</span></summary>
@@ -260,14 +260,14 @@ const Help: React.FC = () => {
       <section className="grid gap-4 xl:grid-cols-[1.4fr_1fr]" aria-labelledby="help-workflow-title">
         <Surface className="overflow-hidden p-5 sm:p-6">
           <div className="flex items-start gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent"><Route className="h-5 w-5" aria-hidden="true" /></div>
+            <div className="flex h-6 w-6 shrink-0 items-center justify-center text-muted"><Route className="h-5 w-5" aria-hidden="true" /></div>
             <div><p className="calm-eyebrow">{t('Who owns the next step')}</p><h2 id="help-workflow-title" className="mt-1 text-xl font-semibold tracking-[-0.03em] text-ink">{workflow.title}</h2><p className="mt-1 text-sm leading-6 text-muted">{workflow.intro}</p></div>
           </div>
           <ol className="mt-6 grid gap-3">{workflow.stages.map(([title, body], index) => <li key={title} className="grid gap-3 rounded-control border border-line/70 bg-surface p-4 sm:grid-cols-[10rem_1fr] sm:items-start"><div className="flex items-center gap-2 text-sm font-semibold text-ink"><span className="calm-number text-xs text-accent">0{index + 1}</span>{title}</div><p className="text-sm leading-6 text-muted">{body}</p></li>)}</ol>
         </Surface>
 
         <Surface as="div" className="overflow-hidden p-5 sm:p-6">
-          <div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-amber-50 text-amber-700"><LockKeyhole className="h-5 w-5" aria-hidden="true" /></div><div><p className="calm-eyebrow">{t('Status controls assignment')}</p><h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-ink">{statuses.title}</h2></div></div>
+          <div className="flex items-start gap-3"><div className="flex h-6 w-6 shrink-0 items-center justify-center text-muted"><LockKeyhole className="h-5 w-5" aria-hidden="true" /></div><div><p className="calm-eyebrow">{t('Status controls assignment')}</p><h2 className="mt-1 text-xl font-semibold tracking-[-0.03em] text-ink">{statuses.title}</h2></div></div>
           <p className="mt-4 text-sm leading-6 text-muted">{statuses.intro}</p>
           <div className="mt-5 space-y-4"><div><p className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-700">{statuses.assignable.title}</p><div className="mt-2 flex flex-wrap gap-2">{statuses.assignable.items.map(item => <StatusChip key={item} tone="emerald" dot>{item}</StatusChip>)}</div></div><div><p className="text-xs font-semibold uppercase tracking-[0.08em] text-amber-700">{statuses.locked.title}</p><div className="mt-2 flex flex-wrap gap-2">{statuses.locked.items.map(item => <StatusChip key={item} tone="amber" dot>{item}</StatusChip>)}</div></div></div>
           <p className="mt-5 rounded-control bg-inset px-3 py-3 text-sm leading-5 text-muted">{statuses.note}</p>

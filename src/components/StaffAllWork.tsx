@@ -33,7 +33,7 @@ import TaskStageFilterBar from './TaskStageFilterBar';
 const legacyQueueStage: Record<string, TaskStageFilter> = { done: 'completed', waiting: 'review', up_next: 'todo' };
 const priorities: Priority[] = ['Urgent', 'High', 'Medium', 'Low'];
 
-const StaffAllWork: React.FC = () => {
+const StaffAllWork: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }) => {
   const { locale, t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users, serviceCycles, deliverables, setCreateTaskModalOpen } = useStore(useShallow(state => ({
@@ -192,7 +192,8 @@ const StaffAllWork: React.FC = () => {
         compact
         title={t(isProjectManager ? 'Portfolio work' : isDepartmentLead ? 'Department tasks' : 'All work')}
         description={t(isProjectManager ? 'Every task in your projects, ordered by risk and next action.' : isDepartmentLead ? 'Department and delegated tasks, including work awaiting your review.' : 'Your assigned and created tasks, ordered by next action.')}
-        meta={<span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>}
+        hideDescriptionOnMobile
+        meta={<><span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>{viewsSlot}</>}
         action={<div className="flex flex-wrap items-center gap-2">
           {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
           <Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />{t('Filters')}{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>
