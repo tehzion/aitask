@@ -68,6 +68,8 @@ import {
   canApproveRegistrations,
   canCreateTasks,
   canCreateUsers,
+  canHandOverClientProfile,
+  isClientHandoverTarget,
   canCreateClientProfiles,
   canDeleteClientProfile,
   canDeleteUser,
@@ -4101,10 +4103,16 @@ export const useStore = create<StoreState>()(
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const currentUser = state.currentUser;
-        if (!canCreateUsers(currentUser, state.rolePermissions)) {
-          return { ok: false, error: 'Only Boss Koo can assign a company owner.' };
-        }
         const client = state.clients.find(item => item.id === clientId);
+        if (!canCreateUsers(currentUser, state.rolePermissions)) {
+          if (!client || !canHandOverClientProfile(currentUser, client)) {
+            return { ok: false, error: 'Only Boss Koo or the company owner can change its owner.' };
+          }
+          // An owning Project Manager can only pass the company to another Project Manager.
+          if (!isClientHandoverTarget(state.users.find(user => user.id === ownerId), client.createdBy)) {
+            return { ok: false, error: 'Choose another Project Manager as the new owner.' };
+          }
+        }
         if (!client) return { ok: false, error: 'Company not found.' };
         const nextOwner = ownerId || undefined;
         if (nextOwner) {

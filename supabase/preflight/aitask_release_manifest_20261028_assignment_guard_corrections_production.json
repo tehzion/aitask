@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-10-28T00:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "Production verified through repository 20261028150000_hod_patch_empty_defaults. The 20261028 migrations were applied with the same versions on 2026-10-28; the earlier tail resolves through connector-generated migration aliases. 20261028160000_optional_task_output was applied to production on 2026-10-28 in one transaction and recorded with the same version.",
+  "status": "Production verified through repository 20261028150000_hod_patch_empty_defaults. The 20261028 migrations were applied with the same versions on 2026-10-28; the earlier tail resolves through connector-generated migration aliases. 20261028160000_optional_task_output was applied to production on 2026-10-28 in one transaction and recorded with the same version. 20261029120000_pm_company_handover was applied to production on 2026-10-29 in one transaction and recorded with the same version.",
   "validatedMigrationTail": [
     "20261021110000_monthly_plan_renewal_integrity",
     "20261023120000_pm_hod_staff_assignment_state",
@@ -16,12 +16,13 @@
     "20261028130000_service_command_guard_direct_writes",
     "20261028140000_task_stage_guard_corrections",
     "20261028150000_hod_patch_empty_defaults",
-    "20261028160000_optional_task_output"
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover"
   ],
   "pendingProductionMigrations": [],
   "productionVerification": {
     "historyAligned": false,
-    "historyThrough": "20261028160000_optional_task_output",
+    "historyThrough": "20261029120000_pm_company_handover",
     "migrationResolution": {
       "status": "connector_aliases_verified",
       "repositoryToProduction": [
@@ -68,6 +69,10 @@
         {
           "repository": "20261028160000_optional_task_output",
           "production": "20261028160000_optional_task_output"
+        },
+        {
+          "repository": "20261029120000_pm_company_handover",
+          "production": "20261029120000_pm_company_handover"
         }
       ]
     }
@@ -77,11 +82,13 @@
     "20261028130000_service_command_guard_direct_writes": "The service command entity-type guard checks only the command's own writes, not rows maintained by progress triggers, and workflow generation may record its task ids on its deliverable.",
     "20261028140000_task_stage_guard_corrections": "The responsible PM can complete a Waiting Approval task whose approval mode is none; Staff can create tasks that start in Pending; HODs are no longer limited to the ordinary Staff status action list.",
     "20261028150000_hod_patch_empty_defaults": "HOD saves are no longer rejected when the app fills absent fields with defaults or omits the server-kept accountableLeadId/reviewCover; real changes to restricted fields stay denied.",
-    "20261028160000_optional_task_output": "Output is optional when submitting any task, including deliverable-linked work; a supplied output link must still be a valid https URL without credentials."
+    "20261028160000_optional_task_output": "Output is optional when submitting any task, including deliverable-linked work; a supplied output link must still be a valid https URL without credentials.",
+    "20261029120000_pm_company_handover": "A Project Manager who owns a company may hand it to another non-admin Project Manager; Boss Koo can still assign any owner. Both the company guard trigger and the service command accept the handover."
   },
   "qualityGates": {
     "disposableSupabaseStack": "PASS (2026-10-28): CI=true pnpm verify:supabase:rollout — 77 pgTAP files / 1148 tests, storage, staff saves, HOD status, onboarding, workflow review gate, HOD output UI and security audit checks.",
     "productionApply": "APPLIED 2026-10-28 by the owner in the Supabase SQL Editor as one transaction, recorded in supabase_migrations.schema_migrations; live definitions of all six changed functions verified identical to the validated local stack, and the three entity write policies call aitask_can_mutate_entity.",
-    "optionalTaskOutputApply": "APPLIED 2026-10-28 to production in one transaction via the Supabase connector (anchors verified beforehand), recorded in supabase_migrations.schema_migrations as 20261028160000; CI database job passed on e5d6f4b."
+    "optionalTaskOutputApply": "APPLIED 2026-10-28 to production in one transaction via the Supabase connector (anchors verified beforehand), recorded in supabase_migrations.schema_migrations as 20261028160000; CI database job passed on e5d6f4b.",
+    "pmCompanyHandoverApply": "APPLIED 2026-10-29 to production in one transaction via the Supabase connector after a rolled-back dry run against the live definitions; recorded in supabase_migrations.schema_migrations as 20261029120000. Local stack: 78 pgTAP files / 1154 tests pass, including pm_company_handover."
   }
 }

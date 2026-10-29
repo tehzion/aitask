@@ -117,6 +117,36 @@ describe('client profile store authorization', () => {
     expect(useStore.getState().clients[0]?.createdBy).toBe(pm.id);
   });
 
+  it('lets an owning Project Manager hand the company to another Project Manager only', () => {
+    const boss: User = { id: 'boss-owner', name: 'Boss Koo', role: 'Project Manager', isSuperAdmin: true, departments: ['Management'], department: 'Management' };
+    const owner: User = { id: 'pm-ting', name: 'Ting Ting', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    const next: User = { id: 'pm-jing', name: 'Jing Yi', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    const hod: User = { id: 'hod-one', name: 'HOD One', role: 'HOD', departments: ['Designer'], department: 'Designer' };
+    useStore.setState({
+      ...initialState,
+      currentUser: next,
+      users: [boss, owner, next, hod],
+      clients: [{ id: 'CL-handover', clientName: 'Handover Co', createdBy: owner.id, createdAt: '', updatedAt: '' }],
+      tasks: [],
+      projects: [],
+      rolePermissions: [],
+    }, true);
+
+    // Another PM cannot take a company they do not own.
+    expect(useStore.getState().assignClientOwner('CL-handover', next.id).ok).toBe(false);
+
+    useStore.setState({ currentUser: owner });
+    expect(useStore.getState().assignClientOwner('CL-handover', boss.id).ok).toBe(false);
+    expect(useStore.getState().assignClientOwner('CL-handover', hod.id).ok).toBe(false);
+    expect(useStore.getState().assignClientOwner('CL-handover').ok).toBe(false);
+    expect(useStore.getState().clients[0]?.createdBy).toBe(owner.id);
+
+    expect(useStore.getState().assignClientOwner('CL-handover', next.id)).toEqual({ ok: true });
+    expect(useStore.getState().clients[0]?.createdBy).toBe(next.id);
+    // Once handed over, the previous owner can no longer change it.
+    expect(useStore.getState().assignClientOwner('CL-handover', owner.id).ok).toBe(false);
+  });
+
   it('treats a legacy Staff + built-in HOD member as an eligible company owner', () => {
     const boss: User = { id: 'boss-owner-legacy', name: 'Boss Koo', role: 'Project Manager', isSuperAdmin: true, departments: ['Management'], department: 'Management' };
     const legacyHod: User = { id: 'legacy-hod-owner', name: 'Legacy HOD', role: 'Staff', customRoleId: 'builtin-hod', departments: ['Designer'], department: 'Designer' };

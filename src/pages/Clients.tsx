@@ -20,7 +20,7 @@ import {
 } from 'lucide-react';
 import { Badge, Button, PageHeader, ProgressBar, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canEditProject, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo, isHodUser } from '../lib/access';
+import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canEditProject, canHandOverClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo, isClientHandoverTarget, isHodUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { resolveClientAddedDate } from '../lib/clientDates';
 import { cn } from '../lib/utils';
@@ -1220,7 +1220,7 @@ const Clients: React.FC = () => {
                 <section className="rounded-lg border border-slate-200 bg-white p-4">
                   <h3 className="text-sm font-bold text-slate-900">{t('Work Summary')}</h3>
                   <div className="mt-3 space-y-2 text-sm text-slate-600">
-                    {isBossKoo(currentUser) && selectedClient.profile && !selectedClient.profile.discovered && (
+                    {(isBossKoo(currentUser) || canHandOverClientProfile(currentUser, selectedClient.profile)) && selectedClient.profile && !selectedClient.profile.discovered && (
                       <p>
                         <span className="font-semibold text-slate-500">{t('Owner')}:</span>{' '}
                         <select
@@ -1230,8 +1230,11 @@ const Clients: React.FC = () => {
                           disabled={isSavingClient || Boolean(pendingClientChange) || upgradeRequired}
                           onChange={event => void saveClientOwner(event.target.value || undefined)}
                         >
-                          <option value="">{t('Unassigned')}</option>
-                          {users.filter(user => user.role === 'Project Manager' || isHodUser(user, rolePermissions)).sort((a, b) => a.name.localeCompare(b.name)).map(user => (
+                          {isBossKoo(currentUser) ? <option value="">{t('Unassigned')}</option> : <option value={currentUser?.id} data-i18n-skip>{currentUser?.name} · {t(getRoleDisplayName('Project Manager'))}</option>}
+                          {/* An owning Project Manager hands the company to another Project Manager; Boss Koo picks any PM or HOD. */}
+                          {users.filter(user => isBossKoo(currentUser)
+                            ? user.role === 'Project Manager' || isHodUser(user, rolePermissions)
+                            : isClientHandoverTarget(user, currentUser?.id)).sort((a, b) => a.name.localeCompare(b.name)).map(user => (
                             <option key={user.id} value={user.id}>{user.name} · {t(getRoleDisplayName(user.role))}</option>
                           ))}
                         </select>

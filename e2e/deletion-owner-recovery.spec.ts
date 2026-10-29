@@ -209,3 +209,35 @@ for (const action of ['owner', 'deletion'] as const) {
     expect(await successToasts(page)).toEqual([]);
   });
 }
+
+test('an owning Project Manager hands the company to another Project Manager', async ({ page }) => {
+  await seed(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const state = useStore.getState();
+    const owner = { id: 'handover-owner-pm', name: 'Ting Ting QA', role: 'Project Manager' as const, department: 'Management', departments: ['Management'] };
+    enablePasswordResetBypass(owner.id);
+    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${owner.id}`, 'acknowledged');
+    useStore.setState({
+      currentUser: { ...owner, mustResetPassword: false },
+      users: [...state.users, owner, { id: 'handover-next-pm', name: 'Jing Yi QA', role: 'Project Manager', department: 'Management', departments: ['Management'] },
+        { id: 'handover-hod', name: 'HOD QA', role: 'HOD', department: 'Designer', departments: ['Designer'] }],
+      clients: state.clients.map(client => ({ ...client, createdBy: owner.id })),
+      tasks: [], projects: [],
+    });
+  });
+  await page.goto('/projects');
+  await page.getByRole('row').filter({ hasText: 'Recovery QA Company' }).getByRole('button', { name: 'More actions' }).click();
+  await page.getByRole('menuitem', { name: 'Edit details', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Recovery QA Company', exact: true });
+  const owner = dialog.getByLabel('Owner', { exact: true });
+  await expect(owner).toHaveValue('handover-owner-pm');
+  // Only other Project Managers are offered: no Boss Koo, HOD or "Unassigned".
+  const options = await owner.locator('option').allTextContents();
+  expect(options.some(option => option.startsWith('Jing Yi QA'))).toBe(true);
+  expect(options.some(option => option.startsWith('HOD QA') || option.startsWith('Boss Koo') || option === 'Unassigned')).toBe(false);
+  await owner.selectOption('handover-next-pm');
+  await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().clients
+    .find(client => client.id === 'recovery-qa-client')?.createdBy)).toBe('handover-next-pm');
+});
