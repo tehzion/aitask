@@ -1,14 +1,16 @@
 import '../lib/actionFeedbackCopy';
+import '../lib/taskStageCopy';
 import SystemMessage from '../components/SystemMessage';
 import { getTaskProgress } from '../lib/taskProgress';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
 import { useShallow } from 'zustand/react/shallow';
-import { ArrowLeft, Building2, ExternalLink, Search, Filter, Paperclip, MoreHorizontal, CheckCircle2, X, CalendarClock, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
+import { ArrowLeft, Building2, ExternalLink, Search, Paperclip, MoreHorizontal, X, SlidersHorizontal, ChevronDown, Mail, MapPin, Phone, Plus } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { Priority, Task } from '../types';
 import TaskDetailsModal from '../components/TaskDetailsModal';
+import SideSheet from '../components/SideSheet';
 import { Link, useSearchParams } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
@@ -20,7 +22,12 @@ import { DEPARTMENTS } from '../lib/departments';
 import { assignableTaskAssignees } from '../lib/taskWorkflowAccess';
 import { getOperationsPeriod, isTaskOpen, isTaskOverdue, type TeamWorkloadPeriod } from '../lib/taskReporting';
 import { getClientTaskStage } from '../lib/clientPortal';
-import { getLocalizedDepartment, getLocalizedPriority, getLocalizedStatus } from '../lib/localeLabels';
+import { getLocalizedDepartment, getLocalizedPriority, getLocalizedTaskStatus } from '../lib/localeLabels';
+import { TaskCard, TaskStatusBadges } from '../components/TaskCard';
+import { useTaskNextStep } from '../hooks/useTaskNextStep';
+import { countTasksByStageFilter, isTaskInStageFilter, parseTaskStageFilter, type TaskStageFilter } from '../lib/taskStage';
+import TaskStageFilterBar from '../components/TaskStageFilterBar';
+import { buildStaffWorkQueue, isStaffGuidedActionEnabled } from '../lib/staffWorkspace';
 import { formatLocalizedDate } from '../lib/i18n';
 import StaffAllWork from '../components/StaffAllWork';
 import ClientDeliveries from '../components/ClientDeliveries';
@@ -29,7 +36,7 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import PersonalTaskViews from '../components/PersonalTaskViews';
 import { taskPreferencesKey } from '../lib/personalTaskViews';
-import { isTaskInListScope, parseTaskListScope, shouldApplyTaskListScope, TASK_LIST_SCOPE_PARAM } from '../lib/taskListScope';
+import { shouldApplyTaskListScope, TASK_LIST_SCOPE_PARAM } from '../lib/taskListScope';
 
 const CLIENT_BOARD_COLUMNS = [
   { value: 'active', label: 'In progress' },
@@ -38,7 +45,7 @@ const CLIENT_BOARD_COLUMNS = [
 ] as const;
 
 const PRIORITY_OPTIONS: Priority[] = ['Low', 'Medium', 'High', 'Urgent'];
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 20;
 const normalizeClientName = (value: string) => value.trim().toLowerCase();
 
 const statusColors: Record<string, string> = {
@@ -53,17 +60,23 @@ const getStatusColor = (status: string): string => {
   return statusColors[status] || 'bg-slate-100 text-slate-700 border border-slate-200';
 };
 
-const priorityColors: Record<Priority, string> = {
-  'Low': 'bg-slate-100 text-slate-700',
-  'Medium': 'bg-blue-50 text-blue-700',
-  'High': 'bg-amber-50 text-amber-800',
-  'Urgent': 'bg-red-50 text-red-700',
+const priorityText: Record<Priority, string> = {
+  'Low': 'text-muted',
+  'Medium': 'text-muted',
+  'High': 'font-semibold text-ink',
+  'Urgent': 'font-semibold text-red-700 dark:text-red-300',
 };
 
-const TasksWorkspace: React.FC = () => {
+const NextStepText: React.FC<{ task: Task }> = ({ task }) => {
+  const { t } = useI18n();
+  const nextStep = useTaskNextStep(task);
+  return nextStep ? <div className="mt-1 text-xs font-semibold text-ink"><span className="font-medium text-muted">{t('Next')}:</span> {t(nextStep)}</div> : null;
+};
+
+const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }) => {
   const { locale, t } = useI18n();
   const today = useLocalToday();
-  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation } = useStore(useShallow(state => ({
+  const { tasks: allTasks, clients: clientProfiles, users, projects, updateTaskPriority, updateTaskAssignee, currentUser, rolePermissions, backend, taskStatuses, setCreateTaskModalOpen, commitPendingMutation, serviceCycles, deliverables } = useStore(useShallow(state => ({
     tasks: state.tasks,
     clients: state.clients,
     users: state.users,
@@ -76,6 +89,8 @@ const TasksWorkspace: React.FC = () => {
     taskStatuses: state.taskStatuses,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
     commitPendingMutation: state.commitPendingMutation,
+    serviceCycles: state.serviceCycles,
+    deliverables: state.deliverables,
   })));
   const [activeQuickEdit, setActiveQuickEdit] = useState<{ taskId: string; x: number; y: number } | null>(null);
   const [quickSyncError, setQuickSyncError] = useState('');
@@ -159,7 +174,7 @@ const TasksWorkspace: React.FC = () => {
     ? requestedPeriod
     : '';
   const routeSearch = searchParams.get('search') || '';
-  const listScope = parseTaskListScope(searchParams.get(TASK_LIST_SCOPE_PARAM));
+  const listScope: TaskStageFilter = parseTaskStageFilter(searchParams.get(TASK_LIST_SCOPE_PARAM));
 
   const updateSearch = useCallback((value: string) => {
     const next = new URLSearchParams(searchParams);
@@ -266,7 +281,8 @@ const TasksWorkspace: React.FC = () => {
   }, [locale, periodRouteFilter, today]);
 
   const applyListScope = shouldApplyTaskListScope({ statusFilter: filterStatus, taskId: taskIdFilter });
-  const filteredTasks = useMemo(() => {
+  // Every filter except the stage tab, so each tab can show its own count.
+  const unscopedTasks = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
 
     return tasks.filter(task => {
@@ -306,11 +322,19 @@ const TasksWorkspace: React.FC = () => {
           ? task.status === 'Waiting Approval' && isTaskOpen(task)
           : true;
 
-      const matchesScope = isClientUser || !applyListScope || isTaskInListScope(task, listScope);
-
-      return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask && matchesRoutePeriod && matchesFocus && matchesScope;
+      return matchesSearch && matchesDept && matchesAssignee && matchesClient && matchesStatus && matchesPriority && matchesDateFrom && matchesDateTo && matchesProject && matchesTask && matchesRoutePeriod && matchesFocus;
     });
-  }, [applyListScope, assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, isClientUser, listScope, projectIdFilter, routeFocus, routePeriodBounds, searchTerm, taskIdFilter, tasks, users, today]);
+  }, [assigneeRouteFilter, clientRouteFilter, dateFrom, dateTo, filterAssignee, filterClient, filterDepartment, filterPriority, filterStatus, projectIdFilter, routeFocus, routePeriodBounds, searchTerm, taskIdFilter, tasks, users, today]);
+  // Needs action uses the same queue rules as the Staff, HOD and PM lists.
+  const needsActionIds = useMemo(() => new Set(buildStaffWorkQueue(unscopedTasks, format(today, 'yyyy-MM-dd'), {
+    isActionable: task => isStaffGuidedActionEnabled(task, taskStatuses, currentUser, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }),
+  }).needs_action.map(task => task.id)), [allTasks, clientProfiles, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, today, unscopedTasks, users]);
+  const needsActionOnly = searchParams.get('queue') === 'needs_action';
+  const chipTasks = useMemo(() => (needsActionOnly ? unscopedTasks.filter(task => needsActionIds.has(task.id)) : unscopedTasks), [needsActionIds, needsActionOnly, unscopedTasks]);
+  const stageCounts = useMemo(() => countTasksByStageFilter(chipTasks), [chipTasks]);
+  const filteredTasks = useMemo(() => (
+    isClientUser || !applyListScope ? chipTasks : chipTasks.filter(task => isTaskInStageFilter(task, listScope))
+  ), [applyListScope, chipTasks, isClientUser, listScope]);
 
   const totalPages = Math.max(1, Math.ceil(filteredTasks.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -372,8 +396,8 @@ const TasksWorkspace: React.FC = () => {
       ? 'Leave feedback'
       : 'View details';
   const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, activeQuickTask);
-  const TABLE_COLUMN_COUNT = isClientUser ? 5 : 8;
-  const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter, routeFocus].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
+  const TABLE_COLUMN_COUNT = isClientUser ? 4 : 6;
+  const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter, routeFocus, needsActionOnly].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
   const activeFilterLabels = [
     searchTerm && `Search: ${searchTerm}`,
     filterDepartment !== 'All' && filterDepartment,
@@ -392,9 +416,13 @@ const TasksWorkspace: React.FC = () => {
     periodRouteFilter && (periodRouteFilter === 'today' ? 'Today' : periodRouteFilter === 'week' ? 'This week' : 'Overall'),
   ].filter((label): label is string => Boolean(label));
 
-  const emptyListMessage = !hasAnyFilter && applyListScope && listScope === 'active'
-    ? 'No active tasks. Completed work stays under Completed.'
-    : 'No tasks found matching your criteria.';
+  const emptyListMessage = tasks.length === 0
+    ? 'No tasks assigned yet.'
+    : hasAnyFilter
+      ? 'No tasks match your filters.'
+      : listScope === 'active'
+        ? 'No active tasks. Completed work stays under Completed.'
+        : 'No tasks in this stage.';
 
   const clearRouteFilter = (key: string) => {
     const next = new URLSearchParams(searchParams);
@@ -402,14 +430,23 @@ const TasksWorkspace: React.FC = () => {
     setSearchParams(next, { replace: true });
   };
 
-  const applyQuickFilter = (value: 'active' | 'today' | 'overdue' | 'waiting' | 'completed' | 'all') => {
+  // Stage tabs and deadline chips are independent: a task can be In progress and Overdue.
+  const applyStageFilter = (value: TaskStageFilter) => {
     const next = new URLSearchParams(searchParams);
-    next.delete('focus');
-    next.delete('period');
-    ['dueFrom', 'dueTo', 'status', TASK_LIST_SCOPE_PARAM].forEach(key => next.delete(key));
-    if (value === 'today') next.set('period', 'today');
-    else if (value === 'overdue' || value === 'waiting') next.set('focus', value);
-    else if (value === 'completed' || value === 'all') next.set(TASK_LIST_SCOPE_PARAM, value);
+    next.delete('status');
+    if (routeFocus === 'waiting') next.delete('focus');
+    if (value === 'active') next.delete(TASK_LIST_SCOPE_PARAM);
+    else next.set(TASK_LIST_SCOPE_PARAM, value);
+    setSearchParams(next, { replace: true });
+    setPage(1);
+  };
+
+  const toggleDeadlineFilter = (value: 'today' | 'overdue') => {
+    const isOn = value === 'today' ? periodRouteFilter === 'today' : routeFocus === 'overdue';
+    const next = new URLSearchParams(searchParams);
+    ['focus', 'period', 'dueFrom', 'dueTo'].forEach(key => next.delete(key));
+    if (!isOn && value === 'today') next.set('period', 'today');
+    if (!isOn && value === 'overdue') next.set('focus', 'overdue');
     setSearchParams(next, { replace: true });
     setPage(1);
   };
@@ -427,9 +464,9 @@ const TasksWorkspace: React.FC = () => {
   };
 
   const renderStatusControl = (task: Task) => (
-    <span className={`inline-flex text-xs px-2.5 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
-      {isClientUser ? t(clientStatusLabel(task)) : getLocalizedStatus(task.status, locale)}
-    </span>
+    isClientUser
+      ? <span className={`inline-flex text-xs px-2.5 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>{t(clientStatusLabel(task))}</span>
+      : <TaskStatusBadges task={task} />
   );
 
   return (
@@ -440,6 +477,8 @@ const TasksWorkspace: React.FC = () => {
           ? t('Track your company work, review deliverables, and share feedback.')
           : t('Active assignments, reviews, and deadlines across the agency.')}
         onboardingTarget="tasks-overview"
+        hideDescriptionOnMobile
+        meta={viewsSlot}
         action={canCreateTasks(currentUser, rolePermissions) ? (
           <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
             <Plus className="h-4 w-4" />
@@ -523,11 +562,8 @@ const TasksWorkspace: React.FC = () => {
                   <ArrowLeft className="h-4 w-4" /> {t('Back to Delivery tracker')}
                 </Link>
                 <div className="flex items-start gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white shadow-sm">
-                    <Building2 className="h-5 w-5" />
-                  </div>
                   <div className="min-w-0">
-                    <p className="text-xs font-medium text-blue-700">{t('Client task view')}</p>
+                    <p className="text-xs font-medium text-muted">{t('Client task view')}</p>
                     <h2 data-i18n-skip className="mt-1 truncate text-xl font-bold text-slate-950">{activeClient}</h2>
                     <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">
                       {activeClientProfile?.contactPerson || activeClientFallbackDetails ? <span data-i18n-skip>{activeClientProfile?.contactPerson || activeClientFallbackDetails}</span> : t('No saved contact person yet.')}
@@ -608,45 +644,18 @@ const TasksWorkspace: React.FC = () => {
       )}
 
       <div className={`${tableShell} flex flex-col`}>
-        <div className="space-y-4 border-b border-slate-200 bg-slate-50/70 p-4">
+        <div className="space-y-4 border-b border-line bg-inset/60 p-4">
           {!isClientUser && (
-            <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t('Quick task filters')}>
-              {([
-                ['active', t('Active work')],
-                ['today', t('Due today')],
-                ['overdue', t('Overdue')],
-                ['waiting', t('Waiting approval')],
-                ['completed', t('Completed')],
-                ['all', t('All tasks')],
-              ] as const).map(([value, label]) => {
-                const noFocus = !routeFocus && !periodRouteFilter && !dateFrom && !dateTo && filterStatus === 'All';
-                const isActive = value === 'active'
-                  ? noFocus && listScope === 'active'
-                  : value === 'completed' || value === 'all'
-                    ? noFocus && listScope === value
-                  : value === 'today'
-                    ? periodRouteFilter === 'today' || (!routeFocus && dateFrom === format(today, 'yyyy-MM-dd') && dateTo === format(today, 'yyyy-MM-dd'))
-                    : value === 'overdue'
-                      ? routeFocus === 'overdue'
-                      : routeFocus === 'waiting' || (!routeFocus && filterStatus === 'Waiting Approval');
-                return (
-                  <button
-                    key={value}
-                    type="button"
-                    aria-pressed={isActive}
-                    onClick={() => applyQuickFilter(value)}
-                    className={cn(
-                      'rounded-full border px-3 py-1 text-xs font-semibold transition-colors',
-                      isActive
-                        ? 'border-accent bg-accent text-white'
-                        : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300 hover:bg-slate-50',
-                    )}
-                  >
-                    {label}
-                  </button>
-                );
-              })}
-            </div>
+            <TaskStageFilterBar
+              value={applyListScope ? listScope : null}
+              counts={stageCounts}
+              onChange={applyStageFilter}
+              quickFilters={[
+                { id: 'needs_action', label: t('Needs action'), active: needsActionOnly, count: needsActionIds.size, onToggle: () => setFilter('queue', needsActionOnly ? '' : 'needs_action') },
+                { id: 'today', label: t('Due today'), active: periodRouteFilter === 'today' || (!routeFocus && dateFrom === format(today, 'yyyy-MM-dd') && dateTo === format(today, 'yyyy-MM-dd')), onToggle: () => toggleDeadlineFilter('today') },
+                { id: 'overdue', label: t('Overdue'), active: routeFocus === 'overdue', onToggle: () => toggleDeadlineFilter('overdue') },
+              ]}
+            />
           )}
           <div className="flex flex-col lg:flex-row gap-3 lg:items-center">
             <div className="relative w-full lg:max-w-sm">
@@ -663,13 +672,12 @@ const TasksWorkspace: React.FC = () => {
               />
             </div>
 
-            <div className="flex items-center gap-2 text-sm text-slate-500">
-              <Filter className="w-4 h-4" />
-              <span>{filteredTasks.length} {filteredTasks.length === 1 ? t('matching task') : t('matching tasks')}</span>
+            <div className="text-sm text-muted" aria-live="polite">
+              {filteredTasks.length} {filteredTasks.length === 1 ? t('matching task') : t('matching tasks')}
             </div>
 
             {/* View Toggle */}
-            <div className="flex shrink-0 items-center rounded-lg border border-slate-200 bg-white p-1 sm:ml-auto" role="group" aria-label={t('Task view')}>
+            <div className="flex w-fit shrink-0 items-center rounded-control border border-line bg-surface p-1 md:ml-auto" role="group" aria-label={t('Task view')}>
               <button
                 type="button"
                 onClick={() => setViewType('table')}
@@ -677,8 +685,8 @@ const TasksWorkspace: React.FC = () => {
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
                   viewType === 'table'
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-600 hover:bg-slate-50"
+                    ? "bg-inset text-ink ring-1 ring-line"
+                    : "text-muted hover:text-ink"
                 )}
               >
                 {t('Table')}
@@ -691,25 +699,17 @@ const TasksWorkspace: React.FC = () => {
                 className={cn(
                   "rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
                   viewType === 'board'
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "text-slate-600 hover:bg-slate-50"
+                    ? "bg-inset text-ink ring-1 ring-line"
+                    : "text-muted hover:text-ink"
                 )}
               >
                 {t('Board')}
               </button>
             </div>
 
-            <Button
-              variant="secondary"
-              onClick={() => setFiltersOpen(value => !value)}
-              className="justify-between lg:hidden"
-              aria-expanded={filtersOpen}
-            >
-              <span className="inline-flex items-center gap-2">
-                <SlidersHorizontal className="w-4 h-4" />
-                {t('Filters')} {activeFilterLabels.length > 0 && `(${activeFilterLabels.length})`}
-              </span>
-              <ChevronDown className={cn('w-4 h-4 transition-transform', filtersOpen && 'rotate-180')} />
+            <Button variant="secondary" onClick={() => setFiltersOpen(true)} aria-haspopup="dialog">
+              <SlidersHorizontal className="h-4 w-4" aria-hidden="true" />
+              {t('Filters')}{activeFilterLabels.length > 0 ? ` · ${activeFilterLabels.length}` : ''}
             </Button>
 
             {hasAnyFilter && (
@@ -725,163 +725,80 @@ const TasksWorkspace: React.FC = () => {
             </div>
           )}
 
-          <div className={cn('grid-cols-1 gap-3 sm:grid-cols-2', isClientUser ? 'lg:grid-cols-3' : 'lg:grid-cols-4', filtersOpen ? 'grid' : 'hidden lg:grid')}>
-            {!isClientUser && <div className="relative">
-              <select aria-label={t('Filter by department')} value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">{t('All departments')}</option>
-                {departmentOptions.map(dept => <option key={dept} value={dept}>{getLocalizedDepartment(dept, locale)}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            {!isClientUser && <div className="relative">
-              <select
-                aria-label={t('Filter by assignee')}
-                value={filterAssignee}
-                onChange={(e) => {
-                  setFilterAssignee(e.target.value);
-                }}
-                className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}
-              >
-                <option value="All">{t('All assignees')}</option>
-                {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            {!isClientUser && <div className="relative">
-              <select aria-label={t('Filter by client')} value={filterClient} onChange={(e) => {
-                setFilterClient(e.target.value);
-              }} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">{t('All clients')}</option>
-                {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            {!isClientUser && <div className="relative">
-              <select aria-label={t('Filter by status')} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">{t('All statuses')}</option>
-                {[...new Set([...taskStatuses, 'Approved'])].map(status => <option key={status} value={status}>{getLocalizedStatus(status, locale)}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            {!isClientUser && <div className="relative">
-              <select aria-label={t('Filter by priority')} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
-                <option value="All">{t('All priorities')}</option>
-                {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{getLocalizedPriority(priority, locale)}</option>)}
-              </select>
-              <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
-            </div>}
-            <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due from')} />
-            <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due to')} />
-          </div>
         </div>
 
         {viewType === 'table' ? (
           <>
-            <div className="hidden overflow-x-auto 2xl:block">
-	              <table className={cn('w-full text-left text-sm text-slate-500', isClientUser ? 'min-w-[820px]' : 'min-w-[1020px]')}>
-                <thead className="text-xs text-slate-700 bg-slate-50 border-b border-slate-200">
+            <div className="hidden overflow-x-auto xl:block">
+              <table className="w-full min-w-[960px] text-left text-sm text-muted">
+                <thead className="border-b border-line bg-inset/60 text-xs text-muted">
                   <tr>
-                    <th className="px-3 py-3 font-semibold">{t('Task Details')}</th>
-	                    {!isClientUser && <th className="px-3 py-3 font-semibold">{t('Client / Company')}</th>}
-	                    {!isClientUser && <th className="px-3 py-3 font-semibold">{t('Department')}</th>}
-	                    <th className="px-3 py-3 font-semibold">{t('Timeline')}</th>
-	                    {!isClientUser && <th className="w-[100px] px-3 py-3 text-center font-semibold">{t('Priority')}</th>}
-	                    <th className="w-[130px] px-3 py-3 text-center font-semibold">{t('Status')}</th>
-	                    <th className="px-3 py-3 text-center font-semibold">{t('Progress')}</th>
-	                    <th className="px-3 py-3 font-semibold">{isClientUser ? t('Contact / Action') : t('Actions')}</th>
+                    <th scope="col" className="px-4 py-3 font-semibold">{t('Task')}</th>
+                    {!isClientUser && <th scope="col" className="px-3 py-3 font-semibold">{t('Assigned to')}</th>}
+                    <th scope="col" className="px-3 py-3 font-semibold">{t('Due')}</th>
+                    {!isClientUser && <th scope="col" className="px-3 py-3 font-semibold">{t('Priority')}</th>}
+                    <th scope="col" className="px-3 py-3 font-semibold">{t('Status')}</th>
+                    <th scope="col" className="w-12 px-3 py-3 font-semibold"><span className="sr-only">{isClientUser ? t('Contact / Action') : t('Actions')}</span></th>
                   </tr>
                 </thead>
-                <tbody>
+                <tbody className="divide-y divide-line/70">
                   {backend?.isLoading ? (
                     Array.from({ length: PAGE_SIZE }).map((_, i) => <SkeletonTableRow key={i} />)
                   ) : (
                     pagedTasks.map((task) => {
-                      const startDateParsed = parseOptionalDate(task.startDate);
                       const dueDateParsed = parseOptionalDate(task.dueDate);
                       const isOverdue = isTaskOverdue(task, today);
+                      const attachment = task.attachmentLink ? safeHttpsUrl(task.attachmentLink) : undefined;
 
                       return (
                         <tr
                           key={task.id}
-                          className={cn(
-                            "border-b border-slate-100 hover:bg-slate-50 transition-colors cursor-pointer text-slate-700",
-                            isOverdue ? "bg-red-50/50 hover:bg-red-100/50 border-red-100/70" : "bg-white"
-                          )}
+                          className="cursor-pointer bg-surface text-ink transition-colors duration-160 hover:bg-inset/60"
                           onClick={() => setSelectedTask(task)}
                           onContextMenu={(e) => handleRowContextMenu(e, task)}
                         >
-                          <td className="max-w-[200px] px-3 py-3">
-                            <div data-i18n-skip className={cn("font-semibold truncate", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
-                            <div data-i18n-skip className="text-xs text-slate-500 mt-0.5">{task.id} - {task.serviceType}</div>
+                          <td className="max-w-[26rem] px-4 py-3">
+                            <div data-i18n-skip className="truncate text-xs font-medium text-muted">{task.clientName}{task.projectName ? ` · ${task.projectName}` : ''}{!isClientUser && task.department ? ` · ${getLocalizedDepartment(task.department, locale)}` : ''}</div>
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); setSelectedTask(task); }}
+                              className="mt-0.5 block max-w-full truncate text-left font-semibold text-ink hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                            ><span data-i18n-skip>{task.title}</span></button>
+                            {!isClientUser && <NextStepText task={task} />}
                           </td>
-	                          {!isClientUser && <td className="max-w-[150px] px-3 py-3">
-                            <div data-i18n-skip className="font-medium text-slate-800 truncate">{task.clientName}</div>
-                            <div data-i18n-skip className="text-xs text-slate-500 truncate mt-0.5">{task.projectName || t('Independent task')}</div>
-	                          </td>}
-	                          {!isClientUser && <td className="whitespace-nowrap px-3 py-3">
-                            <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-md font-medium border border-slate-200">{getLocalizedDepartment(task.department, locale)}</span>
-	                          </td>}
-                          <td className="whitespace-nowrap px-3 py-3 text-xs">
-                            <div className="text-slate-500 mb-0.5">{t('Start')}: {startDateParsed ? formatLocalizedDate(startDateParsed, locale) : t('common.noStartDate')}</div>
-                            <div
-                              className={cn("font-medium", isOverdue ? "text-red-700 font-bold" : "text-slate-800")}
+                          {!isClientUser && <td className="whitespace-nowrap px-3 py-3">
+                            <span data-i18n-skip className="text-sm">{task.assignedTo ? getUserName(task.assignedTo) : t('Unassigned')}</span>
+                          </td>}
+                          <td className="whitespace-nowrap px-3 py-3">
+                            <span
+                              className={cn('text-sm', isOverdue ? 'font-semibold text-red-700 dark:text-red-300' : 'text-ink')}
                               title={dueDateParsed ? `${t('Due')}: ${formatLocalizedDate(dueDateParsed, locale)}` : t('common.noDueDate')}
                             >
                               {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
-                            </div>
+                            </span>
                           </td>
-	                          {!isClientUser && <td className="w-[100px] whitespace-nowrap px-3 py-3 text-center">
-                            <span className={`inline-block text-xs px-2.5 py-1 rounded-md font-semibold ${priorityColors[task.priority]}`}>{getLocalizedPriority(task.priority, locale)}</span>
-	                          </td>}
-                          <td className="w-[130px] whitespace-nowrap px-3 py-3 text-center" onClick={(e) => e.stopPropagation()}>
+                          {!isClientUser && <td className="whitespace-nowrap px-3 py-3">
+                            <span className={cn('text-sm', priorityText[task.priority])}>{getLocalizedPriority(task.priority, locale)}</span>
+                          </td>}
+                          <td className="whitespace-nowrap px-3 py-3">
                             {renderStatusControl(task)}
+                            {isClientUser && <div className="mt-1 text-xs font-semibold text-accent">{t(clientTaskAction(task))}</div>}
                           </td>
-                          <td className="px-3 py-3">
-                            <div className="flex items-center justify-center gap-2">
-                              <div className="w-16 bg-slate-200 rounded-full h-2 overflow-hidden">
-                                <div className="bg-accent h-2 rounded-full" style={{ width: `${getTaskProgress(task, users, isClientUser)}%` }}></div>
-                              </div>
-                              <span className="text-xs font-semibold text-slate-700 w-8">{getTaskProgress(task, users, isClientUser)}%</span>
-                            </div>
-                          </td>
-                          <td className="px-3 py-3 text-slate-400">
-                            <div className="flex flex-col items-start gap-1.5">
-	                              {!isClientUser && <div className="flex items-center gap-2">
-                                {task.attachmentLink && (
-                                  safeHttpsUrl(task.attachmentLink) ? (
-                                    <a href={safeHttpsUrl(task.attachmentLink)!} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className="hover:text-blue-600" title={task.attachmentName || 'Attachment'}>
-                                      <Paperclip className="w-4 h-4" />
-                                    </a>
-                                  ) : (
-                                    <span title={t('Invalid attachment link')} className="text-slate-400">
-                                      <Paperclip className="w-4 h-4" />
-                                    </span>
-                                  )
-                                )}
-                                {task.isCompleted && <CheckCircle2 className="w-4 h-4 text-emerald-500" />}
-	                                {canEditTask(task) && <button
-                                  className="rounded-md p-1 transition-colors hover:bg-slate-200 hover:text-slate-700"
-                                  title={t('Quick Edit')}
-                                  aria-label={t('Quick Edit')}
-                                  onClick={(e) => handleQuickEditClick(e, task)}
-                                >
-                                  <MoreHorizontal className="w-4 h-4" />
-	                                </button>}
-	                              </div>}
-	                              <div className="flex items-center gap-1.5" title={t('Assigned contact')}>
-                                <div className="w-5 h-5 rounded-full bg-accent-soft text-accent flex items-center justify-center text-[10px] font-bold">
-                                  {getUserName(task.assignedTo).charAt(0)}
-                                </div>
-                                <span data-i18n-skip className="text-xs font-medium text-slate-600 truncate max-w-[85px]">
-                                  {getUserName(task.assignedTo)}
-	                                </span>
-	                              </div>
-	                              {isClientUser && (
-                              <span className="inline-flex text-xs font-semibold text-accent">
-	                                  {clientTaskAction(task)}
-	                                </span>
-	                              )}
-                            </div>
+                          <td className="px-3 py-3 text-muted" onClick={(e) => e.stopPropagation()}>
+                            {!isClientUser && <div className="flex items-center justify-end gap-1">
+                              {task.attachmentLink && (attachment
+                                ? <a href={attachment} target="_blank" rel="noopener noreferrer" className="inline-flex h-9 w-9 items-center justify-center rounded-control hover:bg-inset hover:text-ink" title={task.attachmentName || t('Output link')} aria-label={t('Output link')}><Paperclip className="h-4 w-4" aria-hidden="true" /></a>
+                                : <span title={t('Invalid attachment link')} className="inline-flex h-9 w-9 items-center justify-center"><Paperclip className="h-4 w-4" aria-hidden="true" /></span>)}
+                              {canEditTask(task) && <button
+                                type="button"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-control transition-colors hover:bg-inset hover:text-ink"
+                                title={t('Quick Edit')}
+                                aria-label={t('Quick Edit')}
+                                onClick={(e) => handleQuickEditClick(e, task)}
+                              >
+                                <MoreHorizontal className="h-4 w-4" aria-hidden="true" />
+                              </button>}
+                            </div>}
                           </td>
                         </tr>
                       );
@@ -889,92 +806,38 @@ const TasksWorkspace: React.FC = () => {
                   )}
                   {!backend?.isLoading && pagedTasks.length === 0 && (
                     <tr>
-	                      <td colSpan={TABLE_COLUMN_COUNT} className="px-4 py-8 text-center text-slate-500">{t(emptyListMessage)}</td>
+                      <td colSpan={TABLE_COLUMN_COUNT} className="px-4 py-12 text-center">
+                        <p className="font-semibold text-ink">{t(emptyListMessage)}</p>
+                        {tasks.length > 0 && <p className="mt-1 text-sm text-muted">{t('Try another stage or clear your filters.')}</p>}
+                      </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
 
-            <div className="grid grid-cols-1 gap-px bg-slate-200 md:grid-cols-2 2xl:hidden">
+            <div className={cn('grid grid-cols-1 gap-px bg-line/70 xl:hidden', filteredTasks.some(task => !isTaskInStageFilter(task, 'active')) ? '' : 'md:grid-cols-2')}>
               {backend?.isLoading ? (
                 Array.from({ length: 4 }).map((_, i) => <SkeletonMobileCard key={i} />)
               ) : (
-                pagedTasks.map(task => {
-                  const dueDateParsed = parseOptionalDate(task.dueDate);
-                  const isOverdue = isTaskOverdue(task, today);
-
-                  return (
-                    <article
-                      key={task.id}
-                      className={cn(
-                        "relative w-full border-l-4 p-4 text-left transition-colors hover:bg-slate-50",
-                        isOverdue
-                          ? "border-l-red-500 bg-red-50/30 hover:bg-red-100/30"
-                          : "border-l-transparent bg-white"
-                      )}
-                    >
-                      <button
-                        type="button"
-                        onClick={() => setSelectedTask(task)}
-                        className="block w-full text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
-                        aria-label={t('task.viewFor', { title: task.title })}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div data-i18n-skip className={cn("font-semibold leading-5", isOverdue ? "text-red-900" : "text-slate-900")}>{task.title}</div>
-                            <div data-i18n-skip className="text-xs text-slate-500 mt-1 leading-5">{task.id} - {task.clientName} - {task.projectName || t('Independent task')}</div>
-                          </div>
-	                          {!isClientUser && <span className={`shrink-0 rounded-md px-2.5 py-1 text-xs font-semibold ${priorityColors[task.priority]}`}>{getLocalizedPriority(task.priority, locale)}</span>}
-                        </div>
-                        <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-slate-600">
-                        <span
-                          className={cn("inline-flex items-center gap-1", isOverdue ? "text-red-700 font-bold" : "text-slate-600")}
-                          title={dueDateParsed ? `${t('Due')}: ${formatLocalizedDate(dueDateParsed, locale)}` : t('common.noDueDate')}
-                        >
-                          <CalendarClock className="w-3.5 h-3.5" />
-                            {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
-                        </span>
-                        <span className="truncate text-right">{getUserName(task.assignedTo)}</span>
-	                        {!isClientUser && <span>{getLocalizedDepartment(task.department, locale)}</span>}
-	                          <span className="truncate text-right">{task.serviceType}</span>
-                        </div>
-                        {isOverdue && (
-                          <div className="mt-2 text-[10px] text-red-700 font-extrabold flex items-center gap-1.5">
-                            <span className="h-2 w-2 rounded-full bg-red-500" />
-                            {t('Overdue')}
-                          </div>
-                        )}
-                        {isClientUser && (
-                          <div className="mt-3 border-t border-slate-100 pt-3">
-                            <span className="text-sm font-semibold text-accent">{clientTaskAction(task)}</span>
-                          </div>
-                        )}
-                      </button>
-                      <div className="mt-3 flex items-center justify-between gap-3">
-                        <div>{renderStatusControl(task)}</div>
-                        <div className="flex items-center gap-2">
-                          <div className="w-20 bg-slate-200 rounded-full h-2 overflow-hidden">
-                            <div className="bg-accent h-2 rounded-full" style={{ width: `${getTaskProgress(task, users, isClientUser)}%` }}></div>
-                          </div>
-                          <span className="text-xs font-semibold text-slate-700">{getTaskProgress(task, users, isClientUser)}%</span>
-                        </div>
-                      </div>
-                    </article>
-                  );
-                })
+                pagedTasks.map(task => (
+                  <TaskCard key={task.id} task={task} allTasks={tasks} users={users} onOpen={setSelectedTask} className="bg-surface" />
+                ))
               )}
-              {!backend?.isLoading && pagedTasks.length === 0 && <div className="p-8 text-center text-sm text-slate-700">{t(emptyListMessage)}</div>}
+              {!backend?.isLoading && pagedTasks.length === 0 && <div className="col-span-full bg-surface px-4 py-12 text-center">
+                <p className="font-semibold text-ink">{t(emptyListMessage)}</p>
+                {tasks.length > 0 && <p className="mt-1 text-sm text-muted">{t('Try another stage or clear your filters.')}</p>}
+              </div>}
             </div>
 
-            <div className="p-4 border-t border-slate-200 flex flex-col sm:flex-row gap-3 justify-between items-center bg-slate-50 text-sm">
-              <span className="text-slate-500">
+            <div className="flex flex-col items-center justify-between gap-3 border-t border-line bg-inset/60 p-4 text-sm sm:flex-row">
+              <span className="text-muted">
                 {t('Showing')} {filteredTasks.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1} {t('to')} {Math.min(currentPage * PAGE_SIZE, filteredTasks.length)} {t('of')} {filteredTasks.length} {t('entries')}
               </span>
               <div className="flex gap-1">
-                <button disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="px-3 py-1 border border-slate-300 rounded-md bg-white text-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed">{t('Previous')}</button>
-                <span className="px-3 py-1 border border-blue-600 rounded-md bg-blue-600 text-white font-medium">{currentPage} / {totalPages}</span>
-                <button disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} className="px-3 py-1 border border-slate-300 rounded-md bg-white text-slate-600 disabled:text-slate-400 disabled:cursor-not-allowed">{t('Next')}</button>
+                <button disabled={currentPage === 1} onClick={() => setPage(p => Math.max(1, p - 1))} className="min-h-9 rounded-control border border-line bg-surface px-3 text-ink disabled:cursor-not-allowed disabled:text-muted/60">{t('Previous')}</button>
+                <span className="calm-number inline-flex min-h-9 items-center px-3 font-medium text-ink" aria-current="page">{currentPage} / {totalPages}</span>
+                <button disabled={currentPage === totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))} className="min-h-9 rounded-control border border-line bg-surface px-3 text-ink disabled:cursor-not-allowed disabled:text-muted/60">{t('Next')}</button>
               </div>
             </div>
           </>
@@ -987,7 +850,7 @@ const TasksWorkspace: React.FC = () => {
                 const columnTasks = isClientUser
                   ? filteredTasks.filter(t => getClientTaskStage(t) === status)
                   : filteredTasks.filter(t => t.status === status);
-                const hiddenByScope = !isClientUser && applyListScope && !isTaskInListScope({ status, isCompleted: status === 'Completed' }, listScope);
+                const hiddenByScope = !isClientUser && applyListScope && !isTaskInStageFilter({ status, isCompleted: status === 'Completed' }, listScope);
                 return (
                   <div
                     key={status}
@@ -995,8 +858,8 @@ const TasksWorkspace: React.FC = () => {
                   >
                     {/* Column Header */}
                     <div className="flex justify-between items-center mb-3 pb-2 border-b border-line shrink-0">
-                      <span className="text-xs font-semibold text-slate-600">{isClientUser ? column.label : status}</span>
-                      {hiddenByScope && <button type="button" onClick={() => applyQuickFilter('all')} className="text-[11px] font-semibold text-accent hover:underline">{t('Show')}</button>}
+                      <span className="text-xs font-semibold text-slate-600">{isClientUser ? t(column.label) : getLocalizedTaskStatus(status, locale)}</span>
+                      {hiddenByScope && <button type="button" onClick={() => applyStageFilter('all')} className="text-[11px] font-semibold text-accent hover:underline">{t('Show')}</button>}
                       <span className="rounded-md bg-slate-200/80 px-2 py-0.5 text-xs font-bold text-slate-700">{columnTasks.length}</span>
                     </div>
 
@@ -1039,7 +902,7 @@ const TasksWorkspace: React.FC = () => {
                               </div>
 
                               <div data-i18n-skip className="text-[10px] text-slate-500 mt-1.5 truncate">
-                                {task.id}{isClientUser ? ` · ${task.serviceType}` : ` · ${task.clientName}`}
+                                {isClientUser ? task.serviceType : `${task.clientName}${task.projectName ? ` · ${task.projectName}` : ''}`}
                               </div>
 
                               {!isClientUser && <div className="flex items-center gap-1.5 mt-2 flex-wrap">
@@ -1105,6 +968,63 @@ const TasksWorkspace: React.FC = () => {
         )}
       </div>
 
+      <SideSheet
+        isOpen={filtersOpen}
+        onClose={() => setFiltersOpen(false)}
+        title={t('Filter visible work')}
+        description={t('Choose which work to show.')}
+        footer={<div className="flex gap-2"><Button variant="secondary" className="flex-1" onClick={clearAllFilters}>{t('Clear')}</Button><Button className="flex-1" onClick={() => setFiltersOpen(false)}>{t('Show')} {filteredTasks.length}</Button></div>}
+      >
+              <div className="grid grid-cols-1 gap-4">
+                {!isClientUser && <div className="relative">
+                  <select aria-label={t('Filter by department')} value={filterDepartment} onChange={(e) => setFilterDepartment(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                    <option value="All">{t('All departments')}</option>
+                    {departmentOptions.map(dept => <option key={dept} value={dept}>{getLocalizedDepartment(dept, locale)}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                {!isClientUser && <div className="relative">
+                  <select
+                    aria-label={t('Filter by assignee')}
+                    value={filterAssignee}
+                    onChange={(e) => {
+                      setFilterAssignee(e.target.value);
+                    }}
+                    className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}
+                  >
+                    <option value="All">{t('All assignees')}</option>
+                    {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                {!isClientUser && <div className="relative">
+                  <select aria-label={t('Filter by client')} value={filterClient} onChange={(e) => {
+                    setFilterClient(e.target.value);
+                  }} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                    <option value="All">{t('All clients')}</option>
+                    {clientOptions.map(client => <option key={client} value={client}>{client}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                {!isClientUser && <div className="relative">
+                  <select aria-label={t('Filter by status')} value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                    <option value="All">{t('All statuses')}</option>
+                    {[...new Set([...taskStatuses, 'Approved'])].map(status => <option key={status} value={status}>{getLocalizedTaskStatus(status, locale)}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                {!isClientUser && <div className="relative">
+                  <select aria-label={t('Filter by priority')} value={filterPriority} onChange={(e) => setFilterPriority(e.target.value)} className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}>
+                    <option value="All">{t('All priorities')}</option>
+                    {PRIORITY_OPTIONS.map(priority => <option key={priority} value={priority}>{getLocalizedPriority(priority, locale)}</option>)}
+                  </select>
+                  <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
+                </div>}
+                <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due from')} />
+                <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className={cn(inputBase, 'p-2 text-slate-700')} aria-label={t('Due to')} />
+              </div>
+      </SideSheet>
+
       <TaskDetailsModal
         isOpen={!!selectedTask}
         onClose={() => {
@@ -1159,7 +1079,7 @@ const TasksWorkspace: React.FC = () => {
               <div>
                 <label className="block text-[10px] font-bold text-slate-400 mb-1">{t('Status')}</label>
                 <span className={`inline-flex rounded-md px-2.5 py-1.5 text-xs font-semibold ${getStatusColor(currentTask.status)}`}>
-                  {getLocalizedStatus(currentTask.status, locale)}
+                  {getLocalizedTaskStatus(currentTask.status, locale)}
                 </span>
               </div>
 
@@ -1235,10 +1155,8 @@ const Tasks: React.FC = () => {
   const backendMode = useStore(state => state.backend.mode);
   if (currentUser?.role === 'Client') return <ClientDeliveries />;
   const key = currentUser ? taskPreferencesKey(currentUser, backendMode) : '';
-  return <>
-    {currentUser && <PersonalTaskViews key={key} storageKey={key} supportsBoard={isBossKoo(currentUser)} />}
-    {currentUser && !isBossKoo(currentUser) ? <StaffAllWork /> : <TasksWorkspace />}
-  </>;
+  const views = currentUser ? <PersonalTaskViews key={key} storageKey={key} supportsBoard={isBossKoo(currentUser)} /> : null;
+  return currentUser && !isBossKoo(currentUser) ? <StaffAllWork viewsSlot={views} /> : <TasksWorkspace viewsSlot={views} />;
 };
 
 export default Tasks;

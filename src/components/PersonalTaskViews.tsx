@@ -58,9 +58,10 @@ export default function PersonalTaskViews({ storageKey, supportsBoard = false }:
     setParams(restored.params);
     setMessage(restored.removed ? 'Some saved filters are no longer available and were removed.' : '');
   };
-  return <details className="mb-5 rounded-panel border border-line bg-surface px-4">
-    <summary className="min-h-11 cursor-pointer py-3 text-sm font-semibold text-ink">{t('Personal views')}</summary>
-    <div className="flex flex-wrap items-end gap-3 pb-4">
+  // A quiet disclosure under the page title; it opens into a panel only on request.
+  return <details className="group/views w-full">
+    <summary className="inline-flex min-h-11 cursor-pointer items-center text-sm font-medium text-muted hover:text-ink">{t('Personal views')}</summary>
+    <div className="mt-1 flex flex-wrap items-end gap-3 rounded-panel border border-line bg-surface p-4">
       <label className="min-w-0 flex-1 text-sm text-ink">{t('Choose a saved view')}
         <select className={`${inputBase} mt-1 min-h-11`} value={selected} onChange={event => open(event.target.value)}><option value="">{t('Choose a saved view')}</option>{preferences.views.map(view => <option data-i18n-skip key={view.id} value={view.id}>{view.name}</option>)}</select>
       </label>
@@ -69,6 +70,6 @@ export default function PersonalTaskViews({ storageKey, supportsBoard = false }:
       {selected && <><Button variant="secondary" disabled={!name.trim()} onClick={() => save(true)}>{t('Update view')}</Button><Button variant="secondary" onClick={() => { if (persist({ ...preferences, views: preferences.views.filter(view => view.id !== selected) })) { setSelected(''); setName(''); setMessage('View deleted.'); } }}>{t('Delete view')}</Button></>}
       {supportsBoard && <label className="text-sm text-ink">{t('View mode')}<select className={`${inputBase} mt-1 min-h-11`} value={mode} onChange={event => { const nextMode: TaskViewMode = event.target.value === 'board' ? 'board' : 'table'; const next = new URLSearchParams(params); next.set('view', nextMode); setParams(next, { replace: true }); persist({ ...preferences, mode: nextMode }); }}><option value="table">{t('Table')}</option><option value="board">{t('Board')}</option></select></label>}
     </div>
-    {message && <p role="status" className="pb-4 text-sm text-muted">{t(message)}</p>}
+    {message && <p role="status" className="mt-2 text-sm text-muted">{t(message)}</p>}
   </details>;
 }

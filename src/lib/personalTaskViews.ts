@@ -5,7 +5,7 @@ export interface PersonalTaskView { id: string; name: string; filters: string }
 export interface TaskViewPreferences { version: 1; mode: TaskViewMode; views: PersonalTaskView[] }
 export const emptyTaskPreferences = (): TaskViewPreferences => ({ version: 1, mode: 'table', views: [] });
 export const taskPreferencesKey = (user: User, backendMode: string) => `aitask:task-views:v1:${JSON.stringify([backendMode, user.workspaceId || 'local', user.authUserId || user.id, user.id])}`;
-const filterKeys = new Set(['search', 'projectId', 'project', 'client', 'assignee', 'department', 'creator', 'status', 'priority', 'dueFrom', 'dueTo', 'focus', 'period', 'queue', 'scope', 'help', 'unaccepted']);
+const filterKeys = new Set(['search', 'projectId', 'project', 'client', 'assignee', 'department', 'creator', 'status', 'priority', 'dueFrom', 'dueTo', 'focus', 'period', 'queue', 'show', 'scope', 'help', 'unaccepted']);
 
 export function captureTaskFilters(params: URLSearchParams): string {
   const clean = new URLSearchParams();

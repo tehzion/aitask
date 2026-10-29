@@ -198,7 +198,7 @@ const OnboardingExperience: React.FC = () => {
       >
         <div className="h-1 bg-inset" aria-hidden="true"><div className="h-full bg-accent transition-[width] duration-160" style={{ width: isTour ? `${progress}%` : '100%' }} /></div>
         <div className="flex items-start gap-3 p-5 pb-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center text-muted">
             {isTour ? <BookOpen className="h-5 w-5" aria-hidden="true" /> : <CircleHelp className="h-5 w-5" aria-hidden="true" />}
           </div>
           <div className="min-w-0 flex-1">

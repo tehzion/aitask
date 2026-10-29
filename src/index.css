@@ -127,8 +127,8 @@ html.dark body {
 }
 
 .calm-number {
-  font-family: "Geist Mono Variable", ui-monospace, SFMono-Regular, monospace;
-  font-variant-numeric: tabular-nums slashed-zero;
+  /* Same typeface as the text around it; tabular figures keep columns aligned. */
+  font-variant-numeric: tabular-nums;
 }
 
 .calm-eyebrow {
@@ -177,17 +177,6 @@ html { scroll-behavior: smooth; }
 .app-page-header {
   position: relative;
   border-color: rgb(var(--calm-line) / 0.72);
-}
-
-.app-page-header::after {
-  position: absolute;
-  bottom: -1px;
-  left: 0;
-  width: 3.25rem;
-  height: 2px;
-  border-radius: 999px;
-  background: rgb(var(--calm-accent));
-  content: "";
 }
 
 .app-page-title {
