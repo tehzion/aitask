@@ -30,6 +30,8 @@ import ManagementOverview from '../components/ManagementOverview';
 
 const DeliveryReviewPanel = React.lazy(() => import('../components/DeliveryReviewPanel'));
 import NeedsMyAttention from '../components/NeedsMyAttention';
+import ProjectsWithoutPmPanel from '../components/ProjectsWithoutPmPanel';
+import RenewalSignals from '../components/RenewalSignals';
 import { useI18n } from '../components/I18nProvider';
 import { isLocalServiceDemoEnabled, LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID } from '../mock/localServiceDemo';
 import { useLocalToday } from '../hooks/useLocalToday';
@@ -616,6 +618,7 @@ const Dashboard: React.FC = () => {
                 )}
 
                 <ManagementOverview part="summary" />
+                <ProjectsWithoutPmPanel />
                 <NeedsMyAttention />
                 <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
                 {recentActivitySection}
@@ -718,10 +721,13 @@ const Dashboard: React.FC = () => {
                         const days = getContractDaysRemaining(plan.contractEndDate, today);
                         if (days === null) return null;
                         return (
-                          <div key={plan.id} className="flex items-center justify-between gap-3 px-5 py-3">
-                            <Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="min-w-0 truncate text-sm font-medium text-ink hover:text-accent">
-                              {plan.clientName} · {plan.name}
-                            </Link>
+                          <div key={plan.id} className="flex items-start justify-between gap-3 px-5 py-3">
+                            <div className="min-w-0">
+                              <Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="block truncate text-sm font-medium text-ink hover:text-accent">
+                                {plan.clientName} · {plan.name}
+                              </Link>
+                              <RenewalSignals plan={plan} />
+                            </div>
                             <span className={cn('shrink-0 rounded-md px-2 py-0.5 text-xs font-semibold', days <= 7 ? 'bg-red-50 text-red-700' : 'bg-amber-50 text-amber-700')}>
                               {days === 0 ? t('Ends today') : `${days} ${t('days left')}`}
                             </span>

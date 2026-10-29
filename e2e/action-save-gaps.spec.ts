@@ -199,6 +199,8 @@ test('project save locks its submitted form, recovers exceptions and detects dis
   await dialog.getByLabel('Company name *').selectOption(clientId);
   await dialog.getByLabel('Project name *').fill('Retained project');
   await dialog.getByRole('button', { name: 'Design', exact: true }).click();
+  // Every project needs a Project Manager; Boss Koo administers.
+  await dialog.locator('fieldset', { hasText: 'Project managers' }).getByRole('checkbox').first().check();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ retryPendingSave: () => new Promise((_resolve, reject) => {
