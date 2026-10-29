@@ -309,6 +309,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       setFormError('Project deadline cannot be before the start date.');
       return;
     }
+    // Project Managers run projects; Boss Koo administers, so every project needs one.
+    const availableProjectManagers = users.filter(user => user.role === 'Project Manager' && !user.isSuperAdmin);
+    if (isBossKoo(currentUser) && availableProjectManagers.length > 0
+      && !projectManagerIds.some(id => availableProjectManagers.some(user => user.id === id))) {
+      setFormError('Choose at least one Project Manager for this project.');
+      return;
+    }
 
     if (project) {
       const result = updateProject(project.id, {
@@ -428,7 +435,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
 
             {isBossKoo(currentUser) ? (
               <fieldset className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-                <legend className="px-1 text-sm font-semibold text-slate-700">{t('Project managers')}</legend>
+                <legend className="px-1 text-sm font-semibold text-slate-700">{t('Project managers')} <span className="text-red-500">*</span></legend>
                 <p className="mb-2 text-xs leading-5 text-slate-500">{t('Only assigned Project Managers can manage this project.')}</p>
                 <div className="max-h-32 space-y-1 overflow-y-auto">
                   {users.filter(user => user.role === 'Project Manager' && !user.isSuperAdmin).map(user => (

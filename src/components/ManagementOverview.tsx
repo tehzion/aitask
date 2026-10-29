@@ -126,7 +126,7 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
           <div className="divide-y divide-line/60">
             {snapshot.projectManagers.slice(0, 6).map(row => (
               <div key={row.member.id} className="grid grid-cols-[minmax(0,1fr)_repeat(3,auto)] items-center gap-3 px-5 py-3">
-                <div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{row.member.name}</p><p className="mt-1 text-xs text-muted">{row.projects} {t('projects')}</p></div>
+                <div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{row.member.name}</p><p className="mt-1 text-xs text-muted">{row.projects} {t('projects')} · {row.openTasks} {t('open')}{row.openTasks > 0 && <> · <span className={row.overdueTasks / row.openTasks >= 0.5 ? 'font-semibold text-red-700' : ''}>{Math.round((row.overdueTasks / row.openTasks) * 100)}% {t('overdue')}</span></>}</p></div>
                 <div className="text-right"><p className={cn('calm-number text-sm font-semibold', row.overdueTasks > 0 ? 'text-red-700' : 'text-ink')}>{row.overdueTasks}</p><p className="text-[11px] text-muted">{t('overdue')}</p></div>
                 <div className="text-right"><p className={cn('calm-number text-sm font-semibold', row.pendingReviews > 0 ? 'text-amber-700' : 'text-ink')}>{row.pendingReviews}</p><p className="text-[11px] text-muted">{t('reviews')}</p></div>
                 <div className="text-right"><p className={cn('calm-number text-sm font-semibold', row.atRiskProjects > 0 ? 'text-red-700' : 'text-ink')}>{row.atRiskProjects}</p><p className="text-[11px] text-muted">{t('at risk')}</p></div>
@@ -153,6 +153,7 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
         { label: t('At-risk projects'), value: snapshot.atRiskProjects, to: '/projects?health=atRisk', tone: 'danger' },
         { label: t('Overdue tasks'), value: snapshot.overdueTasks, to: '/tasks?focus=overdue', tone: 'danger' },
         { label: t('Pending approvals'), value: snapshot.pendingApprovals, to: '/tasks?focus=waiting', tone: 'warning' },
+        { label: t('Approvals waiting 7+ days'), value: snapshot.staleApprovals, to: '/tasks?focus=waiting', tone: 'danger' },
         { label: t('Monthly renewals in 30 days'), value: snapshot.upcomingRenewals, to: '/clients', tone: 'warning' },
         { label: t('Overdue deliverables'), value: snapshot.overdueDeliverables, to: '/clients', tone: 'danger' },
       ]} />

@@ -5,7 +5,9 @@ const seedBoss = async (page: Page) => {
   await page.goto('/login');
   // Let the app finish its startup load so seeded state is not overwritten.
   await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
-  await page.evaluate(async () => {
+  // Keep the seeded deadline well away from today so no deadline popup covers the page.
+  const farDue = (() => { const date = new Date(); date.setDate(date.getDate() + 60); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`; })();
+  await page.evaluate(async dueDate => {
     localStorage.setItem('aitask:locale', 'en');
     const { useStore } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
@@ -17,11 +19,11 @@ const seedBoss = async (page: Page) => {
       clientName: 'Action QA', clientId: undefined, projectId: undefined, projectName: undefined,
       deliverableId: undefined, serviceCycleId: undefined, status: 'Pending', priority: 'Medium',
       createdBy: boss.id, assignedTo: boss.id, comments: [], approvalHistory: [],
-      startDate: '2026-10-01', dueDate: '2026-10-30', isCompleted: false, version: 1 };
+      startDate: '2026-10-01', dueDate, isCompleted: false, version: 1 };
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, tasks: [task],
       clients: [], projects: [], servicePackages: [], serviceWorkflowTemplates: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
-  });
+  }, farDue);
 };
 
 const catalog = {
@@ -199,6 +201,8 @@ test('project save locks its submitted form, recovers exceptions and detects dis
   await dialog.getByLabel('Company name *').selectOption(clientId);
   await dialog.getByLabel('Project name *').fill('Retained project');
   await dialog.getByRole('button', { name: 'Design', exact: true }).click();
+  // Every project needs a Project Manager; Boss Koo administers.
+  await dialog.locator('fieldset', { hasText: 'Project managers' }).getByRole('checkbox').first().check();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ retryPendingSave: () => new Promise((_resolve, reject) => {

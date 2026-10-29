@@ -7,7 +7,7 @@ vi.hoisted(() => {
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), getUser: vi.fn() }));
 vi.mock('../lib/supabaseClient', () => ({ supabase: { rpc: mocks.rpc, from: mocks.from, auth: { getUser: mocks.getUser, refreshSession: vi.fn() } }, shouldUseSecureSupabase: () => true, resolveAuthEmail: (x: string) => x }));
 import { clearWorkspaceSession, useStore } from './index';
-import { buildOperations, getRetainedSecureCommand, saveSecureWorkspace } from '../lib/secureWorkspace';
+import { buildOperations, getRetainedSecureCommand, saveSecureWorkspace, transientRetryPolicy } from '../lib/secureWorkspace';
 const initial = useStore.getState();
 const authId = '00000000-0000-4000-8000-000000000001';
 const stamp = '2026-10-08T00:00:00Z';
@@ -17,6 +17,8 @@ let version: number;
 let failGeneric: boolean;
 let failService: boolean;
 beforeEach(() => {
+  // These cases cover the manual retry path after an outage.
+  transientRetryPolicy.attempts = 0;
   const storage = new Map<string, string>();
   const fakeStorage = { getItem: (key: string) => storage.get(key) || null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) };
   vi.stubGlobal('localStorage', fakeStorage);

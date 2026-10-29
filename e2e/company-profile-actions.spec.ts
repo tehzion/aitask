@@ -335,6 +335,8 @@ test('deletion confirmation lists linked record counts before any records are ch
   await page.setViewportSize({ width: 1600, height: 1000 });
   const fixture = await seedCompany(page);
   await page.goto(`/projects?search=${encodeURIComponent(companyName)}`);
+  // Count only after the page has loaded the company, so the counts and the dialog read the same data.
+  await expect(page.getByRole('button', { name: 'More actions' })).toBeVisible();
   const counts = await page.evaluate(async id => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();

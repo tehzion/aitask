@@ -1,6 +1,7 @@
 import { getLocalizedDepartment, getLocalizedTaskStatus } from '../lib/localeLabels';
 import UnavailableWork from './UnavailableWork';
 import '../lib/staffWorkflowCopy';
+import '../lib/taskStageCopy';
 import React from 'react';
 import { Filter, ListFilter, Plus, Search, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
@@ -8,7 +9,7 @@ import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
 import { useStore } from '../store';
 import { getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
-import { buildStaffWorkQueue, getHodScopeTasks, isStaffGuidedActionEnabled, getStaffBucketLabel, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { buildStaffWorkQueue, getHodScopeTasks, isStaffGuidedActionEnabled } from '../lib/staffWorkspace';
 import { normalizeDepartment } from '../lib/departments';
 import { getTodayInputDate } from '../lib/utils';
 import { Button, PageHeader, SegmentedTabs, Surface } from './ui';
@@ -23,13 +24,16 @@ import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { isTaskOpen } from '../lib/taskReporting';
 import { isTaskAwaitingAcceptance } from '../lib/taskCompletion';
-import { shouldApplyTaskListScope } from '../lib/taskListScope';
+import { shouldApplyTaskListScope, TASK_LIST_SCOPE_PARAM } from '../lib/taskListScope';
+import { countTasksByStageFilter, isTaskInStageFilter, parseTaskStageFilter, type TaskStageFilter } from '../lib/taskStage';
+import { isTaskOverdue } from '../lib/taskReporting';
+import TaskStageFilterBar from './TaskStageFilterBar';
 
-type StaffAllWorkBucket = 'all' | StaffWorkBucketKey;
-const buckets: StaffAllWorkBucket[] = ['all', 'needs_action', 'up_next', 'waiting', 'done'];
+// Older links used queue tabs; map them onto the shared stage tabs.
+const legacyQueueStage: Record<string, TaskStageFilter> = { done: 'completed', waiting: 'review', up_next: 'todo' };
 const priorities: Priority[] = ['Urgent', 'High', 'Medium', 'Low'];
 
-const StaffAllWork: React.FC = () => {
+const StaffAllWork: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }) => {
   const { locale, t } = useI18n();
   const [searchParams, setSearchParams] = useSearchParams();
   const { currentUser, tasks: allTasks, rolePermissions, taskStatuses, clients: clientProfiles, projects, users, serviceCycles, deliverables, setCreateTaskModalOpen } = useStore(useShallow(state => ({
@@ -45,7 +49,10 @@ const StaffAllWork: React.FC = () => {
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
   const canCreateTask = canCreateTasks(currentUser, rolePermissions);
-  const bucket: StaffAllWorkBucket = buckets.includes(searchParams.get('queue') as StaffAllWorkBucket) ? searchParams.get('queue') as StaffAllWorkBucket : 'all';
+  const legacyQueue = searchParams.get('queue') || '';
+  const stage: TaskStageFilter = searchParams.has(TASK_LIST_SCOPE_PARAM) ? parseTaskStageFilter(searchParams.get(TASK_LIST_SCOPE_PARAM)) : legacyQueueStage[legacyQueue] || 'active';
+  const needsActionOnly = legacyQueue === 'needs_action';
+  const overdueOnly = searchParams.get('focus') === 'overdue';
   const setParam = (key: string, value: string, defaultValue = 'All') => {
     setSearchParams(previous => {
       const next = new URLSearchParams(previous);
@@ -54,7 +61,13 @@ const StaffAllWork: React.FC = () => {
       return next;
     }, { replace: true });
   };
-  const setBucket = (value: StaffAllWorkBucket) => setParam('queue', value, 'all');
+  const setStage = (value: TaskStageFilter) => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    if (legacyQueueStage[next.get('queue') || '']) next.delete('queue');
+    next.delete('status');
+    if (value === 'active') next.delete(TASK_LIST_SCOPE_PARAM); else next.set(TASK_LIST_SCOPE_PARAM, value);
+    return next;
+  }, { replace: true });
   const [filtersOpen, setFiltersOpen] = React.useState(false);
   const helpOnly = searchParams.get('help') === '1';
   const unacceptedOnly = searchParams.get('unaccepted') === '1';
@@ -101,22 +114,19 @@ const StaffAllWork: React.FC = () => {
     }
     return visibleTasks;
   }, [currentUser, isDepartmentLead, isHod, scopeView, visibleTasks]);
-  const today = getTodayInputDate(useLocalToday());
+  const todayDate = useLocalToday();
+  const today = getTodayInputDate(todayDate);
   const queue = React.useMemo(
     () => buildStaffWorkQueue(tasks, today, {
       isActionable: task => isStaffGuidedActionEnabled(task, taskStatuses, currentUser, rolePermissions, { users, clients: clientProfiles, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }),
     }),
     [allTasks, clientProfiles, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
   );
-  // The default queue is active work only. Finished work stays in Done, and an
-  // explicit status filter (for example Completed) still reaches history.
-  const includeFinished = !shouldApplyTaskListScope({ statusFilter: status });
-  const orderedTasks = React.useMemo(() => (
-    bucket === 'all'
-      ? [...queue.needs_action, ...queue.up_next, ...queue.waiting, ...(includeFinished ? queue.done : [])]
-      : queue[bucket]
-  ), [bucket, includeFinished, queue]);
-  const activeCount = queue.needs_action.length + queue.up_next.length + queue.waiting.length;
+  // Most urgent first inside every stage; finished work newest first. An
+  // explicit status filter (for example Completed) overrides the stage tabs.
+  const applyStage = shouldApplyTaskListScope({ statusFilter: status });
+  const orderedTasks = React.useMemo(() => [...queue.needs_action, ...queue.up_next, ...queue.waiting, ...queue.done], [queue]);
+  const needsActionIds = React.useMemo(() => new Set(queue.needs_action.map(task => task.id)), [queue]);
   const clients = React.useMemo(() => Array.from(new Set(tasks.map(task => task.clientName).filter(Boolean))).sort(), [tasks]);
   const projectsForFilter = React.useMemo(() => Array.from(new Set(tasks.map(task => task.projectName).filter(Boolean))).sort(), [tasks]);
   const departments = React.useMemo(() => Array.from(new Set(tasks.map(task => normalizeDepartment(task.department) || task.department).filter(Boolean))).sort(), [tasks]);
@@ -124,7 +134,7 @@ const StaffAllWork: React.FC = () => {
   const creators = React.useMemo(() => users.filter(user => tasks.some(task => task.createdBy === user.id)), [tasks, users]);
   const deferredSearch = React.useDeferredValue(searchInput.value);
   const normalizedSearch = deferredSearch.trim().toLowerCase();
-  const filteredTasks = React.useMemo(() => orderedTasks.filter(task => {
+  const unscopedTasks = React.useMemo(() => orderedTasks.filter(task => {
     const searchable = [task.title, task.description, task.clientName, task.projectName, task.serviceType, task.department, getLocalizedDepartment(task.department, locale)].filter(Boolean).join(' ').toLowerCase();
     return (!normalizedSearch || searchable.includes(normalizedSearch))
       && (!helpOnly || Boolean(isTaskOpen(task) && task.workState?.blocker))
@@ -137,8 +147,21 @@ const StaffAllWork: React.FC = () => {
       && (status === 'All' || task.status === status)
       && (priority === 'All' || task.priority === priority)
       && (!dueFrom || Boolean(task.dueDate && task.dueDate >= dueFrom))
-      && (!dueTo || Boolean(task.dueDate && task.dueDate <= dueTo));
-  }), [assignee, client, creator, department, dueFrom, dueTo, helpOnly, unacceptedOnly, normalizedSearch, orderedTasks, priority, project, status, locale]);
+      && (!dueTo || Boolean(task.dueDate && task.dueDate <= dueTo))
+      && (!needsActionOnly || needsActionIds.has(task.id))
+      && (!overdueOnly || isTaskOverdue(task, todayDate));
+  }), [assignee, client, creator, department, dueFrom, dueTo, helpOnly, unacceptedOnly, normalizedSearch, orderedTasks, priority, project, status, locale, needsActionOnly, needsActionIds, overdueOnly, todayDate]);
+  const stageCounts = React.useMemo(() => countTasksByStageFilter(unscopedTasks), [unscopedTasks]);
+  const filteredTasks = React.useMemo(() => (applyStage ? unscopedTasks.filter(task => isTaskInStageFilter(task, stage)) : unscopedTasks), [applyStage, stage, unscopedTasks]);
+  const dueTodayOnly = dueFrom === today && dueTo === today;
+  const toggleQuickFilter = (key: 'needs_action' | 'today' | 'overdue') => setSearchParams(previous => {
+    const next = new URLSearchParams(previous);
+    if (key === 'needs_action') { if (needsActionOnly) next.delete('queue'); else next.set('queue', 'needs_action'); }
+    if (key === 'today' || key === 'overdue') { ['focus', 'dueFrom', 'dueTo'].forEach(item => next.delete(item)); }
+    if (key === 'today' && !dueTodayOnly) { next.set('dueFrom', today); next.set('dueTo', today); }
+    if (key === 'overdue' && !overdueOnly) next.set('focus', 'overdue');
+    return next;
+  }, { replace: true });
   const taskId = searchParams.get('taskId');
   // List filters and scope must not dismiss authorized details after delegation.
   const selectedTask = taskId ? visibleTasks.find(task => task.id === taskId) || null : null;
@@ -157,7 +180,8 @@ const StaffAllWork: React.FC = () => {
     searchInput.commit('');
     setSearchParams(previous => {
       const next = new URLSearchParams(previous);
-      ['search', 'client', 'project', 'assignee', 'department', 'creator', 'status', 'priority', 'dueFrom', 'dueTo', 'help', 'unaccepted'].forEach(key => next.delete(key));
+      ['search', 'client', 'project', 'assignee', 'department', 'creator', 'status', 'priority', 'dueFrom', 'dueTo', 'help', 'unaccepted', 'focus'].forEach(key => next.delete(key));
+      if (next.get('queue') === 'needs_action') next.delete('queue');
       return next;
     }, { replace: true });
   };
@@ -168,7 +192,8 @@ const StaffAllWork: React.FC = () => {
         compact
         title={t(isProjectManager ? 'Portfolio work' : isDepartmentLead ? 'Department tasks' : 'All work')}
         description={t(isProjectManager ? 'Every task in your projects, ordered by risk and next action.' : isDepartmentLead ? 'Department and delegated tasks, including work awaiting your review.' : 'Your assigned and created tasks, ordered by next action.')}
-        meta={<span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>}
+        hideDescriptionOnMobile
+        meta={<><span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>{viewsSlot}</>}
         action={<div className="flex flex-wrap items-center gap-2">
           {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
           <Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />{t('Filters')}{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>
@@ -219,14 +244,15 @@ const StaffAllWork: React.FC = () => {
             />
           )}
 
-          <SegmentedTabs<StaffAllWorkBucket>
-            items={buckets.map(item => ({ id: item, label: item === 'all' ? t('Active work') : t(getStaffBucketLabel(item)), count: item === 'all' ? activeCount : queue[item].length }))}
-            value={bucket}
-            onChange={setBucket}
-            label={t('All work queues')}
-            idPrefix="all-work"
-            panelId="all-work-panel"
-            variant="underline"
+          <TaskStageFilterBar
+            value={applyStage ? stage : null}
+            counts={stageCounts}
+            onChange={setStage}
+            quickFilters={[
+              { id: 'needs_action', label: t('Needs action'), active: needsActionOnly, count: queue.needs_action.length, onToggle: () => toggleQuickFilter('needs_action') },
+              { id: 'today', label: t('Due today'), active: dueTodayOnly, onToggle: () => toggleQuickFilter('today') },
+              { id: 'overdue', label: t('Overdue'), active: overdueOnly, onToggle: () => toggleQuickFilter('overdue') },
+            ]}
           />
 
           {activeFilterCount > 0 && (
@@ -237,9 +263,9 @@ const StaffAllWork: React.FC = () => {
           )}
 
           {taskId && !selectedTask && <UnavailableWork onDismiss={() => setTaskId()} />}
-          <Surface id="all-work-panel" role="tabpanel" aria-labelledby={`all-work-tab-${bucket}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+          <Surface as="div" id="all-work-panel" className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
             {filteredTasks.map(task => <StaffWorkItem key={task.id} task={task} allTasks={visibleTasks} users={users} onOpen={item => setTaskId(item.id)} />)}
-            {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter className="mx-auto h-8 w-8 text-muted/60" /><p className="mt-4 font-semibold text-ink">{t(activeFilterCount > 0 ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : bucket === 'all' ? 'No active work. Finished tasks are under Done.' : bucket === 'needs_action' ? 'feedback.noNeedsAction' : bucket === 'up_next' ? 'feedback.noUpNext' : bucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Clear a filter or choose another queue.')}</p></div>}
+            {filteredTasks.length === 0 && <div className="px-5 py-16 text-center"><ListFilter aria-hidden="true" className="mx-auto h-6 w-6 text-muted" /><p className="mt-3 font-semibold text-ink">{t(activeFilterCount > 0 || needsActionOnly || overdueOnly ? 'feedback.noMatches' : tasks.length === 0 ? 'feedback.noAssignments' : stage === 'active' ? 'No active tasks. Completed work stays under Completed.' : 'No tasks in this stage.')}</p>{activeFilterCount > 0 ? <button type="button" onClick={clearFilters} className="mt-2 min-h-11 px-2 text-sm font-semibold text-accent hover:underline">{t('Clear filters')}</button> : tasks.length > 0 && stage !== 'active' && <p className="mt-1 text-sm text-muted">{t('Try another stage or clear your filters.')}</p>}</div>}
           </Surface>
         </div>
       </section>

@@ -14,10 +14,13 @@ import { CountLabel, DataRow, MetricStrip, ProgressBar, StatGroup, StatusChip, S
 import { formatLocalizedDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
-import { getPlanDeliverySummary, getCompanyTaskActivity } from '../lib/dashboardData';
+import { getContractDaysRemaining, getPlanDeliverySummary, getCompanyTaskActivity } from '../lib/dashboardData';
 import { assessProjectHealth, getPersonalReviewQueues, getPortfolioReviewQueues } from '../lib/pmDashboard';
 import { projectStatus } from '../lib/projectManagement';
+import { getCyclePace, type CyclePace } from '../lib/opsSignals';
 import NeedsMyAttention from './NeedsMyAttention';
+import RenewalSignals from './RenewalSignals';
+import StuckWorkPanel from './StuckWorkPanel';
 
 type WorkspaceTask = ReturnType<typeof useStore.getState>['tasks'][number];
 
@@ -42,6 +45,18 @@ const SpotlightMetric = ({ label, value, icon: Icon, detail, tone = 'accent' }: 
 const CompactStat = ({ label, value, icon: Icon, tone = 'neutral' }: { label: string; value: React.ReactNode; icon: React.ComponentType<{ className?: string }>; tone?: 'neutral' | 'danger' | 'warning' | 'success' }) => {
   const toneClass = tone === 'danger' ? 'bg-red-50 text-red-700' : tone === 'warning' ? 'bg-amber-50 text-amber-700' : tone === 'success' ? 'bg-emerald-50 text-emerald-700' : 'bg-accent-soft text-accent';
   return <div className="min-h-36 p-5"><div className={`inline-flex rounded-control p-2 ${toneClass}`}><Icon className="h-4 w-4" /></div><p className="calm-number mt-5 text-2xl font-semibold tracking-[-0.04em] text-ink">{value}</p><p className="mt-1 text-xs font-medium text-muted">{label}</p></div>;
+};
+
+const paceDisplay: Record<CyclePace, { label: string; tone: 'emerald' | 'amber' | 'red' }> = {
+  done: { label: 'All delivered', tone: 'emerald' },
+  onTrack: { label: 'On track', tone: 'emerald' },
+  atRisk: { label: 'At risk', tone: 'amber' },
+  missed: { label: 'Missed', tone: 'red' },
+};
+
+const PaceChip = ({ pace }: { pace: CyclePace }) => {
+  const { t } = useI18n();
+  return <StatusChip tone={paceDisplay[pace].tone}>{t(paceDisplay[pace].label)}</StatusChip>;
 };
 
 const TaskQueue = ({ title, tasks, empty }: { title: string; tasks: WorkspaceTask[]; empty: string }) => (
@@ -148,8 +163,6 @@ const ServiceRoleDashboard = () => {
   const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
   const waitingInternal = portfolioReviews.internal;
   const waitingClient = portfolioReviews.client;
-  const awaitingHod = scopeTasks.filter(task => isTaskOpen(task)
-    && (task.assignmentState === 'needs_hod' || (!task.assignmentState && !task.assignedTo)));
   const awaitingStaffAssignment = scopeTasks.filter(task => isTaskOpen(task) && task.assignmentState === 'pending_hod');
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && isTaskOpen(task));
   const completed = scopeTasks.filter(isTaskCompleted);
@@ -168,7 +181,12 @@ const ServiceRoleDashboard = () => {
       ...getPlanDeliverySummary(plan, store.serviceCycles, store.deliverables, visibleTasks, now),
       taskActivity: getCompanyTaskActivity(plan.clientId, visibleTasks, store.users, now),
     };
-  }), [activePlans, store.deliverables, store.serviceCycles, visibleTasks, store.users, now]);
+  }).map(item => ({ ...item, pace: item.currentCycle ? getCyclePace(item.currentCycle, item.delivered, item.total, now) : undefined })),
+  [activePlans, store.deliverables, store.serviceCycles, visibleTasks, store.users, now]);
+  const plansAtRisk = activeCompanies.filter(item => item.pace === 'atRisk' || item.pace === 'missed');
+  const renewingSoon = renewalPlans
+    .map(plan => ({ plan, days: getContractDaysRemaining(plan.contractEndDate, now) }))
+    .filter((item): item is { plan: typeof item.plan; days: number } => item.days !== null && item.days >= 0 && item.days <= 30);
 
   if (persona === 'client') return null;
 
@@ -203,7 +221,6 @@ const ServiceRoleDashboard = () => {
     const urgent = [...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
     const waitingOnOthers = [
       { title: t('With department review'), tasks: personal.department },
-      { title: t('Awaiting HOD Assignment'), tasks: awaitingHod },
       { title: t('Awaiting Staff Assignment'), tasks: awaitingStaffAssignment },
       { title: t('Client review (optional)'), tasks: personal.client },
     ].filter(item => item.tasks.length > 0);
@@ -230,6 +247,31 @@ const ServiceRoleDashboard = () => {
           <TaskQueue title={t('Due today / overdue')} tasks={urgent} empty={t('No urgent portfolio delivery work.')} />
         </div>
       </section>
+      {/* Unassigned work needs the PM to act, so it is listed here, not under waiting on others. */}
+      <StuckWorkPanel tasks={scopeTasks} />
+      {plansAtRisk.length > 0 && <Surface className="overflow-hidden" aria-labelledby="pm-plans-risk-title">
+        <div className="flex items-start justify-between gap-3 border-b border-line/70 px-5 py-4">
+          <div><h3 id="pm-plans-risk-title" className="font-semibold text-ink">{t('Monthly plans at risk')}</h3><p className="mt-1 text-sm text-muted">{t('Deliveries are behind the calendar for this month.')}</p></div>
+          <CountLabel>{plansAtRisk.length}</CountLabel>
+        </div>
+        <ul className="divide-y divide-line/60">{plansAtRisk.map(item => <li key={item.plan.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3">
+          <Link to={`/clients/${encodeURIComponent(item.clientId)}`} className="min-w-0 truncate text-sm font-semibold text-ink hover:text-accent"><span data-i18n-skip>{item.clientName}</span></Link>
+          <span className="flex items-center gap-2 text-xs text-muted">{item.delivered}/{item.total} {t('Delivered')} {item.pace && <PaceChip pace={item.pace} />}</span>
+        </li>)}</ul>
+      </Surface>}
+      {renewingSoon.length > 0 && <Surface className="overflow-hidden" aria-labelledby="pm-renewals-title">
+        <div className="flex items-start justify-between gap-3 border-b border-line/70 px-5 py-4">
+          <div><h3 id="pm-renewals-title" className="font-semibold text-ink">{t('Renewals in the next 30 days')}</h3><p className="mt-1 text-sm text-muted">{t('Their recent delivery record, to prepare the renewal conversation.')}</p></div>
+          <CountLabel>{renewingSoon.length}</CountLabel>
+        </div>
+        <ul className="divide-y divide-line/60">{renewingSoon.map(({ plan, days }) => <li key={plan.id} className="flex items-start justify-between gap-3 px-5 py-3">
+          <div className="min-w-0">
+            <Link to={`/clients/${encodeURIComponent(plan.clientId)}`} className="block truncate text-sm font-semibold text-ink hover:text-accent"><span data-i18n-skip>{plan.clientName} · {plan.name}</span></Link>
+            <RenewalSignals plan={plan} />
+          </div>
+          <StatusChip tone={days <= 7 ? 'red' : 'amber'}>{days === 0 ? t('Ends today') : `${days} ${t('days left')}`}</StatusChip>
+        </li>)}</ul>
+      </Surface>}
       <NeedsMyAttention excludeProjectRisks taskDecisions={false} hideWhenEmpty />
       {waitingOnOthers.length > 0 && <section aria-labelledby="pm-waiting-title" className="space-y-3">
         <div><h2 id="pm-waiting-title" className="text-lg font-semibold text-ink">{t('Waiting on others')}</h2><p className="mt-1 text-sm text-muted">{t('Follow up if these stall. No decision is needed from you yet.')}</p></div>
@@ -283,6 +325,7 @@ const ServiceRoleDashboard = () => {
       { label: t('Contracted monthly value'), value: formatMoney(contractedMonthly, 'MYR', locale) },
       { label: t('Active clients'), value: activePlans.length, to: '/clients' },
       { label: t('Delivered outputs'), value: delivered.length, to: '/clients' },
+      { label: t('Plans at risk this month'), value: plansAtRisk.length, to: '/clients', tone: plansAtRisk.length ? 'danger' : undefined },
     ]} />
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
@@ -298,6 +341,7 @@ const ServiceRoleDashboard = () => {
             </div>
             <div className="min-w-0">
               {item.currentCycle && item.total > 0 ? <>
+              {item.pace && <div className="mb-1.5"><PaceChip pace={item.pace} /></div>}
               <ProgressBar className="mb-1.5" label={`${t('Deliverables')} ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
                 <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>

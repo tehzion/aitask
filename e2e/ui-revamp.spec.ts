@@ -79,21 +79,21 @@ test.describe('completed tasks leave active lists but stay in history', () => {
     await seed(page, 'boss');
     await page.goto('/tasks');
     await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
-    const filters = page.getByRole('group', { name: 'Quick task filters' });
-    await expect(filters.getByRole('button', { name: 'Active work' })).toHaveAttribute('aria-pressed', 'true');
+    const filters = page.getByRole('group', { name: 'Task stages' });
+    await expect(filters.getByRole('button', { name: /^Active work \d+$/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(visibleText(page, 'RV open brief')).toBeVisible();
     await expect(visibleText(page, 'RV approved poster')).toBeVisible();
     await expect(visibleText(page, 'RV finished logo')).toHaveCount(0);
     await expect(visibleText(page, 'RV cancelled flyer')).toHaveCount(0);
 
-    await filters.getByRole('button', { name: 'Completed' }).click();
+    await filters.getByRole('button', { name: /^Completed \d+$/ }).click();
     await expect(page).toHaveURL(/show=completed/);
     await expect(visibleText(page, 'RV finished logo')).toBeVisible();
     await expect(visibleText(page, 'RV open brief')).toHaveCount(0);
     await page.reload();
     await expect(visibleText(page, 'RV finished logo')).toBeVisible();
 
-    await page.getByRole('group', { name: 'Quick task filters' }).getByRole('button', { name: 'All tasks' }).click();
+    await page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^All tasks \d+$/ }).click();
     await expect(visibleText(page, 'RV cancelled flyer')).toBeVisible();
     await expect(visibleText(page, 'RV finished logo')).toBeVisible();
 
@@ -116,7 +116,7 @@ test.describe('completed tasks leave active lists but stay in history', () => {
     await expect(metric(page, 'Overdue tasks')).toHaveText('0');
     await page.goto('/tasks');
     await expect(visibleText(page, 'RV overdue banner')).toHaveCount(0);
-    await page.getByRole('group', { name: 'Quick task filters' }).getByRole('button', { name: 'Completed' }).click();
+    await page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^Completed \d+$/ }).click();
     await expect(visibleText(page, 'RV overdue banner')).toBeVisible();
     const stored = await page.evaluate(async () => {
       const { useStore } = await import('/src/store/index.ts');
@@ -155,9 +155,9 @@ test.describe('review queues show only decisions the user can take', () => {
 
     await page.goto('/tasks');
     await expect(page.getByRole('heading', { name: 'Portfolio work', exact: true })).toBeVisible();
-    await expect(page.getByRole('tab', { name: /Active work/, selected: true })).toBeVisible();
+    await expect(page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^Active work \d+$/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(visibleText(page, 'RV approved poster')).toHaveCount(0);
-    await page.getByRole('tab', { name: /Done/ }).click();
+    await page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^Completed \d+$/ }).click();
     await expect(visibleText(page, 'RV approved poster')).toBeVisible();
     await expect(visibleText(page, 'RV finished logo')).toBeVisible();
   });
@@ -168,12 +168,14 @@ test.describe('review queues show only decisions the user can take', () => {
     await page.goto('/tasks?scope=department');
     await expect(page.getByRole('heading', { name: 'Department tasks', exact: true })).toBeVisible();
     await expect(visibleText(page, 'RV finished logo')).toHaveCount(0);
-    await page.getByRole('tab', { name: /Needs action/ }).click();
+    const needsAction = page.getByRole('group', { name: 'Quick task filters' }).getByRole('button', { name: /Needs action/ });
+    await needsAction.click();
     await expect(visibleText(page, 'RV department submission')).toBeVisible();
     await expect(visibleText(page, 'RV PM-approval submission')).toHaveCount(0);
-    await page.getByRole('tab', { name: /^Waiting/ }).click();
+    await needsAction.click();
+    await page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^In review \d+$/ }).click();
     await expect(visibleText(page, 'RV PM-approval submission')).toBeVisible();
-    await page.getByRole('tab', { name: /Done/ }).click();
+    await page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^Completed \d+$/ }).click();
     await expect(visibleText(page, 'RV finished logo')).toBeVisible();
   });
 
@@ -185,7 +187,7 @@ test.describe('review queues show only decisions the user can take', () => {
     await expect(visibleText(page, 'RV open brief')).toBeVisible();
     await expect(visibleText(page, 'RV finished logo')).toHaveCount(0);
     await expect(main(page).getByRole('button', { name: /^Approve/ })).toHaveCount(0);
-    await page.getByRole('tab', { name: /Done/ }).click();
+    await page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^Completed \d+$/ }).click();
     await expect(visibleText(page, 'RV finished logo')).toBeVisible();
     await page.goto('/');
     await expect(page.getByRole('heading', { name: 'My work', level: 1 })).toBeVisible();

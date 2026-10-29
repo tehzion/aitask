@@ -16,6 +16,7 @@ vi.mock('./supabaseClient', () => ({
 
 import {
   BACKEND_UPGRADE_REQUIRED_MESSAGE,
+  transientRetryPolicy,
   buildOperations,
   acknowledgeSecureReleaseNotice,
   discardSecureWorkspaceCommand,
@@ -47,6 +48,8 @@ import {
 
 beforeEach(() => {
   invalidateWorkspaceSession();
+  // Most cases exercise the manual retry path; the automatic resend has its own tests.
+  transientRetryPolicy.attempts = 0;
 });
 
 afterEach(() => {
@@ -477,6 +480,34 @@ describe('secure command retry identity', () => {
       expect(getRetainedSecureCommand()?.id).toBe(rpc.mock.calls[0][1].p_command_id);
       await request;
     } finally { vi.useRealTimers(); }
+  });
+
+  it('resends once automatically after a dropped request, with the same command id', async () => {
+    transientRetryPolicy.attempts = 1;
+    transientRetryPolicy.delayMs = 0;
+    rpc
+      .mockRejectedValueOnce(new Error('fetch failed'))
+      .mockResolvedValueOnce({
+        data: { ok: true, workspaceVersion: 2, changed: [{ entityType: 'member', entityId: '5', version: 1, updatedAt: '2026-07-15T00:00:00Z' }] },
+        error: null,
+      });
+
+    const result = await saveSecureWorkspace(stateWithUser('5'));
+
+    expect(result.ok).toBe(true);
+    expect(rpc).toHaveBeenCalledTimes(2);
+    expect(rpc.mock.calls[1][1].p_command_id).toBe(rpc.mock.calls[0][1].p_command_id);
+  });
+
+  it('asks the user to retry when the automatic resend also fails', async () => {
+    transientRetryPolicy.attempts = 1;
+    transientRetryPolicy.delayMs = 0;
+    rpc.mockRejectedValueOnce(new Error('fetch failed')).mockRejectedValueOnce(new Error('fetch failed'));
+
+    const result = await saveSecureWorkspace(stateWithUser('6'));
+
+    expect(result).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
+    expect(rpc).toHaveBeenCalledTimes(2);
   });
 
   it('retains a command after a thrown network error', async () => {

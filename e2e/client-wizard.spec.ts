@@ -108,6 +108,8 @@ test('creates a client profile first, then a named project', async ({ page }) =>
   await projectDialog.getByLabel('Project name *').fill('Q4 Launch');
   await projectDialog.getByRole('button', { name: 'Design' }).click();
   await projectDialog.getByRole('checkbox', { name: 'HOD Demo' }).check();
+  // Every project needs a Project Manager; Boss Koo administers.
+  await projectDialog.locator('fieldset', { hasText: 'Project managers' }).getByRole('checkbox').first().check();
   await projectDialog.getByRole('button', { name: 'Create project', exact: true }).click();
   await expect(projectDialog).toBeHidden();
   await expect(page.getByText('Projects: Q4 Launch', { exact: true }).last()).toBeVisible();
@@ -150,6 +152,8 @@ test('can add a client inside project creation and continue the same form', asyn
   await expect(projectDialog.getByLabel('Company name *')).toHaveValue(/CL-/);
   await projectDialog.getByLabel('Project name *').fill('Inline Project');
   await projectDialog.getByRole('button', { name: 'Design' }).click();
+  // Every project needs a Project Manager; Boss Koo administers.
+  await projectDialog.locator('fieldset', { hasText: 'Project managers' }).getByRole('checkbox').first().check();
   await projectDialog.getByRole('button', { name: 'Create project', exact: true }).click();
   await expect(projectDialog).toBeHidden();
   await expect(page.getByText('Projects: Inline Project', { exact: true }).last()).toBeVisible();

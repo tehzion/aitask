@@ -116,6 +116,8 @@ for (const locale of ['en', 'zh'] as const) {
   test(`Conflict ${locale}: field names are readable and recovery uses saved data`, async ({ page }) => {
     await seed(page, 'Staff', locale);
     await page.goto('/settings');
+    // Inject the conflict only after the reloaded app has finished loading.
+    await expect(page.locator('main h1').first()).toBeVisible();
     await page.evaluate(async () => {
       const { useStore } = await import('/src/store/index.ts');
       const { mountMessageProbe } = await import('/e2e/fixtures/uiMessageProbe.tsx');

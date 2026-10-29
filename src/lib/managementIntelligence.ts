@@ -52,6 +52,7 @@ export interface ManagementProjectRow {
 export interface ProjectManagerOverview {
   member: User;
   projects: number;
+  openTasks: number;
   overdueTasks: number;
   pendingReviews: number;
   atRiskProjects: number;
@@ -63,6 +64,8 @@ export interface ManagementSnapshot {
   atRiskProjects: number;
   overdueTasks: number;
   pendingApprovals: number;
+  /** Waiting for approval for more than a week. */
+  staleApprovals: number;
   activeMonthlyPlans: number;
   upcomingRenewals: number;
   overdueRenewals: number;
@@ -139,7 +142,8 @@ export const getManagementSnapshot = ({
   const renewalWindowEnd = endOfDay(addDays(today, 30));
   const renewalDates = activePlans.map(planRenewalDate);
   const overdueDeliverables = getOverdueDeliverables(deliverables, serviceCycles, now);
-  const projectManagerUsers = users.filter(user => user.role === 'Project Manager' && !user.directoryOnly);
+  // Boss Koo administers the workspace; only real Project Managers run projects.
+  const projectManagerUsers = users.filter(user => user.role === 'Project Manager' && !user.isSuperAdmin && !user.directoryOnly);
   const projectManagers = projectManagerUsers.map(member => {
     const memberProjects = projects.filter(project => (
       project.projectManagerIds !== undefined
@@ -152,6 +156,7 @@ export const getManagementSnapshot = ({
     return {
       member,
       projects: memberProjects.length,
+      openTasks: memberTasks.filter(isTaskOpen).length,
       overdueTasks: memberTasks.filter(task => isTaskOverdue(task, now)).length,
       pendingReviews: getPortfolioReviewQueues(memberTasks).waitingCount,
       atRiskProjects: memberRows.filter(row => row.health.health === 'atRisk').length,
@@ -166,6 +171,12 @@ export const getManagementSnapshot = ({
     atRiskProjects: projectRows.filter(row => row.health.health === 'atRisk').length,
     overdueTasks: tasks.filter(task => isTaskOverdue(task, now)).length,
     pendingApprovals: getPortfolioReviewQueues(tasks).waitingCount,
+    staleApprovals: tasks.filter(task => {
+      if (task.status !== 'Waiting Approval' || !isTaskOpen(task)) return false;
+      // Legacy rows have no review timestamp; fall back to their due date.
+      const since = parseOptionalDate((task.workState?.reviewRequestedAt || task.updatedAt || task.dueDate)?.slice(0, 10));
+      return Boolean(since && isBefore(since, addDays(today, -7)));
+    }).length,
     activeMonthlyPlans: activePlans.length,
     upcomingRenewals: renewalDates.filter(date => Boolean(date && !isBefore(date, today) && date <= renewalWindowEnd)).length,
     overdueRenewals: renewalDates.filter(date => Boolean(date && isBefore(date, today))).length,

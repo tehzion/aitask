@@ -15,6 +15,7 @@ import { isMessageId } from './messages';
 import './staffWorkflowCopy';
 import './actionFeedbackCopy';
 import './hodReviewCopy';
+import './taskStageCopy';
 
 describe('Chinese UI translations', () => {
   it('keeps English as the default and translates shared interface copy to Simplified Chinese', () => {

@@ -27,12 +27,12 @@ test('All work refreshes urgency and due labels at local midnight', async ({ pag
   await page.clock.install({ time: new Date('2026-10-14T15:59:50Z') });
   await page.clock.pauseAt(new Date('2026-10-14T15:59:59Z'));
   await seed(page);
-  await expect(page.getByRole('tab', { name: /Up next/ })).toContainText('1');
+  const needsAction = page.getByRole('group', { name: 'Quick task filters' }).getByRole('button', { name: /Needs action/ });
+  await expect(needsAction).toContainText('0');
   await expect(page.getByText('Due in 1 day', { exact: true })).toBeVisible();
   await page.clock.runFor(2000);
-  await expect(page.getByRole('tab', { name: /Needs action/ })).toContainText('1');
-  await expect(page.getByRole('tab', { name: /Up next/ })).toContainText('0');
-  await expect(page.getByText('Due today', { exact: true })).toBeVisible();
+  await expect(needsAction).toContainText('1');
+  await expect(page.locator('#all-work-panel').getByText('Due today', { exact: true })).toBeVisible();
 });
 
 test('All work catches up on focus after a suspended date boundary', async ({ page }) => {
@@ -41,8 +41,8 @@ test('All work catches up on focus after a suspended date boundary', async ({ pa
   await seed(page);
   await page.clock.setSystemTime(new Date('2026-10-14T16:00:01Z'));
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(page.getByRole('tab', { name: /Needs action/ })).toContainText('1');
-  await expect(page.getByText('Due today', { exact: true })).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Quick task filters' }).getByRole('button', { name: /Needs action/ })).toContainText('1');
+  await expect(page.locator('#all-work-panel').getByText('Due today', { exact: true })).toBeVisible();
 });
 
 test('Staff review enquiry notifies the displayed HOD contact and PM', async ({ page }) => {
@@ -58,7 +58,7 @@ test('Staff review enquiry notifies the displayed HOD contact and PM', async ({ 
   await expect(sheet.getByText('Please share the review result', { exact: true })).toBeVisible();
 });
 
-test('All work HOD scope and queue tablists control distinct panels', async ({ page }) => {
+test('All work HOD scope tablist controls its panel and stage tabs stay plain toggles', async ({ page }) => {
   await page.goto('/login');
   // Let the app finish its startup load so seeded state is not overwritten.
   await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
@@ -76,10 +76,11 @@ test('All work HOD scope and queue tablists control distinct panels', async ({ p
   });
   await page.goto('/tasks');
   await expect(page.getByRole('tab', { name: 'My assignments' })).toHaveAttribute('aria-controls', 'hod-scope-panel');
-  await expect(page.getByRole('tab', { name: 'Up next' })).toHaveAttribute('aria-controls', 'all-work-panel');
   await expect(page.locator('#hod-scope-panel')).toHaveAttribute('role', 'tabpanel');
-  await expect(page.locator('#all-work-panel')).toHaveAttribute('role', 'tabpanel');
-  // Exactly one tablist may control each panel.
+  // Exactly one tablist controls the scope panel; stage tabs are pressed toggles, not a second tablist.
   await expect(page.locator('[aria-controls="hod-scope-panel"]')).toHaveCount(3);
-  await expect(page.locator('[aria-controls="all-work-panel"]')).toHaveCount(5);
+  const stages = page.getByRole('group', { name: 'Task stages' }).getByRole('button');
+  await expect(stages).toHaveCount(6);
+  await expect(stages.first()).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#all-work-panel')).not.toHaveAttribute('role', 'tabpanel');
 });

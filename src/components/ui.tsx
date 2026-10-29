@@ -13,18 +13,20 @@ interface PageHeaderProps {
   meta?: React.ReactNode;
   compact?: boolean;
   onboardingTarget?: string;
+  /** Hide the description on phones, where list pages need the space for content. */
+  hideDescriptionOnMobile?: boolean;
 }
 
-export const PageHeader: React.FC<PageHeaderProps> = ({ title, description, action, breadcrumb, meta, compact = false, onboardingTarget }) => (
-  <header {...(onboardingTarget ? { 'data-onboarding-target': onboardingTarget } : {})} className={cn('app-page-header flex flex-col gap-5 border-b border-line/70', compact ? 'pb-4' : 'pb-6', 'sm:flex-row sm:items-end sm:justify-between')}>
+export const PageHeader: React.FC<PageHeaderProps> = ({ title, description, action, breadcrumb, meta, compact = false, onboardingTarget, hideDescriptionOnMobile = false }) => (
+  <header {...(onboardingTarget ? { 'data-onboarding-target': onboardingTarget } : {})} className={cn('app-page-header flex flex-col gap-5 border-b border-line/70', compact ? 'pb-4' : 'pb-6', 'lg:flex-row lg:items-end lg:justify-between')}>
     {/* The title keeps a readable minimum; the actions wrap instead of squeezing it to zero width. */}
-    <div className="min-w-0 sm:min-w-[14rem] sm:flex-1">
+    <div className="min-w-0 lg:min-w-[14rem] lg:flex-1">
       {breadcrumb && <div className="mb-2 text-xs font-medium text-muted">{breadcrumb}</div>}
       <h1 className={cn('app-page-title text-balance font-semibold text-ink', compact ? 'text-2xl leading-8' : 'text-[1.75rem] leading-9 sm:text-[2rem] sm:leading-10')}>{title}</h1>
-      {description && <p className="mt-1.5 max-w-[65ch] text-pretty text-sm leading-6 text-muted">{description}</p>}
+      {description && <p className={cn('mt-1.5 max-w-[65ch] text-pretty text-sm leading-6 text-muted', hideDescriptionOnMobile && 'hidden sm:block')}>{description}</p>}
       {meta && <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted">{meta}</div>}
     </div>
-    {action && <div className="min-w-0 sm:max-w-[65%] sm:shrink-0">{action}</div>}
+    {action && <div className="min-w-0 lg:max-w-[65%] lg:shrink-0">{action}</div>}
   </header>
 );
 
@@ -83,17 +85,6 @@ interface MetricCardProps {
   className?: string;
 }
 
-const toneClasses: Record<string, string> = {
-  indigo:  'bg-accent-soft text-accent',
-  emerald: 'bg-emerald-50 text-emerald-600',
-  amber:   'bg-amber-50   text-amber-600',
-  orange:  'bg-amber-50  text-amber-700',
-  red:     'bg-red-50     text-red-600',
-  blue:    'bg-accent-soft text-accent',
-  purple:  'bg-accent-soft text-accent',
-  slate:   'bg-slate-100  text-slate-600',
-};
-
 export const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon: Icon, tone = 'blue', footer, className }) => (
   <div className={cn(cardBase, 'app-metric-card p-4 sm:p-5', className)}>
     <div className="flex items-start justify-between gap-3">
@@ -101,9 +92,8 @@ export const MetricCard: React.FC<MetricCardProps> = ({ title, value, icon: Icon
         <p className="text-sm font-medium leading-5 text-muted">{title}</p>
         <div className="calm-number mt-1.5 text-2xl font-semibold leading-8 tracking-[-0.035em] text-ink">{value}</div>
       </div>
-      {Icon && <div className={cn('flex h-9 w-9 shrink-0 items-center justify-center rounded-control', toneClasses[tone])}>
-        <Icon className="h-4 w-4" aria-hidden="true" />
-      </div>}
+      {/* The value carries the meaning; the icon stays a quiet, neutral marker. */}
+      {Icon && <Icon className={cn('mt-0.5 h-[18px] w-[18px] shrink-0', tone === 'red' ? 'text-red-600 dark:text-red-300' : 'text-muted')} aria-hidden="true" />}
     </div>
     {footer && <div className="mt-3 text-xs text-muted">{footer}</div>}
   </div>
@@ -192,8 +182,9 @@ export const StatGroup: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ clas
   <div className={cn('calm-surface grid divide-y divide-line/70 overflow-hidden ring-1 ring-line/70 sm:divide-x sm:divide-y-0', className)} {...props} />
 );
 
+// Active states use the ink tone; the red accent is kept for selection and risk.
 export const StatusChip: React.FC<React.HTMLAttributes<HTMLSpanElement> & { tone?: BadgeProps['tone']; dot?: boolean }> = ({ tone = 'slate', dot = false, className, children, ...props }) => (
-  <span className={cn('inline-flex items-center gap-1.5 border-l-2 pl-2 text-xs font-semibold leading-5', tone === 'emerald' ? 'border-emerald-500 text-emerald-700 dark:text-emerald-300' : tone === 'amber' || tone === 'orange' ? 'border-amber-500 text-amber-700 dark:text-amber-300' : tone === 'red' ? 'border-red-500 text-red-700 dark:text-red-300' : tone === 'blue' || tone === 'purple' || tone === 'pink' || tone === 'indigo' ? 'border-accent text-accent' : 'border-line text-muted', className)} {...props}>
+  <span className={cn('inline-flex items-center gap-1.5 border-l-2 pl-2 text-xs font-semibold leading-5', tone === 'emerald' ? 'border-emerald-500 text-emerald-700 dark:text-emerald-300' : tone === 'amber' || tone === 'orange' ? 'border-amber-500 text-amber-700 dark:text-amber-300' : tone === 'red' ? 'border-red-500 text-red-700 dark:text-red-300' : tone === 'blue' || tone === 'purple' || tone === 'pink' || tone === 'indigo' ? 'border-ink/70 text-ink' : 'border-line text-muted', className)} {...props}>
     {dot && <span className="h-1.5 w-1.5 rounded-full bg-current opacity-75" aria-hidden="true" />}
     {children}
   </span>
@@ -273,17 +264,15 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
     selectAt(nextIndex);
   };
 
-  const isUnderline = variant === 'underline';
-  const isBoss = variant === 'boss';
+  // Page-level views share one underline style; 'boss' is kept as an alias for it.
+  const isUnderline = variant === 'underline' || variant === 'boss';
   return (
     <div role="tablist" aria-label={label} className={cn(
       'app-tablist',
       isUnderline && 'app-tablist--underline',
       isUnderline
         ? 'no-scrollbar flex min-w-0 gap-1 overflow-x-auto border-b border-line'
-        : isBoss
-          ? 'inline-flex w-fit rounded-panel border border-line bg-surface p-1 shadow-sm'
-          : 'no-scrollbar flex min-w-0 gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 sm:gap-1 sm:p-1',
+        : 'no-scrollbar flex min-w-0 gap-0.5 overflow-x-auto rounded-control bg-inset p-0.5 sm:gap-1 sm:p-1',
     )}>
       {items.map((item, index) => (
         <button
@@ -303,17 +292,12 @@ export const SegmentedTabs = <T extends string,>({ items, value, onChange, label
             isUnderline && 'app-tab--underline',
             isUnderline
               ? 'relative min-h-11 shrink-0 px-3 text-sm font-semibold transition-colors duration-160'
-              : isBoss
-                ? 'inline-flex min-h-11 items-center gap-2 rounded-control px-3 text-sm font-semibold transition-colors'
-                : 'min-h-11 shrink-0 rounded-tag px-2 text-xs font-medium transition-[background-color,color,box-shadow] duration-160 sm:px-3 sm:text-sm',
+              : 'min-h-11 shrink-0 rounded-tag px-2 text-xs font-medium transition-[background-color,color,box-shadow] duration-160 sm:px-3 sm:text-sm',
             isUnderline
               ? value === item.id ? 'text-ink after:absolute after:inset-x-2 after:bottom-0 after:h-0.5 after:rounded-full after:bg-accent' : 'text-muted hover:text-ink'
-              : isBoss
-                ? value === item.id ? 'bg-accent text-white' : 'text-muted hover:bg-inset hover:text-ink'
-                : value === item.id ? 'bg-surface text-ink ring-1 ring-line/70' : 'text-muted hover:text-ink',
+              : value === item.id ? 'bg-surface text-ink ring-1 ring-line/70' : 'text-muted hover:text-ink',
           )}
         >
-          {item.icon && <item.icon className="h-4 w-4" aria-hidden="true" />}
           {item.compactLabel ? <><span className="sm:hidden" aria-hidden="true">{item.compactLabel}</span><span className="hidden sm:inline">{item.label}</span></> : item.label}
           {typeof item.count === 'number' && <span className="calm-number ml-1.5 text-xs opacity-70">{item.count}</span>}
         </button>
@@ -341,7 +325,7 @@ export const DataRow: React.FC<Omit<React.HTMLAttributes<HTMLElement>, 'title'> 
 
 export const EmptyState: React.FC<{ title: string; description: string; action?: React.ReactNode; icon?: LucideIcon; className?: string }> = ({ title, description, action, icon: Icon = ArrowUpRight, className }) => (
   <div className={cn('app-empty-state rounded-panel bg-inset px-5 py-12 text-center', className)}>
-    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-control bg-accent-soft text-accent"><Icon className="h-5 w-5" aria-hidden="true" /></div>
+    <Icon className="mx-auto h-6 w-6 text-muted" aria-hidden="true" />
     <h3 className="mt-4 font-semibold text-ink">{title}</h3><p className="mx-auto mt-1 max-w-md text-sm leading-6 text-muted">{description}</p>{action && <div className="mt-5">{action}</div>}
   </div>
 );

@@ -101,7 +101,7 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
     >
       <div className="overflow-y-auto px-5 pb-5 pt-6 sm:px-7 sm:pb-7 sm:pt-8">
         <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-control bg-accent-soft text-accent">
+          <div className="flex h-6 w-6 shrink-0 items-center justify-center text-muted">
             <Megaphone className="h-5 w-5" aria-hidden="true" />
           </div>
           <div className="min-w-0">
