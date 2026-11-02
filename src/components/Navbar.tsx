@@ -18,6 +18,7 @@ import type { ResolvedTheme, ThemePreference } from '../lib/theme';
 import { LanguageSwitcher, useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import GlobalSearchResults from './GlobalSearchResults';
+import UserAvatar from './UserAvatar';
 
 const NotificationPreviewText = React.lazy(() => import('../modules/notifications/components/NotificationPreviewText'));
 
@@ -281,10 +282,10 @@ const Navbar: React.FC<NavbarProps> = ({
           {showMobileSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
         </IconButton>
         <div className="relative flex items-center" ref={appearanceRef}>
-          <IconButton onClick={onToggleTheme} label={t('Switch to {mode} mode', { mode: resolvedTheme === 'dark' ? t('day') : t('night') })} aria-pressed={resolvedTheme === 'dark'} aria-keyshortcuts="Shift+D" className="rounded-r-none">
+          <IconButton onClick={onToggleTheme} label={t('Switch to {mode} mode', { mode: resolvedTheme === 'dark' ? t('day') : t('night') })} aria-pressed={resolvedTheme === 'dark'} aria-keyshortcuts="Shift+D" className="sm:rounded-r-none">
             {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </IconButton>
-          <button ref={appearanceTriggerRef} type="button" onClick={() => setShowAppearance(value => !value)} onKeyDown={event => { if (event.key === 'Escape' && showAppearance) { event.preventDefault(); closeAppearance(true); } }} aria-label={t('Appearance settings')} aria-haspopup="menu" aria-expanded={showAppearance} aria-controls="appearance-menu" className="flex h-11 w-11 items-center justify-center rounded-r-control text-muted hover:bg-inset hover:text-ink"><ChevronDown className="h-4 w-4" /></button>
+          <button ref={appearanceTriggerRef} type="button" onClick={() => setShowAppearance(value => !value)} onKeyDown={event => { if (event.key === 'Escape' && showAppearance) { event.preventDefault(); closeAppearance(true); } }} aria-label={t('Appearance settings')} aria-haspopup="menu" aria-expanded={showAppearance} aria-controls="appearance-menu" className="hidden h-11 w-11 items-center justify-center rounded-r-control text-muted hover:bg-inset hover:text-ink sm:flex"><ChevronDown className="h-4 w-4" /></button>
           {showAppearance && <div id="appearance-menu" role="menu" aria-label={t('Appearance')} className="absolute right-0 top-12 z-50 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
             {([{ id: 'light', label: 'Light', icon: Sun }, { id: 'dark', label: 'Dark', icon: Moon }, { id: 'system', label: 'System', icon: Monitor }] as const).map((option, index) => <button key={option.id} ref={node => { appearanceItemRefs.current[index] = node; }} type="button" role="menuitemradio" aria-checked={themePreference === option.id} onKeyDown={event => handleAppearanceKeyDown(event, index)} onClick={() => { onSetThemePreference(option.id); closeAppearance(true); }} className={cn('flex min-h-11 w-full items-center gap-2.5 rounded-control px-3 text-sm transition-colors duration-160', themePreference === option.id ? 'bg-accent-soft font-semibold text-accent' : 'text-muted hover:bg-inset hover:text-ink')}><option.icon className="h-4 w-4" />{t(option.label)}</button>)}
           </div>}
@@ -300,13 +301,15 @@ const Navbar: React.FC<NavbarProps> = ({
         <IconButton
           onClick={handleToggleSound}
           label={soundEnabled ? t('Mute notifications') : t('Unmute notifications')}
+          className="hidden sm:inline-flex"
         >
           {soundEnabled
             ? <Volume2 className="w-5 h-5" />
             : <VolumeX className="w-5 h-5 text-slate-400" />}
         </IconButton>
 
-        <div className="relative" ref={notifRef}>
+        {/* Phones reach notifications from the bottom bar's Inbox, so the header keeps only search, language and theme. */}
+        <div className="relative hidden sm:block" ref={notifRef}>
           <IconButton
             onClick={handleBellClick}
             label={t('Notifications')}
@@ -316,7 +319,7 @@ const Navbar: React.FC<NavbarProps> = ({
           >
             <Bell className="w-5 h-5" />
             {unreadCount > 0 && (
-              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-700 px-1 text-[10px] font-bold leading-none text-white">
+              <span className="absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full border-2 border-white bg-red-700 px-1 text-[11px] font-bold leading-none text-white">
                 {unreadCount > 99 ? '99+' : unreadCount}
               </span>
             )}
@@ -397,11 +400,7 @@ const Navbar: React.FC<NavbarProps> = ({
               {getEffectiveRoleName(currentUser, rolePermissions)} - {getMemberDepartments(currentUser).join(', ')}
             </span>
           </div>
-          <img
-            src={currentUser.avatar}
-            data-i18n-skip alt={currentUser.name}
-            className="h-9 w-9 rounded-control object-cover ring-1 ring-line"
-          />
+          <UserAvatar src={currentUser.avatar} name={currentUser.name} className="h-9 w-9 rounded-control ring-1 ring-line" />
         </div>
       </div>
       {showMobileSearch && (

@@ -30,6 +30,7 @@ import { formatLocalizedDate } from '../lib/i18n';
 import { getLocalizedDepartment, getLocalizedPriority, getLocalizedRole, getLocalizedStatus } from '../lib/localeLabels';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
+import UserAvatar from './UserAvatar';
 
 interface TeamWorkloadProps {
   tasks: Task[];
@@ -63,7 +64,7 @@ const priorityClasses: Record<Task['priority'], string> = {
 const MemberIdentity = ({ member, locale }: { member: User; locale: Parameters<typeof formatLocalizedDate>[1] }) => (
   <div className="flex min-w-0 items-center gap-3">
     {member.avatar ? (
-      <img src={member.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full object-cover" />
+      <UserAvatar src={member.avatar} name={member.name} className="h-10 w-10 rounded-full" />
     ) : (
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-700">
         {member.name.charAt(0).toUpperCase()}

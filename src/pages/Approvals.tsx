@@ -26,6 +26,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { rollbackUnchangedRows } from '../lib/actionRollback';
 import { generateTemporaryPassword } from '../lib/temporaryPassword';
+import UserAvatar from '../components/UserAvatar';
 
 const ROLES: Role[] = ['Project Manager', 'HOD', 'Staff', 'Client'];
 
@@ -1433,7 +1434,7 @@ const Approvals: React.FC = () => {
                       <div className="flex items-center gap-2 text-xs text-slate-500 mt-0.5">
                         {t({ id: 'approval.appliedColon', values: { date: formatLocalizedDate(new Date(reg.createdAt), locale) } })}
                         {days >= 7 && (
-                        <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[10px] font-bold text-red-700">{days}d {t('pending')}</span>
+                        <span className="rounded-md bg-red-100 px-1.5 py-0.5 text-[11px] font-bold text-red-700">{days}d {t('pending')}</span>
                         )}
                       </div>
                     </td>
@@ -1794,7 +1795,7 @@ const Approvals: React.FC = () => {
           {visibleMembers.map(u => (
             <article key={u.id} className="space-y-4 p-4">
               <div className="flex items-start gap-3">
-                <img src={u.avatar} alt="" className="h-10 w-10 shrink-0 rounded-full border border-slate-200 object-cover" />
+                <UserAvatar src={u.avatar} name={u.name} className="h-10 w-10 rounded-full border border-line" />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>
@@ -1891,7 +1892,7 @@ const Approvals: React.FC = () => {
                 <tr key={u.id} className="hover:bg-slate-50">
                   <td className="px-6 py-4">
                     <div className="flex items-center gap-3">
-                      <img src={u.avatar} alt="" className="w-8 h-8 rounded-full object-cover border border-slate-200" />
+                      <UserAvatar src={u.avatar} name={u.name} className="h-8 w-8 rounded-full border border-line" />
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>

@@ -173,7 +173,7 @@ const StaffMyWork: React.FC = () => {
         </Surface>
       </section>}
       {focusTask ? (
-        <section aria-labelledby="staff-focus-title" className="calm-raised border-l-2 border-accent p-5 sm:p-6">
+        <section aria-labelledby="staff-focus-title" className="calm-raised p-5 sm:p-6">
           <div className="grid gap-5 lg:grid-cols-[1fr_auto] lg:items-end">
             <div className="min-w-0">
               <p className="calm-eyebrow">{t('Needs attention')}</p>

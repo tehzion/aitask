@@ -5430,7 +5430,7 @@ export const useStore = create<StoreState>()(
           customRoleId: customRole?.id,
           customRoleName: customRole?.name,
           permissions: undefined,
-          avatar: `https://i.pravatar.cc/150?u=${encodeURIComponent(name.replace(/\s/g, ''))}`,
+          avatar: undefined,
           updatedAt: new Date().toISOString()
         };
 
@@ -6014,7 +6014,7 @@ export const useStore = create<StoreState>()(
           companyName,
           customRoleId: customRole?.id,
           customRoleName: customRole?.name,
-          avatar: `https://i.pravatar.cc/150?u=${reg.name.replace(/\s/g, '')}`,
+          avatar: undefined,
           updatedAt: new Date().toISOString()
         };
 

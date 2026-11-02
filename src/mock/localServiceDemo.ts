@@ -611,7 +611,6 @@ export const createLocalServiceDemoFixture = (
       departments: ['Operation'],
       department: 'Operation',
       workerType: 'employee',
-      avatar: 'https://i.pravatar.cc/150?u=OperationDemo',
       permissions: {
         viewDashboard: true, viewTasks: true, viewCalendar: true, viewProjects: true, viewDeliveryTracker: true, viewAllTasks: true, viewAllClients: true, manageAssignedClients: true, viewReports: true, viewApprovals: false, viewSettings: true, createTasks: true, editTasks: true, manageCreatedTasks: true, createProjects: false, createClients: false, deleteClients: false, manageUsers: false, approveRegistrations: false, deleteUsers: false, clientReview: false, manageServiceCatalog: false, manageTaskTemplates: false, manageClientPlans: false, manageServiceCycles: true, viewAllServiceClients: true, viewAssignedServiceClients: true, viewServicePrices: false, viewProductionReports: true,
       },
@@ -624,7 +623,6 @@ export const createLocalServiceDemoFixture = (
       departments: ['Account & Finance'],
       department: 'Account & Finance',
       workerType: 'employee',
-      avatar: 'https://i.pravatar.cc/150?u=AccountDemo',
       permissions: {
         viewDashboard: true, viewTasks: true, viewCalendar: true, viewProjects: true, viewDeliveryTracker: true, viewAllTasks: true, viewAllClients: true, manageAssignedClients: false, viewReports: true, viewApprovals: false, viewSettings: true, createTasks: false, editTasks: false, manageCreatedTasks: false, createProjects: false, createClients: false, deleteClients: false, manageUsers: false, approveRegistrations: false, deleteUsers: false, clientReview: false, manageServiceCatalog: false, manageTaskTemplates: false, manageClientPlans: false, manageServiceCycles: false, viewAllServiceClients: true, viewAssignedServiceClients: true, viewServicePrices: true, viewProductionReports: true,
       },

@@ -10,7 +10,7 @@ export const inputBase = [
   'min-h-11 w-full rounded-control border border-line bg-surface text-sm text-ink shadow-none',
   'outline-none transition-[border-color,box-shadow,background-color] duration-160',
   'focus:border-accent focus:ring-2 focus:ring-accent/15',
-  'placeholder:text-muted/70',
+  'placeholder:text-muted',
   'disabled:cursor-not-allowed disabled:bg-inset disabled:text-muted/60',
 ].join(' ');
 export const buttonBase = [

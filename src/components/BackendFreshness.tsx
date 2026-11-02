@@ -100,7 +100,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
   return (
     <div className={cn('flex flex-wrap items-center gap-2', className)} aria-live="polite">
       <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
-        <Badge tone={tone} className="px-1.5 py-0.5 text-[10px] font-semibold gap-1 shrink-0">
+        <Badge tone={tone} className="px-1.5 py-0.5 text-[11px] font-semibold gap-1 shrink-0">
           <Icon className={cn('h-3 w-3', backend.status === 'loading' && 'animate-spin')} />
           {label}
         </Badge>

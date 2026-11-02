@@ -606,7 +606,7 @@ const Dashboard: React.FC = () => {
             {bossTab === 'overview' && (
               <div id="boss-panel-overview" role="tabpanel" aria-labelledby="boss-tab-overview" tabIndex={0} className="space-y-6">
                 {bossBriefing && bossBriefing.pendingRegs.length > 0 && (
-                  <Link to="/approvals" className={cn(cardBase, 'flex flex-wrap items-center gap-4 border-l-2 border-accent p-5 transition-colors hover:bg-inset/50')}>
+                  <Link to="/approvals" className={cn(cardBase, 'flex flex-wrap items-center gap-4 p-5 transition-colors hover:bg-inset/50')}>
                     <span className="min-w-0 flex-1">
                       <span className="block font-semibold text-ink">{t('Registrations waiting for approval')}</span>
                       <span className="mt-0.5 block text-sm text-muted">

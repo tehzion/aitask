@@ -356,7 +356,7 @@ const Layout: React.FC = () => {
                   <Icon aria-hidden="true" className={cn("h-5 w-5", isActive && "text-accent")} />
                   {item.path === '/notifications' && unreadCount > 0 && <span aria-hidden="true" className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
                 </span>
-                <span className="max-w-full truncate text-[10px] leading-4">{t(item.label)}</span>
+                <span className="max-w-full truncate text-[11px] leading-4">{t(item.label)}</span>
               </>
             );
             const navClass = (isActive: boolean) => cn(
@@ -385,7 +385,7 @@ const Layout: React.FC = () => {
             className="flex h-16 min-w-0 flex-1 flex-col items-center justify-center gap-0.5 rounded-control px-1 text-muted transition-[background-color,color,transform] duration-160 hover:bg-inset hover:text-ink active:translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-inset"
           >
             <span className="flex h-7 w-7 items-center justify-center"><Menu aria-hidden="true" className="h-5 w-5" /></span>
-            <span className="max-w-full truncate text-[10px] leading-4">{t('More')}</span>
+            <span className="max-w-full truncate text-[11px] leading-4">{t('More')}</span>
           </button>
         </nav>
       </div>

@@ -106,9 +106,9 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
           }}
           placeholder={t('Search pages and actions...')}
           aria-label={t('Search pages and actions...')}
-          className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted/70"
+          className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
         />
-        <kbd className="rounded border border-line bg-inset px-1.5 py-0.5 font-mono text-[10px] text-muted">{t('common.escape')}</kbd>
+        <kbd className="rounded border border-line bg-inset px-1.5 py-0.5 font-mono text-[11px] text-muted">{t('common.escape')}</kbd>
         <button type="button" aria-label={t('Close')} onClick={onClose} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink"><X className="h-4 w-4" /></button>
       </div>
       <p className="sr-only" role="status" aria-live="polite">{filtered[activeIndex]?.label || t('No matching commands.')}</p>

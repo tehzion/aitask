@@ -1551,6 +1551,8 @@ const zhCopyAdditions: Record<string, string> = {
   'Department workload, delegated tasks, and review risk.': '部门工作量、委派任务和审核风险。',
   'Department tasks': '部门任务',
   'Team members': '团队成员',
+  'Nothing needs your action right now.': '目前没有需要您处理的事项。',
+  'All clear': '已无待办',
   '{days} days overdue': '已逾期 {days} 天',
   'New due date for {title}': '{title} 的新截止日期',
   'Re-date': '修改日期',
@@ -2541,6 +2543,17 @@ export const formatLocalizedDate = (value: Date, locale: AppLocale) => {
   return locale === 'zh'
     ? `${calendarYear(value)}年${value.getMonth() + 1}月${value.getDate()}日`
     : `${value.getDate()} ${shortMonth.format(value)} ${calendarYear(value)}`;
+};
+
+/** A YYYY-MM-DD period ("1 Nov 2026 – 30 Nov 2026"), formatted like every other date in the app. */
+export const formatLocalizedDateRange = (start: string | undefined, end: string | undefined, locale: AppLocale) => {
+  const toDate = (value?: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(value || '');
+    return match ? new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])) : undefined;
+  };
+  const from = toDate(start);
+  const to = toDate(end);
+  return [from && formatLocalizedDate(from, locale), to && formatLocalizedDate(to, locale)].filter(Boolean).join(' – ');
 };
 
 /** Formats role-workspace headers with the selected locale. */

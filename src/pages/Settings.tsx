@@ -605,7 +605,7 @@ const Settings: React.FC = () => {
                   ) : (
                     <div className="flex h-full w-full flex-col items-center justify-center gap-1 text-muted" role="img" aria-label={avatarUrl ? t('Photo preview unavailable') : t('No profile photo')}>
                       <UserCircle className="h-9 w-9" aria-hidden="true" />
-                      {avatarUrl && <span className="px-1 text-center text-[10px] leading-3">{t('Preview unavailable')}</span>}
+                      {avatarUrl && <span className="px-1 text-center text-[11px] leading-3">{t('Preview unavailable')}</span>}
                     </div>
                   )}
                 </div>
@@ -1022,11 +1022,11 @@ const Settings: React.FC = () => {
                         }`} />
                         <span className="text-sm font-semibold text-slate-700 truncate">{t(status)}</span>
                         {isDefault ? (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold tracking-wide shrink-0">
+                          <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-bold tracking-wide shrink-0">
                             <Lock className="w-2.5 h-2.5" /> {t('System')}
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 font-bold tracking-wide shrink-0">
+                          <span className="inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100 font-bold tracking-wide shrink-0">
                             {t('Custom')}
                           </span>
                         )}
