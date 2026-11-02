@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Clock3, Info } from 'lucide-re
 import { Link } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
-import { getDashboardPersona, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canManageServiceCycles, getDashboardPersona, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { getManagementAttentionItems, type ManagementAttentionItem } from '../lib/managementIntelligence';
 import { getPersonalReviewQueues } from '../lib/pmDashboard';
 import { formatLocalizedDate } from '../lib/i18n';
@@ -11,6 +11,8 @@ import { parseOptionalDate, cn } from '../lib/utils';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { cardBase } from './uiTokens';
+import { Button } from './ui';
+import SystemMessage from './SystemMessage';
 
 const severityStyles = {
   critical: { icon: AlertTriangle, className: 'text-red-700 dark:text-red-300' },
@@ -31,6 +33,42 @@ const describeItem = (item: ManagementAttentionItem, t: Translate) => {
     case 'clientReview': return t('Ready for your review');
     default: return item.blocked ? t('Blocked work') : item.waitingReview ? t('Waiting review') : item.revisionCount ? `${t('Revision')} ${item.revisionCount}` : '';
   }
+};
+
+/**
+ * Marks a past deliverable delivered in one step. Linking tasks is optional:
+ * the PM's confirmation is what counts. A month that was never published is
+ * published first, since only a published month can record a delivery.
+ */
+const MarkDelivered: React.FC<{ deliverableId: string; title: string }> = ({ deliverableId, title }) => {
+  const { t } = useI18n();
+  const [busy, setBusy] = React.useState(false);
+  const [error, setError] = React.useState('');
+  const run = async () => {
+    setBusy(true);
+    setError('');
+    try {
+      const store = useStore.getState();
+      const deliverable = store.deliverables.find(item => item.id === deliverableId);
+      const cycle = store.serviceCycles.find(item => item.id === deliverable?.cycleId);
+      if (cycle?.status === 'Draft') {
+        const published = store.setServiceCycleStatus(cycle.id, 'Published');
+        if (!published.ok) { setError(published.error || 'Unable to publish this month.'); return; }
+        const saved = await useStore.getState().commitPendingMutation('service_cycle.manage');
+        if (!saved.ok) { setError(saved.error || 'The month is waiting to be published.'); return; }
+      }
+      const delivered = useStore.getState().updateDeliverableStatus(deliverableId, 'Delivered');
+      if (!delivered.ok) { setError(delivered.error || 'Unable to mark this delivered.'); return; }
+      const saved = await useStore.getState().commitPendingMutation('deliverable.manage');
+      if (!saved.ok) setError(saved.error || 'The delivery is waiting to be saved.');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return <span className="flex shrink-0 flex-col items-end gap-1">
+    <Button variant="secondary" disabled={busy} onClick={() => void run()} aria-label={t('Mark {title} delivered', { title })}>{busy ? t('Saving…') : t('Mark delivered')}</Button>
+    {error && <span role="alert" className="max-w-56 text-right text-xs text-red-700"><SystemMessage message={t(error)} /></span>}
+  </span>;
 };
 
 type NeedsMyAttentionProps = {
@@ -96,6 +134,7 @@ const NeedsMyAttention: React.FC<NeedsMyAttentionProps> = ({ excludeProjectRisks
     });
   }, [clientPlans, clients, currentUser, deliverables, excludeProjectRisks, now, taskDecisions, projects, rolePermissions, serviceCycles, tasks, users]);
 
+  const canDeliver = canManageServiceCycles(currentUser, rolePermissions);
   if (!attention || (hideWhenEmpty && attention.length === 0)) return null;
 
   return (
@@ -114,8 +153,9 @@ const NeedsMyAttention: React.FC<NeedsMyAttentionProps> = ({ excludeProjectRisks
           const style = severityStyles[item.severity];
           const Icon = style.icon;
           const dueDate = parseOptionalDate(item.dueDate);
-          return (
-            <Link key={item.id} to={item.to} className="group flex items-start gap-3 px-5 py-3 transition-colors hover:bg-inset/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/35">
+          const deliverableId = item.kind === 'deliverable' && canDeliver ? item.id.replace(/^deliverable:/, '') : '';
+          const row = (
+            <Link key={item.id} to={item.to} className="group flex min-w-0 flex-1 items-start gap-3 px-5 py-3 transition-colors hover:bg-inset/50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/35">
               <span className={cn('mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center', style.className)}><Icon className="h-4 w-4" aria-hidden="true" /><span className="sr-only">{t(item.severity === 'critical' ? 'Critical' : item.severity === 'attention' ? 'Attention' : 'Information')}</span></span>
               <span className="min-w-0 flex-1">
                 <span data-i18n-skip className="block truncate text-sm font-semibold text-ink">{item.subject}</span>
@@ -124,6 +164,9 @@ const NeedsMyAttention: React.FC<NeedsMyAttentionProps> = ({ excludeProjectRisks
               <ArrowRight className="mt-1 h-4 w-4 shrink-0 text-muted transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
             </Link>
           );
+          return deliverableId
+            ? <div key={item.id} className="flex flex-wrap items-center gap-2 pr-5">{row}<MarkDelivered deliverableId={deliverableId} title={dueDate ? `${item.subject} (${formatLocalizedDate(dueDate, locale)})` : item.subject} /></div>
+            : row;
         })}
         {attention.length === 0 && (
           <div className="px-5 py-8 text-center">

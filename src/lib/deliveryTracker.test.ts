@@ -240,12 +240,19 @@ describe('matching tracker records', () => {
     expect(progress('Approved')).toBe(95);
     expect(progress('Completed')).toBe(100);
   });
-  it('does not hide unfinished linked work behind a delivered output count', () => {
+  it('counts a delivery the PM confirmed as done, whatever its linked tasks say', () => {
     const output = deliverable({ id: 'output', status: 'Delivered', taskIds: ['work'] });
     const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [cycle], deliverables: [output],
       period: 'all', range: getDeliveryPeriodRange('all', new Date()),
       tasks: [task({ id: 'work', clientName: 'Acme', clientId: output.clientId, status: 'Waiting Approval' })] });
-    expect(summary).toMatchObject({ progress: 60, delivered: 1, included: 1, completed: 0 });
+    expect(summary).toMatchObject({ progress: 100, delivered: 1, included: 1, completed: 0 });
+  });
+  it('keeps finished but unconfirmed delivery work below 100%', () => {
+    const output = deliverable({ id: 'output', status: 'Ready', taskIds: ['work'] });
+    const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [cycle], deliverables: [output],
+      period: 'all', range: getDeliveryPeriodRange('all', new Date()),
+      tasks: [task({ id: 'work', clientName: 'Acme', clientId: output.clientId, status: 'Completed', isCompleted: true })] });
+    expect(summary).toMatchObject({ progress: 90, delivered: 0, included: 1, completed: 1 });
   });
   it('recomputes task statistics and hides unrelated rows for a task search', () => {
     const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [], deliverables: [],

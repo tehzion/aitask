@@ -198,7 +198,8 @@ export const buildClientDeliverySummaries = ({
         || (item.taskIds || []).includes(task.id) || item.primaryTaskId === task.id));
       linked.forEach(task => linkedIds.add(task.id));
       const required = linked.filter(task => task.workflowStepRequired !== false && task.status !== 'Cancelled');
-      if (required.length) return averageTaskProgress(required, users, clientView);
+      // Finished tasks bring a delivery close to done; the PM's confirmation completes it.
+      if (required.length) return item.status === 'Delivered' ? 100 : Math.min(90, averageTaskProgress(required, users, clientView));
       if (item.status === 'Delivered') return 100;
       return item.status === 'Ready' ? 80 : item.status === 'In Progress' ? 30 : 0;
     });

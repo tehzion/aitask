@@ -269,7 +269,7 @@ const DeliveryTracker: React.FC = () => {
                   <div>
                     <ProgressBar value={summary.progress} label={t('Work progress')} />
                     <p className="mt-2 text-xs text-muted">{summary.included > 0
-                      ? <>{summary.delivered}/{summary.included} {t('deliverables completed')}</>
+                      ? <>{summary.delivered}/{summary.included} {t('deliverables completed')}{summary.completed > 0 && <> · {summary.completed} {t('tasks done')}</>}</>
                       : <>{summary.completed}/{summary.open + summary.completed} {t('tasks completed')}</>}</p>
                   </div>
                   <div className="min-w-0">

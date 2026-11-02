@@ -144,3 +144,35 @@ test('a month of service work: bulk task chains, extras logged at no charge, and
   const addon = await page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().addons.find(item => item.clientId === id), clientId);
   expect(addon).toMatchObject({ name: 'Extra story post', billingMode: 'one_off', unitPriceMinor: 0 });
 });
+
+test('Boss Koo marks a past deliverable delivered from the attention list, publishing its month', async ({ page }) => {
+  test.setTimeout(120_000);
+  await startApp(page);
+  await signInAs(page, 'boss');
+  const ids = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ clients: [], clientPlans: [], serviceCycles: [], deliverables: [], addons: [], tasks: [], servicePricingSnapshots: [] });
+    const created = useStore.getState().createClientWithPlan({
+      clientName: 'Past Month Co', planName: 'Past plan', origin: 'custom',
+      serviceItems: [{ id: 'fee', name: 'Management fee', platforms: [], unit: 'month', quantity: 1, unitPriceMinor: 0 }],
+      startDate: '2026-08-01', billingDay: 1, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    const activated = useStore.getState().activateClientPlan(created.planId!);
+    if (!activated.ok) throw new Error(activated.error || 'activation failed');
+    const deliverable = useStore.getState().deliverables.find(item => item.cycleId === activated.cycleId)!;
+    const cycle = useStore.getState().serviceCycles.find(item => item.id === activated.cycleId)!;
+    const [y, m, d] = cycle.periodEnd.split('-').map(Number);
+    const periodEnd = `${d} ${new Date(y, m - 1, d).toLocaleString('en-GB', { month: 'short' })} ${y}`;
+    return { cycleId: activated.cycleId!, deliverableId: deliverable.id, title: deliverable.title, periodEnd };
+  });
+  await page.goto('/');
+  // Each past month has its own button; its label names the month's end date.
+  const button = page.getByRole('button', { name: new RegExp(`^Mark ${ids.title} \\(${ids.periodEnd}\\) delivered$`) });
+  await expect(button).toBeVisible();
+  await button.click();
+  await expect.poll(() => page.evaluate(async ({ cycleId, deliverableId }) => {
+    const state = (await import('/src/store/index.ts')).useStore.getState();
+    return [state.serviceCycles.find(item => item.id === cycleId)?.status, state.deliverables.find(item => item.id === deliverableId)?.status];
+  }, ids)).toEqual([expect.stringMatching(/Published|Completed/), 'Delivered']);
+  await expect(button).toHaveCount(0);
+});
