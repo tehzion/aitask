@@ -110,10 +110,11 @@ try {
   await assertProtectedUpload();
   await expect(page.getByRole('button', { name: 'Edit task', exact: true })).toBeDisabled();
   focusUpload.release();
-  await expect(page.getByRole('button',{name:'Retry output save',exact:true})).toBeVisible({ timeout:30000 });
-  assert.equal(lostConfirmation,true);
-  await page.getByRole('button',{name:'Retry output save',exact:true}).click();
+  // The lost confirmation is resent automatically, so the upload confirms
+  // without the worker being asked to retry.
   await expect(page.getByText('Output file saved for review.',{exact:true})).toBeVisible({ timeout:30000 });
+  assert.equal(lostConfirmation,true);
+  await expect(page.getByRole('button',{name:'Retry output save',exact:true})).toHaveCount(0);
   await page.unroute('**/storage/v1/object/client-service-files/**');
   await page.unroute('**/rest/v1/rpc/aitask_execute_command');
   await expect(page.getByRole('button', { name: 'Close Upload artwork for review', exact: true })).toBeEnabled();
