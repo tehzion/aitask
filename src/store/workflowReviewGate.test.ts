@@ -33,6 +33,10 @@ describe('enforced internal workflow review', () => {
 
   const submit = (index: number) => {
     useStore.setState({ currentUser: staff });
+    // Staff start work before sending it for review, as the server requires.
+    if (useStore.getState().tasks.find(item => item.id === ids[index])?.status !== 'In Progress') {
+      expect(useStore.getState().updateTaskStatus(ids[index], 'In Progress').ok).toBe(true);
+    }
     expect(useStore.getState().updateTaskStatus(ids[index], 'Waiting Approval').ok).toBe(true);
   };
   const approve = (index: number) => {

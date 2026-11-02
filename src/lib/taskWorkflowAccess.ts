@@ -81,6 +81,11 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
     && ['Pending', 'Revision'].includes(before.status) && ordinaryStaff && before.assignedTo !== user?.id) {
     return 'Only the assigned staff member can start this task.';
   }
+  // Matches the database stage guard: Staff send work for review from In Progress.
+  if (before && before.status !== after.status && after.status === 'Waiting Approval'
+    && ordinaryStaff && before.status !== 'In Progress') {
+    return 'Start the task before sending it for review.';
+  }
   if (before && before.status !== after.status && after.status === 'Waiting Approval'
     && before.workflowStepKind !== 'internal_review'
     && getTaskApprovalMode(before, scope) === 'none') {

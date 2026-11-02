@@ -25,9 +25,9 @@ const seed = async (page: Page, role: 'Staff' | 'HOD', ready = true, legacy = fa
     const ids = useStore.getState().generateDeliverableTaskChain(useStore.getState().deliverables[0].id).taskIds!;
     ids.forEach(id => { useStore.getState().updateTaskAssignee(id, worker.id); useStore.getState().updateTaskAttachment(id, 'https://example.com/output.pdf'); });
     if (ready) {
-      for (const [status, actor] of [['Waiting Approval', worker], ['Approved', designerHod], ['Completed', boss]] as const) { useStore.setState({ currentUser: actor }); if (!useStore.getState().updateTaskStatus(ids[0], status).ok) throw new Error('Upstream preparation failed'); }
+      for (const [status, actor] of [['In Progress', worker], ['Waiting Approval', worker], ['Approved', designerHod], ['Completed', boss]] as const) { useStore.setState({ currentUser: actor }); if (!useStore.getState().updateTaskStatus(ids[0], status).ok) throw new Error('Upstream preparation failed'); }
       useStore.setState({ currentUser: worker });
-      if (!useStore.getState().updateTaskStatus(ids[1], 'Waiting Approval').ok) throw new Error('Review submission failed');
+      if (!useStore.getState().updateTaskStatus(ids[1], 'In Progress').ok) throw new Error('Review start failed'); if (!useStore.getState().updateTaskStatus(ids[1], 'Waiting Approval').ok) throw new Error('Review submission failed');
     }
     if (legacy) useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === ids[1] ? { ...task, status: 'Completed', isCompleted: true, internalReview: undefined } : task) }));
     const actor = role === 'Staff' ? worker : hod;
@@ -101,7 +101,7 @@ test('legacy completed review needs explicit approval and later revisions clear 
     useStore.setState({ currentUser: boss });
     if (!useStore.getState().updateTaskStatus(fixture.reviewId, 'Completed').ok) throw new Error('PM review finalization failed');
     const designerHod = useStore.getState().users.find(user => user.id === 'browser-designer-hod')!;
-    for (const [status, actor] of [['Waiting Approval', worker], ['Approved', designerHod], ['Completed', boss]] as const) { useStore.setState({ currentUser: actor }); if (!useStore.getState().updateTaskStatus(fixture.publishId, status).ok) throw new Error('Publication preparation failed'); }
+    for (const [status, actor] of [['In Progress', worker], ['Waiting Approval', worker], ['Approved', designerHod], ['Completed', boss]] as const) { useStore.setState({ currentUser: actor }); if (!useStore.getState().updateTaskStatus(fixture.publishId, status).ok) throw new Error('Publication preparation failed'); }
     if (!useStore.getState().requestRevision(fixture.workId, 'Replace output').ok) throw new Error('Upstream revision failed');
     useStore.setState({ currentUser: worker });
     useStore.getState().updateTaskAttachment(fixture.workId, 'https://example.com/new-output.pdf');

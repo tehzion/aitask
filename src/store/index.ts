@@ -64,6 +64,7 @@ import {
   canDeleteTask,
   canEditClientProfile,
   canEditTask,
+  canLinkTaskDelivery,
   canEditProject,
   canApproveRegistrations,
   canCreateTasks,
@@ -354,7 +355,7 @@ export interface StoreState {
   initializeBackend: () => Promise<void>;
   syncBackendNow: (commandType?: SecureCommandType) => Promise<void>;
   pullBackendNow: (options?: { force?: boolean; silent?: boolean }) => Promise<void>;
-  retryMutation: (options?: { reapplyWorkspaceConflict?: boolean }) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
+  retryMutation: (options?: { reapplyWorkspaceConflict?: boolean; automatic?: boolean }) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
   reapplyMutationOnLatestWorkspace: () => Promise<{ ok: boolean; error?: string }>;
   retryPendingSave: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
   discardMutation: (options?: { reload?: boolean; confirm?: boolean }) => Promise<void>;
@@ -478,7 +479,9 @@ export const isWorkspaceMutationLocked = (state: StoreState) => (
   )
 );
 const isTerminalMemberMutationError = isTerminalMutationError;
-const isSyncBusy = (state: StoreState) => state.backend.isSaving || state.backend.isPulling || state.backend.isRestoring === true;
+// Set while a failed save waits for its automatic retry (see below).
+let autoRecoveryPending = false;
+const isSyncBusy = (state: StoreState) => autoRecoveryPending || state.backend.isSaving || state.backend.isPulling || state.backend.isRestoring === true;
 const isPullBlockedByPendingChange = (state: StoreState) => (
   shouldUseSecureSupabase()
   && (
@@ -487,7 +490,11 @@ const isPullBlockedByPendingChange = (state: StoreState) => (
     || ['conflict', 'retry_required', 'offline'].includes(state.backend.status)
   )
 );
-const waitForSyncIdle = async (timeoutMs = 5000) => {
+// A background pull or save can legitimately take as long as a full workspace
+// load (90 s). Waiting less than that reported "Another synchronization request
+// is still running" for changes that were about to save normally.
+export const syncIdleWaitPolicy = { timeoutMs: 95_000 };
+const waitForSyncIdle = async (timeoutMs = syncIdleWaitPolicy.timeoutMs) => {
   if (!isSyncBusy(useStore.getState())) return true;
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -495,6 +502,64 @@ const waitForSyncIdle = async (timeoutMs = 5000) => {
     if (!isSyncBusy(useStore.getState())) return true;
   }
   return !isSyncBusy(useStore.getState());
+};
+/**
+ * Saves that failed for a temporary reason (dropped connection, slow server,
+ * overlapping save) or conflicted only on fields this user did not touch are
+ * resolved automatically before anyone is asked. Only when these attempts run
+ * out does the save banner ask the user to act.
+ */
+export const automaticRecoveryPolicy = { delaysMs: [1000, 3000, 6000] };
+let autoRecoveryAttempt = 0;
+let autoRecoveryToken = 0;
+// The server rebuilds these on every save (aitask_guard_task_workflow keeps
+// the stored activity log), so both sides "changing" them is not a clash.
+const SERVER_OWNED_CONFLICT_FIELDS = new Set(['updatedAt', 'workHistory']);
+export const isMergeableConflict = (conflict?: MutationConflict) => Boolean(
+  conflict && !isWorkspaceConflict(conflict) && conflict.current
+  && conflict.serverChangedFields && conflict.changedFields?.length
+  && !conflict.changedFields.some(field => !SERVER_OWNED_CONFLICT_FIELDS.has(field) && conflict.serverChangedFields!.includes(field)),
+);
+const resetAutomaticRecovery = () => { autoRecoveryAttempt = 0; };
+const scheduleAutomaticRecovery = (
+  result: { code?: MutationErrorCode; error?: string; conflict?: MutationConflict },
+  sessionToken: ReturnType<typeof captureWorkspaceSession>,
+) => {
+  if (typeof window === 'undefined' || autoRecoveryAttempt >= automaticRecoveryPolicy.delaysMs.length) return false;
+  const recoverable = (result.code === 'RETRY_REQUIRED' && result.error !== BACKEND_UPGRADE_REQUIRED_MESSAGE)
+    || (result.code === 'CONFLICT' && isMergeableConflict(result.conflict));
+  if (!recoverable) return false;
+  const delay = automaticRecoveryPolicy.delaysMs[autoRecoveryAttempt];
+  autoRecoveryAttempt += 1;
+  autoRecoveryPending = true;
+  const token = ++autoRecoveryToken;
+  useStore.setState(state => ({
+    backend: {
+      ...state.backend,
+      status: 'saving',
+      isSaving: false,
+      hasLocalChanges: true,
+      pendingMutations: 1,
+      conflict: result.conflict,
+      error: undefined,
+      errorCode: undefined,
+      message: 'Saving…',
+    },
+  }));
+  window.setTimeout(() => {
+    if (token !== autoRecoveryToken) return;
+    if (!isWorkspaceSessionCurrent(sessionToken)) { autoRecoveryPending = false; return; }
+    if (getRetainedSecureCommand() || getRetainedSecureMemberMutation()) {
+      // Stay busy across the handoff so waiting saves keep waiting.
+      useStore.setState(state => ({ backend: { ...state.backend, isSaving: true } }));
+      autoRecoveryPending = false;
+      void useStore.getState().retryMutation({ automatic: true });
+    } else {
+      autoRecoveryPending = false;
+      void useStore.getState().syncBackendNow();
+    }
+  }, delay);
+  return true;
 };
 let isApplyingRemoteSnapshot = false;
 let isApplyingNotificationRead = false;
@@ -1216,7 +1281,8 @@ export const useStore = create<StoreState>()(
         const current = get();
         const pendingCommandType = commandType || current.backend.pendingCommandType;
         if (
-          current.backend.upgradeRequired === true
+          autoRecoveryPending
+          || current.backend.upgradeRequired === true
           || current.backend.isRestoring
           || current.backend.isLoading
           || current.backend.isPulling
@@ -1260,6 +1326,7 @@ export const useStore = create<StoreState>()(
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (result.ok === false) {
               const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
+              if (!upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) return;
               apply((state) => ({
                 backend: {
                   ...state.backend,
@@ -1285,6 +1352,7 @@ export const useStore = create<StoreState>()(
               }));
               return;
             }
+            resetAutomaticRecovery();
             const syncedAt = new Date().toISOString();
             const hasChangesAfterSave = !workspaceStatesEqual(savedWorkspace, selectPersistedWorkspaceState(get()));
             apply((state) => ({
@@ -1319,10 +1387,12 @@ export const useStore = create<StoreState>()(
             return;
           }
         } catch (error) {
+          const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+          if (!offline && scheduleAutomaticRecovery({ code: 'RETRY_REQUIRED' }, sessionToken)) return;
           apply((state) => ({
             backend: {
               ...state.backend,
-              status: typeof navigator !== 'undefined' && navigator.onLine === false ? 'offline' : 'retry_required',
+              status: offline ? 'offline' : 'retry_required',
               isSaving: false,
               pendingMutations: state.backend.hasLocalChanges ? 1 : 0,
               message: "We couldn't confirm your save yet. Your change is kept safe — please retry.",
@@ -1562,7 +1632,8 @@ export const useStore = create<StoreState>()(
         const sessionToken = captureWorkspaceSession();
         const apply: typeof set = (patch) => { if (isWorkspaceSessionCurrent(sessionToken)) set(patch); };
 
-        if (isSyncBusy(get())) {
+        // An automatic retry has already marked the store busy for itself.
+        if (!options.automatic && isSyncBusy(get())) {
           const idle = await waitForSyncIdle();
           if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
           if (!idle) return { ok: false, error: 'Another synchronization request is still running.' };
@@ -1720,6 +1791,9 @@ export const useStore = create<StoreState>()(
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         if (result.ok === false) {
           const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
+          if (options.automatic && !upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) {
+            return { ok: false, code: 'RETRY_REQUIRED', error: 'Saving…' };
+          }
           apply((state) => ({
             backend: {
               ...state.backend,
@@ -1747,6 +1821,7 @@ export const useStore = create<StoreState>()(
           return { ok: false, code: result.code, error: result.error };
         }
 
+        resetAutomaticRecovery();
         const savedAt = new Date().toISOString();
         const hasNewerChanges = !workspaceStatesEqual(workspaceBeforeRetry, selectPersistedWorkspaceState(get()));
         apply((state) => ({
@@ -3005,7 +3080,9 @@ export const useStore = create<StoreState>()(
           const assignableProjectIds = new Set(
             getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions, state.users, { clients: state.clients, projects: state.projects }).map(item => item.id)
           );
-          if (!assignableProjectIds.has(requestedProjectId)) {
+          // Only a move needs link rights; keeping the task's own project is
+          // not a new link (an HOD edits work a PM placed in the PM's project).
+          if (requestedProjectId !== task.projectId && !assignableProjectIds.has(requestedProjectId)) {
             return { ok: false, error: 'You can only link tasks to projects you can access.' };
           }
           if (data.milestoneId && !(project?.milestones || []).some(milestone => milestone.id === data.milestoneId)) {
@@ -4773,6 +4850,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
+        if (!canLinkTaskDelivery(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'Ask the project manager to link this task to a deliverable.' };
         if (isWorkflowTask(task) && (cycleId !== task.serviceCycleId || deliverableId !== task.deliverableId)) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };

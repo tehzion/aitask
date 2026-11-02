@@ -110,6 +110,8 @@ export interface MutationConflict {
   current?: Record<string, unknown>;
   attempted?: Record<string, unknown>;
   changedFields?: string[];
+  /** Fields someone else changed since this screen loaded the record. */
+  serverChangedFields?: string[];
 }
 
 export type MutationResult<T> =
@@ -1398,8 +1400,13 @@ export const overlayRetainedWorkspaceEntities = (
   };
 };
 
-/** One automatic resend after a network error or timeout, after a short pause. */
-export const transientRetryPolicy = { attempts: 1, delayMs: 1500 };
+/** A request that never reached the database (no PostgreSQL/PostgREST code). */
+const isNetworkFailure = (error: { code?: string; message?: string } | null | undefined) => Boolean(
+  error && !error.code && /fetch|network|load failed|connection|timed? ?out|abort/i.test(error.message || ''),
+);
+
+/** Automatic resends after a network error or timeout, with growing pauses. */
+export const transientRetryPolicy = { attempts: 2, delayMs: 1500 };
 
 /** The newer workspace version when a command was rejected only because the workspace moved on. */
 export const staleWorkspaceVersion = (data: unknown): number | undefined => {
@@ -1447,10 +1454,13 @@ const executeCommand = async (
     for (let attempt = 0; ; attempt += 1) {
       try {
         rpcResult = await invoke();
+        // supabase-js reports a dropped connection as a returned error rather
+        // than a throw; treat it like any other network failure.
+        if (isNetworkFailure(rpcResult.error) && attempt < transientRetryPolicy.attempts) throw rpcResult.error;
         break;
       } catch (failure) {
         if (attempt >= transientRetryPolicy.attempts || (typeof navigator !== 'undefined' && navigator.onLine === false)) throw failure;
-        await new Promise(resolve => setTimeout(resolve, transientRetryPolicy.delayMs));
+        await new Promise(resolve => setTimeout(resolve, transientRetryPolicy.delayMs * (attempt + 1)));
         assertWorkspaceSession(sessionToken);
       }
     }
@@ -1506,8 +1516,19 @@ const executeCommand = async (
     const operation = command.operations.find(item => (
       item.entityType === response.conflict?.entityType && item.entityId === response.conflict?.entityId
     ));
+    const loadedRow = operation
+      ? retryableBatch?.before.find(row => row.entityType === operation.entityType && row.entityId === operation.entityId)?.data
+        ?? baseline.get(entityKey(operation.entityType, operation.entityId))?.data
+      : undefined;
     const conflict = response.conflict && operation
-      ? { ...response.conflict, attempted: operation.data, changedFields: changedFieldsForConflict(operation, retryableBatch?.before.find(row => row.entityType === operation.entityType && row.entityId === operation.entityId)?.data ?? response.conflict.current) }
+      ? {
+        ...response.conflict,
+        attempted: operation.data,
+        changedFields: changedFieldsForConflict(operation, loadedRow ?? response.conflict.current),
+        serverChangedFields: loadedRow && response.conflict.current
+          ? changedFieldsForConflict({ ...operation, data: response.conflict.current }, loadedRow)
+          : undefined,
+      }
       : response.conflict;
     if (response.code === 'CONFLICT' || response.code === 'RETRY_REQUIRED') retainSecureWorkspaceCommand(command);
     else {
@@ -1973,6 +1994,11 @@ export const saveSecureWorkspace = async (
   options: BuildOperationsOptions = {},
 ): Promise<MutationResult<CommandResponse>> => {
   const saveSession = captureWorkspaceSession();
+  // Another save is still preparing its batch: wait for it instead of
+  // reporting an error for a change that will simply go next.
+  for (const deadline = Date.now() + SYNC_REQUEST_TIMEOUT_MS; saveInFlight && Date.now() < deadline;) {
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
   if (type !== undefined && !isSecureCommandType(type)) {
     return {
       ok: false,

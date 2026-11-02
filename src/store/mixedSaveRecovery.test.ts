@@ -6,7 +6,7 @@ vi.hoisted(() => {
 });
 const mocks = vi.hoisted(() => ({ rpc: vi.fn(), from: vi.fn(), getUser: vi.fn() }));
 vi.mock('../lib/supabaseClient', () => ({ supabase: { rpc: mocks.rpc, from: mocks.from, auth: { getUser: mocks.getUser, refreshSession: vi.fn() } }, shouldUseSecureSupabase: () => true, resolveAuthEmail: (x: string) => x }));
-import { clearWorkspaceSession, useStore } from './index';
+import { clearWorkspaceSession, useStore, automaticRecoveryPolicy } from './index';
 import { buildOperations, getRetainedSecureCommand, saveSecureWorkspace, transientRetryPolicy } from '../lib/secureWorkspace';
 const initial = useStore.getState();
 const authId = '00000000-0000-4000-8000-000000000001';
@@ -19,6 +19,8 @@ let failService: boolean;
 beforeEach(() => {
   // These cases cover the manual retry path after an outage.
   transientRetryPolicy.attempts = 0;
+  // These tests exercise the explicit Retry path.
+  automaticRecoveryPolicy.delaysMs = [];
   const storage = new Map<string, string>();
   const fakeStorage = { getItem: (key: string) => storage.get(key) || null, setItem: (key: string, value: string) => storage.set(key, value), removeItem: (key: string) => storage.delete(key) };
   vi.stubGlobal('localStorage', fakeStorage);
@@ -166,4 +168,21 @@ it('rebases only the original intended fields, preserving a concurrent contact e
   expect(useStore.getState().backend.conflict?.changedFields).not.toContain('contactPerson');
   expect(await useStore.getState().retryPendingSave()).toEqual({ok:true});
   expect(useStore.getState().clients[0]).toMatchObject({clientName:'New Company',contactPerson:'Remote contact'});
+});
+
+it('recovers a dropped save by itself without showing a retry banner', async () => {
+  automaticRecoveryPolicy.delaysMs = [0];
+  try {
+    await useStore.getState().pullBackendNow({force:true});
+    expect((await saveSecureWorkspace(useStore.getState())).ok).toBe(true);
+    await useStore.getState().pullBackendNow({force:true});
+    expect(useStore.getState().renameClient('Old Company','Recovered Company')).toEqual({ok:true});
+    failGeneric = true;
+    expect(await useStore.getState().commitPendingMutation()).toEqual({ok:true});
+    expect(useStore.getState().backend).toMatchObject({status:'live',hasLocalChanges:false,pendingMutations:0});
+    expect(useStore.getState().backend.error).toBeUndefined();
+    expect(getRetainedSecureCommand()).toBeNull();
+  } finally {
+    automaticRecoveryPolicy.delaysMs = [];
+  }
 });

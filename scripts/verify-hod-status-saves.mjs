@@ -160,15 +160,16 @@ try {
     } else await route.continue();
   });
   await dialog.getByRole('button', { name: 'Send for review', exact: true }).click();
-  await expect(dialog.getByRole('button', { name: 'Retry my changes', exact: true })).toBeVisible({ timeout: 30000 });
+  // The lost response is resent automatically (the server replays its receipt),
+  // so the change confirms without the user being asked to retry.
+  await expect.poll(() => canonicalStatus('status-task'), { timeout: 30000 }).toBe('Waiting Approval');
   assert.equal(lostBrowserResponse, true);
-  await dialog.getByRole('button', { name: 'Retry my changes', exact: true }).click();
   await expect(dialog.getByRole('alert')).toHaveCount(0);
-  await expect.poll(() => canonicalStatus('status-task')).toBe('Waiting Approval');
+  await expect(dialog.getByRole('button', { name: 'Retry my changes', exact: true })).toHaveCount(0);
   assert.equal(Number(sql("select count(*) from public.aitask_audit_events where entity_id='status-task' and actor_member_id='status-hod'")), beforeBrowserRetry + 1);
   await page.unroute('**/rest/v1/rpc/aitask_execute_command');
   assert.deepEqual(runtimeErrors, []);
-  console.log('[hod-status] Real browser sign-in, permission rejection, canonical restoration, fresh save/reload and lost-response retry without duplication passed.');
+  console.log('[hod-status] Real browser sign-in, permission rejection, canonical restoration, fresh save/reload and automatic lost-response recovery without duplication passed.');
 } finally {
   globalThis.fetch = originalFetch;
   if (browser) await browser.close();

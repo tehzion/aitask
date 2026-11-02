@@ -19,7 +19,7 @@ vi.mock('../lib/secureWorkspace', async importOriginal => ({
   getRetainedSecureCommand: () => null,
   loadSecureWorkspaceRevision: async () => ({ version: 2 }),
 }));
-import { clearWorkspaceSession, isWorkspaceMutationLocked, useStore } from './index';
+import { clearWorkspaceSession, isWorkspaceMutationLocked, useStore, syncIdleWaitPolicy } from './index';
 import { buildOperations } from '../lib/secureWorkspace';
 import type { User } from '../types';
 const initial = useStore.getState();
@@ -97,7 +97,7 @@ it('secure-mode milestone retry confirms the existing ID after a busy timeout', 
   const first = useStore.getState().saveProjectMilestone('audit-project', milestone);
   expect(first.ok).toBe(true);
   const confirmation = useStore.getState().commitPendingMutation('project.update');
-  await vi.advanceTimersByTimeAsync(5001);
+  await vi.advanceTimersByTimeAsync(syncIdleWaitPolicy.timeoutMs + 1);
   expect(await confirmation).toMatchObject({ ok: false, code: 'RETRY_REQUIRED' });
   expect(mocks.save).not.toHaveBeenCalled();
   expect(isWorkspaceMutationLocked(useStore.getState())).toBe(false);

@@ -15,11 +15,13 @@ afterEach(() => useStore.setState(initial, true));
 describe('staff work lifecycle', () => {
   it('submits deliverable-linked work without an output, through quick status and Full edit', () => {
     useStore.setState({ deliverables: [output] });
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
     expect(useStore.getState().updateTask(task.id, { status: 'Waiting Approval' }).ok).toBe(true);
     expect(useStore.getState().tasks[0].workState).toMatchObject({ reviewRequestedBy: staff.id });
     expect(useStore.getState().tasks[0].workState?.reviewRequestedAt).toBeTruthy();
   });
   it('keeps administrative submissions flexible and legacy completed edits available', () => {
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
     expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
     useStore.setState({ tasks: [{ ...task, status: 'Completed', isCompleted: true }] });
     useStore.setState({ deliverables: [output] });
@@ -30,8 +32,13 @@ describe('staff work lifecycle', () => {
     expect(useStore.getState().updateTask(task.id, { status: 'Completed', attachmentLink: 'javascript:alert(1)' }).ok).toBe(false);
     expect(useStore.getState().updateTaskStatus(task.id, 'Completed').ok).toBe(false);
   });
+  it('asks Staff to start work before sending it for review, as the server does', () => {
+    expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval')).toMatchObject({ ok: false });
+    expect(useStore.getState().tasks[0].status).toBe('Pending');
+  });
   it('accepts valid linked deliverable files as evidence for submission', () => {
     useStore.setState({ deliverables: [{ ...output, attachments: [{ id: 'file', bucket: 'client-service-files', path: 'company/file' } as never] }] });
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
     expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
   });
   it('only the assignee accepts work, while the owner can manage a help request', () => {

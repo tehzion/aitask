@@ -54,3 +54,18 @@ describe('department PM fallback reviewer', () => {
     expect(canReviewTaskInternally(other, { ...task, reviewAccess: { actorId: pm.id, canApprove: true } }, [], scope)).toBe(false);
   });
 });
+
+describe('rules shared with the database', () => {
+  const staff: User = { id: 'staff', name: 'Staff', role: 'Staff', departments: ['Designer'] };
+  const assigned = { ...task, assignedTo: staff.id, requiresInternalApproval: true } as Task;
+  it('asks Staff to start work before sending it for review, as the server does', () => {
+    expect(taskTransitionError(staff, { ...assigned, status: 'Pending' }, { ...assigned, status: 'Waiting Approval', isCompleted: false }, [], { users: [staff] }))
+      .toBe('Start the task before sending it for review.');
+    expect(taskTransitionError(staff, { ...assigned, status: 'In Progress' }, { ...assigned, status: 'Waiting Approval', isCompleted: false }, [], { users: [staff] }))
+      .toBeUndefined();
+  });
+  it('leaves an HOD free to submit their own work from any open stage', () => {
+    const own = { ...assigned, assignedTo: hod.id };
+    expect(taskTransitionError(hod, { ...own, status: 'Pending' }, { ...own, status: 'Waiting Approval', isCompleted: false }, [], { users: [hod] })).toBeUndefined();
+  });
+});
