@@ -1111,9 +1111,51 @@ const serviceCommandGroups = (
     remaining = remaining.filter(operation => operation.entityType !== entityType);
   });
   if (remaining.length > 0) {
-    groups.push({ type: inferSecureCommandType(remaining, { selfMemberId }), operations: remaining });
+    const type = inferSecureCommandType(remaining, { selfMemberId });
+    // The server binds each service command to the entity types it owns. An
+    // update-only diff across several types (a company rename touching its
+    // plans, cycles, deliverables and add-ons) is sent as one command per owner;
+    // diffs that create rows (plan activation, a new add-on) stay together.
+    const unowned = remaining.some(operation => !serviceCommandOwnsEntity(type, operation.entityType));
+    if (unowned && remaining.every(operation => operation.action === 'update')) {
+      const byOwner = new Map<SecureCommandType, WorkspaceOperation[]>();
+      remaining.forEach(operation => {
+        const owner = serviceEntityOwner[operation.entityType] || type;
+        byOwner.set(owner, [...(byOwner.get(owner) || []), operation]);
+      });
+      byOwner.forEach((operations, owner) => groups.push({ type: owner, operations }));
+    } else {
+      // A diff that creates rows belongs to the command that may create them:
+      // plan activation (client_plan.manage) or a new add-on (addon.manage).
+      const entityTypes = new Set(remaining.map(operation => operation.entityType));
+      const creator = !unowned ? type
+        : entityTypes.has('client_plan') ? 'client_plan.manage'
+          : entityTypes.has('addon') ? 'addon.manage'
+            : type;
+      groups.push({ type: creator, operations: remaining });
+    }
   }
   return groups;
+};
+
+// Mirrors private.aitask_service_command_allows_entity.
+const serviceEntityOwner: Record<string, SecureCommandType> = {
+  client_plan: 'client_plan.manage',
+  service_pricing_snapshot: 'client_plan.manage',
+  service_cycle: 'service_cycle.manage',
+  deliverable: 'deliverable.manage',
+  cycle_comment: 'cycle_comment.manage',
+  addon: 'addon.manage',
+};
+const serviceCommandOwnsEntity = (type: SecureCommandType, entityType: string) => {
+  switch (entityType) {
+    case 'client_plan': case 'service_pricing_snapshot': case 'client': return type === 'client_plan.manage';
+    case 'service_cycle': return type === 'service_cycle.manage' || type === 'deliverable.manage';
+    case 'deliverable': return type === 'deliverable.manage' || type === 'deliverable.workflow.generate';
+    case 'cycle_comment': return type === 'cycle_comment.manage';
+    case 'addon': return type === 'addon.manage';
+    default: return true;
+  }
 };
 
 // Split a mixed local diff into command groups that each map to a single RPC.
@@ -1121,7 +1163,7 @@ const serviceCommandGroups = (
 // rejects member rows, so an unpartitioned diff could otherwise be sent to the
 // wrong RPC and be stuck as a retry. The service RPC also accepts `client` and
 // `task`, so any generic-only operation forces a separate service command.
-const partitionOperationsForRpc = (
+export const partitionOperationsForRpc = (
   operations: WorkspaceOperation[],
   selfMemberId?: string,
 ): { type: SecureCommandType; operations: WorkspaceOperation[] }[] => {
