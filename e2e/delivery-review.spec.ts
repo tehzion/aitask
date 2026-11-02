@@ -27,8 +27,10 @@ const seedReview = async (page: import('@playwright/test').Page, locale: string)
 };
 for (const locale of ['en', 'zh']) test(`delivery review preserves pending actions and empty progress (${locale})`, async ({ page }) => {
   await seedReview(page, locale);
-  const panel = page.getByRole('region', { name: locale === 'en' ? 'Delivery records need review' : '交付记录需要审核' });
+  const panel = page.getByRole('region', { name: locale === 'en' ? 'Delivery records' : '交付记录' });
   await expect(panel).toBeVisible();
+  // Linking is optional and folded away until asked for.
+  await panel.getByRole('button', { name: locale === 'en' ? /^Link completed tasks to deliverables \(optional\)/ : /^将已完成任务关联到交付物（可选）/ }).click();
   await expect(page.getByText('0%', { exact: true })).toHaveCount(0);
   await expect(panel.getByRole('button', { name: locale === 'en' ? 'Publish' : '发布', exact: true })).toBeVisible();
   const selectors = panel.getByRole('combobox');
@@ -73,7 +75,8 @@ test('invalid links and expired drafts require explicit scoped review', async ({
     useStore.setState({ tasks: state.tasks.map(task => task.id === 'review-task' ? { ...task, deliverableId: foreign.id } : task),
       deliverables: [...state.deliverables, foreign], serviceCycles: [...state.serviceCycles, { ...state.serviceCycles[0], id: 'expired-review-cycle', periodStart: '2026-09-01', periodEnd: '2026-09-30' }] });
   });
-  const panel = page.getByRole('region', { name: 'Delivery records need review' });
+  const panel = page.getByRole('region', { name: 'Delivery records' });
+  await panel.getByRole('button', { name: /^Link completed tasks to deliverables \(optional\)/ }).click();
   await expect(panel.getByText('Invalid delivery link. Review before linking again.')).toBeVisible();
   await expect(panel.getByText('Foreign secret output')).toHaveCount(0);
   await expect(panel.getByRole('combobox')).toHaveCount(1);
@@ -103,7 +106,8 @@ for (const action of ['link', 'publication']) test(`a restored-away delivery ${a
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Delivery confirmation timed out.' }), retryPendingSave: async () => ({ ok: true }) });
   });
-  const panel = page.getByRole('region', { name: 'Delivery records need review' });
+  const panel = page.getByRole('region', { name: 'Delivery records' });
+  await panel.getByRole('button', { name: /^Link completed tasks to deliverables \(optional\)/ }).click();
   if (action === 'link') {
     await panel.getByRole('combobox').first().selectOption('review-deliverable');
     await panel.getByRole('button', { name: 'Link task', exact: true }).first().click();

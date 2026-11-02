@@ -159,6 +159,9 @@ test('Boss Koo marks a past deliverable delivered from the attention list, publi
     });
     const activated = useStore.getState().activateClientPlan(created.planId!);
     if (!activated.ok) throw new Error(activated.error || 'activation failed');
+    // Only published months that ended are flagged; publish the first one.
+    const published = useStore.getState().setServiceCycleStatus(activated.cycleId!, 'Published');
+    if (!published.ok) throw new Error(published.error || 'publish failed');
     const deliverable = useStore.getState().deliverables.find(item => item.cycleId === activated.cycleId)!;
     const cycle = useStore.getState().serviceCycles.find(item => item.id === activated.cycleId)!;
     const [y, m, d] = cycle.periodEnd.split('-').map(Number);

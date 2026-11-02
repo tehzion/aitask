@@ -111,17 +111,34 @@ const cycleEndById = (cycles: readonly ServiceCycle[]) => new Map(
   cycles.map(cycle => [cycle.id, parseOptionalDate(cycle.periodEnd)]),
 );
 
+/**
+ * Past-month deliverables that still need the PM. Linking tasks is optional,
+ * so a delivery is not flagged when its month was never published, when its
+ * linked tasks are all done, or (unlinked) when the company's work for that
+ * month is finished with nothing still open.
+ */
 export const getOverdueDeliverables = (
   deliverables: readonly Deliverable[],
   serviceCycles: readonly ServiceCycle[],
   now = new Date(),
+  tasks: readonly Task[] = [],
 ) => {
   const today = startOfDay(now);
   const ends = cycleEndById(serviceCycles);
+  const cyclesById = new Map(serviceCycles.map(cycle => [cycle.id, cycle]));
+  const dayOf = (value?: string) => (value ? value.slice(0, 10) : '');
   return deliverables.filter(deliverable => {
     if (deliverable.status === 'Delivered') return false;
+    const cycle = cyclesById.get(deliverable.cycleId);
     const cycleEnd = ends.get(deliverable.cycleId);
-    return Boolean(cycleEnd && isBefore(cycleEnd, today));
+    if (!cycle || !cycleEnd || !isBefore(cycleEnd, today)) return false;
+    if (cycle.status === 'Draft') return false;
+    const linked = tasks.filter(task => task.deliverableId === deliverable.id || deliverable.taskIds?.includes(task.id));
+    if (linked.length) return !linked.every(isTaskCompleted);
+    const companyTasks = tasks.filter(task => (task.clientId ? task.clientId === deliverable.clientId : task.clientName === deliverable.clientName) && !task.deliverableId);
+    const doneInMonth = companyTasks.some(task => isTaskCompleted(task) && dayOf(task.completedAt) >= cycle.periodStart && dayOf(task.completedAt) <= cycle.periodEnd);
+    const openFromMonth = companyTasks.some(task => isTaskOpen(task) && (!task.startDate || task.startDate <= cycle.periodEnd));
+    return !(doneInMonth && !openFromMonth);
   });
 };
 
@@ -141,7 +158,7 @@ export const getManagementSnapshot = ({
   const today = startOfDay(now);
   const renewalWindowEnd = endOfDay(addDays(today, 30));
   const renewalDates = activePlans.map(planRenewalDate);
-  const overdueDeliverables = getOverdueDeliverables(deliverables, serviceCycles, now);
+  const overdueDeliverables = getOverdueDeliverables(deliverables, serviceCycles, now, tasks);
   // Boss Koo administers the workspace; only real Project Managers run projects.
   const projectManagerUsers = users.filter(user => user.role === 'Project Manager' && !user.isSuperAdmin && !user.directoryOnly);
   const projectManagers = projectManagerUsers.map(member => {
@@ -224,7 +241,7 @@ export const getManagementAttentionItems = ({
       ? tasks.filter(task => getClientTaskStage(task) === 'awaiting_review')
       : tasks;
   const projectRows = projects.map(project => ({ project, health: assessProjectHealth(project, tasks, now) }));
-  const overdueDeliverables = getOverdueDeliverables(deliverables, serviceCycles, now);
+  const overdueDeliverables = getOverdueDeliverables(deliverables, serviceCycles, now, tasks);
   const cycleEndByIdMap = cycleEndById(serviceCycles);
   const activePlans = clientPlans.filter(plan => plan.status === 'Active');
 
@@ -361,7 +378,7 @@ export const getMonthlyOperationalReport = ({
     const projectTasks = monthTasks.filter(task => task.projectId === project.id);
     const projectDeliverables = reportDeliverables.filter(item => item.clientId === project.clientId);
     const projectOverdue = projectTasks.filter(task => isTaskOverdue(task, now)).length
-      + getOverdueDeliverables(projectDeliverables, serviceCycles, now).length;
+      + getOverdueDeliverables(projectDeliverables, serviceCycles, now, monthTasks).length;
     const delayedMilestones = (project.milestones || []).filter(milestone => (
       inMonth(milestone.targetDate) && milestone.status !== 'Completed'
     )).length;
