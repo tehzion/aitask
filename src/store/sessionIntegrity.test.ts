@@ -19,7 +19,7 @@ vi.mock('../lib/secureWorkspace', async importOriginal => ({
   retrySecureWorkspaceCommand: mocks.retry,
   loadSecureWorkspaceRevision: async () => ({ version: 2 }),
 }));
-import { clearWorkspaceSession, isPendingMutationResolution, isWorkspaceMutationLocked, useStore } from './index';
+import { clearWorkspaceSession, isPendingMutationResolution, isWorkspaceMutationLocked, useStore, syncIdleWaitPolicy } from './index';
 import { canRetrySave } from '../lib/actionFeedback';
 import type { User } from '../types';
 const initial = useStore.getState();
@@ -72,7 +72,7 @@ describe('session and acknowledgement integrity', () => {
       useStore.getState().createClientWithPlan(input);
       useStore.setState(state => ({ backend: { ...state.backend, isPulling: true } }));
       const request = useStore.getState().commitPendingMutation('client_plan.manage');
-      await vi.advanceTimersByTimeAsync(5001);
+      await vi.advanceTimersByTimeAsync(syncIdleWaitPolicy.timeoutMs + 1);
       expect(await request).toMatchObject({ ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' });
       expect(mocks.save).not.toHaveBeenCalled();
       expect(useStore.getState().backend).toMatchObject({ hasLocalChanges: true, pendingMutations: 1, pendingCommandType: 'client_plan.manage' });
