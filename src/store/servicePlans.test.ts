@@ -206,6 +206,7 @@ describe('client service plan store', () => {
       useStore.setState({ currentUser: admin });
       expect(useStore.getState().updateTaskAttachment(task.id, `https://example.com/output/${task.id}`).ok).toBe(true);
       useStore.setState({ currentUser: staff });
+      expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
       expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
       useStore.setState({ currentUser: reviewer });
       expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(true);

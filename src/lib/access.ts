@@ -661,6 +661,19 @@ export const canViewTask = (
   return false;
 };
 
+/**
+ * Delivery links follow the database rule: linking also records the task on
+ * the deliverable, which Staff and HODs may change only with the Edit tasks
+ * permission. Project managers link their portfolio's work.
+ */
+export const canLinkTaskDelivery = (
+  user: User | null | undefined,
+  task: Task,
+  customRoles: CustomRole[] = [],
+  scope: Parameters<typeof canEditTask>[3] = {},
+) => canEditTask(user, task, customRoles, scope)
+  && (user?.role === 'Project Manager' || hasPermission(user, 'editTasks', customRoles));
+
 export const canEditTask = (
   user: User | null | undefined,
   task: Task,

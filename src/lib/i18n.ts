@@ -2412,6 +2412,8 @@ const zhSystemCopy: Record<string, string> = {
   'Deliverable not found.': '未找到交付物。',
   'You do not have access to this deliverable.': '您无权访问此交付物。',
   'You cannot edit this task.': '您无法编辑此任务。',
+  'Start the task before sending it for review.': '请先开始任务，再提交审核。',
+  'Ask the project manager to link this task to a deliverable.': '请让项目经理将此任务关联到交付项。',
   'The task and deliverable must belong to the same client and cycle.': '任务和交付物必须属于同一客户和周期。',
   'Only authorized operations staff can generate task chains.': '只有获授权的运营员工可以生成任务链。',
   'This service item has no frozen task workflow.': '此服务项目没有冻结的任务工作流。',

@@ -34,6 +34,8 @@ describe('role-controlled task milestones', () => {
     actor(staff);
     expect(useStore.getState().updateTaskWork(task.id, { kind: 'accept' }).ok).toBe(true);
     expect(current().completionPercentage).toBe(30);
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
+    expect(current().completionPercentage).toBe(30);
     expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
     expect(current().completionPercentage).toBe(60);
     expect(useStore.getState().updateTaskStatus(task.id, 'Approved').ok).toBe(false);
@@ -179,6 +181,7 @@ describe('role readiness at alternate entry points', () => {
     actor(hod);
     expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(true);
     actor(staff);
+    expect(useStore.getState().updateTaskStatus(id, 'In Progress').ok).toBe(true);
     expect(useStore.getState().updateTaskStatus(id, 'Waiting Approval').ok).toBe(true);
     expect(useStore.getState().notifications.some(n => n.targetUserId === hod.id && n.route?.entityId === id && n.title === 'Task Ready for Approval')).toBe(true);
   });

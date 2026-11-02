@@ -73,9 +73,12 @@ export const runCommandBatch = async (batch: PendingCommandBatch, options: Build
         const fields = operation.entityType === 'deliverable'
           ? new Set(['status', 'deliveredAt', 'updatedAt'])
           : new Set(['status', 'updatedAt']);
+        // Linking a task also records it on the deliverable. That local field
+        // is re-applied below; the server side may only differ by progress.
+        const localAllowed = operation.entityType === 'deliverable' ? new Set([...fields, 'taskIds']) : fields;
         const localFields = previous ? api.changedFields(operation, previous.data) : [];
         if (!touched || operation.action !== 'update' || !previous || !operation.data
-          || !localFields.every(field => fields.has(field))) {
+          || !localFields.every(field => localAllowed.has(field))) {
           reconciled.push(operation);
           continue;
         }
@@ -102,8 +105,8 @@ export const runCommandBatch = async (batch: PendingCommandBatch, options: Build
             ...canonical, data: operation.data,
             serialized: stable({ parentId: operation.parentId || null, data: operation.data }),
           });
-        } else if (remainingFields.every(field => field === 'deliveredAt')
-          && stable(canonical.data.deliveredAt) === stable(previous.data.deliveredAt)) {
+        } else if (remainingFields.every(field => field === 'deliveredAt' || field === 'taskIds')
+          && (!remainingFields.includes('deliveredAt') || stable(canonical.data.deliveredAt) === stable(previous.data.deliveredAt))) {
           reconciled.push({ ...operation, expectedVersion: Number(row.version) });
         } else {
           reconciled.push(operation);

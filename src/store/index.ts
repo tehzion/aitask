@@ -64,6 +64,7 @@ import {
   canDeleteTask,
   canEditClientProfile,
   canEditTask,
+  canLinkTaskDelivery,
   canEditProject,
   canApproveRegistrations,
   canCreateTasks,
@@ -3005,7 +3006,9 @@ export const useStore = create<StoreState>()(
           const assignableProjectIds = new Set(
             getAssignableProjects(currentUser, state.projects, state.tasks, state.rolePermissions, state.users, { clients: state.clients, projects: state.projects }).map(item => item.id)
           );
-          if (!assignableProjectIds.has(requestedProjectId)) {
+          // Only a move needs link rights; keeping the task's own project is
+          // not a new link (an HOD edits work a PM placed in the PM's project).
+          if (requestedProjectId !== task.projectId && !assignableProjectIds.has(requestedProjectId)) {
             return { ok: false, error: 'You can only link tasks to projects you can access.' };
           }
           if (data.milestoneId && !(project?.milestones || []).some(milestone => milestone.id === data.milestoneId)) {
@@ -4773,6 +4776,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const task = state.tasks.find(item => item.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
+        if (!canLinkTaskDelivery(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'Ask the project manager to link this task to a deliverable.' };
         if (isWorkflowTask(task) && (cycleId !== task.serviceCycleId || deliverableId !== task.deliverableId)) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };

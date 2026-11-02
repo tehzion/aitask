@@ -132,7 +132,7 @@ describe('task update notification recipients', () => {
 
   it('creates client notices consistently for status and full-edit paths only when visible', () => {
     const hod: User = { ...staff, id: 'notify-hod', role: 'HOD' };
-    useStore.setState({ currentUser: staff, users: [boss, pmA, pmB, staff, hod], tasks: [{ ...task, visibility: 'client-visible' }] });
+    useStore.setState({ currentUser: staff, users: [boss, pmA, pmB, staff, hod], tasks: [{ ...task, visibility: 'client-visible', status: 'In Progress' }] });
     expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
     expect(useStore.getState().notifications.filter(notification => notification.targetClient === 'Acme')).toHaveLength(0);
     useStore.setState({ currentUser: hod });
