@@ -985,7 +985,7 @@ const Calendar: React.FC = () => {
                         {dayHolidays.length > 0 && inMonth && !isDropTarget && (
                           <div
                             className={clsx(
-                              'mx-1 hidden truncate rounded px-1 py-0.5 text-[9px] font-semibold leading-tight md:block',
+                              'mx-1 hidden truncate rounded px-1 py-0.5 text-[11px] font-semibold leading-tight md:block',
                               HOLIDAY_COLORS[primaryHoliday.category].badge,
                             )}
                             title={dayHolidays.map(holiday => holiday.name).join(' · ')}
@@ -995,7 +995,7 @@ const Calendar: React.FC = () => {
                         )}
 
                         {isDropTarget && (
-                          <span className="absolute left-1/2 top-10 -translate-x-1/2 rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[9px] font-bold text-blue-700">
+                          <span className="absolute left-1/2 top-10 -translate-x-1/2 rounded border border-blue-300 bg-blue-50 px-1.5 py-0.5 text-[11px] font-bold text-blue-700">
                             {t('Drop')}
                           </span>
                         )}
@@ -1003,7 +1003,7 @@ const Calendar: React.FC = () => {
                         {dayTasks.length > 0 && (
                           <div className="absolute bottom-1 right-1 md:hidden">
                             <span
-                              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-bold text-white"
+                              className="flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[11px] font-bold text-white"
                               aria-label={t('calendar.dayTasks', { count: dayTasks.length, tasksLabel: t(dayTasks.length === 1 ? 'task' : 'tasks'), date: formatLocalizedDate(day, locale) })}
                             >
                               {dayTasks.length}
@@ -1018,7 +1018,7 @@ const Calendar: React.FC = () => {
                               event.stopPropagation();
                               setSelectedDate(day);
                             }}
-                            className="absolute bottom-1 left-1 hidden min-h-11 rounded-control px-1.5 py-0.5 text-[9px] font-semibold text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:block"
+                            className="absolute bottom-1 left-1 hidden min-h-11 rounded-control px-1.5 py-0.5 text-[11px] font-semibold text-muted transition-colors hover:bg-inset hover:text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 md:block"
                             aria-label={t('calendar.showMoreTasks', { count: hiddenCount, tasksLabel: t(hiddenCount === 1 ? 'more task' : 'more tasks'), date: formatLocalizedDate(day, locale) })}
                           >
                             +{hiddenCount} {t('more')}
@@ -1047,7 +1047,7 @@ const Calendar: React.FC = () => {
                         aria-label={`${task.title}. ${t(title)}`} data-i18n-skip
                         title={`${task.clientName} · ${task.title} · ${t(title)}`}
                         className={clsx(
-                          'pointer-events-auto mx-0.5 flex min-w-0 items-stretch overflow-hidden border text-[10px] font-semibold shadow-sm transition-colors',
+                          'pointer-events-auto mx-0.5 flex min-w-0 items-stretch overflow-hidden border text-[11px] font-semibold shadow-sm transition-colors',
                           segment.continuesBefore ? 'rounded-l-none border-l-0' : 'rounded-l-md',
                           segment.continuesAfter ? 'rounded-r-none border-r-0' : 'rounded-r-md',
                           getTaskBarTone(task),
@@ -1199,7 +1199,7 @@ const Calendar: React.FC = () => {
               </div>
 
               {selectedDayTasks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center gap-1 rounded-control border-2 border-dashed border-line py-8 text-center">
+                <div className="flex flex-col items-center justify-center gap-1 py-8 text-center">
                   <p className="text-sm text-muted">
                     {calendarFilter === 'all' ? t('No tasks scheduled for this day.') : t('No tasks match this filter.')}
                   </p>
@@ -1232,8 +1232,8 @@ const Calendar: React.FC = () => {
                     <article
                       key={task.id}
                       className={clsx(
-                        'rounded-control border bg-surface p-3 transition-colors',
-                        isOverdue ? 'border-red-200 border-l-4 border-l-red-500' : 'border-line',
+                        'rounded-control p-3 transition-colors',
+                        isOverdue ? 'bg-red-50' : 'bg-inset/60',
                       )}
                     >
                       <div className="flex items-start gap-2">
@@ -1250,7 +1250,7 @@ const Calendar: React.FC = () => {
                           >
                             {task.title}
                           </Link>
-                          <p data-i18n-skip className="mt-0.5 truncate text-[10px] text-slate-400">
+                          <p data-i18n-skip className="mt-0.5 truncate text-[11px] text-slate-400">
                             {isClientUser
                               ? task.serviceType
                               : [task.clientName, task.projectName].filter(Boolean).join(' · ')}
@@ -1265,21 +1265,21 @@ const Calendar: React.FC = () => {
 
                       <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {!isClientUser && (
-                        <span className={clsx('rounded px-1.5 py-0.5 text-[10px] font-semibold', getDeptBadge(task.department))}>
+                        <span className={clsx('rounded px-1.5 py-0.5 text-[11px] font-semibold', getDeptBadge(task.department))}>
                           {task.department}
                         </span>
                         )}
                         {!isClientUser && (
-                          <span className="flex items-center gap-1 text-[10px] text-muted">
+                          <span className="flex items-center gap-1 text-[11px] text-muted">
                             <User className="h-2.5 w-2.5" aria-hidden="true" /> {getUserName(task.assignedTo)}
                         </span>
                         )}
                         {!isClientUser && task.createdBy && task.createdBy !== task.assignedTo && (
-                          <span className="text-[10px] text-muted">
+                          <span className="text-[11px] text-muted">
                             {t('Created by')} {getUserName(task.createdBy, 'Unknown')}
                         </span>
                         )}
-                        <Badge tone={task.status === 'Completed' ? 'emerald' : task.status === 'Cancelled' ? 'slate' : 'blue'} className="px-1.5 py-0.5 text-[10px]">
+                        <Badge tone={task.status === 'Completed' ? 'emerald' : task.status === 'Cancelled' ? 'slate' : 'blue'} className="px-1.5 py-0.5 text-[11px]">
                           {task.status}
                         </Badge>
                       </div>
@@ -1298,7 +1298,7 @@ const Calendar: React.FC = () => {
                             <CalendarRange className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
                           )}
                           <span className="min-w-0 flex-1">
-                            <span className="block text-[10px] font-medium text-muted">{t('Schedule')}</span>
+                            <span className="block text-[11px] font-medium text-muted">{t('Schedule')}</span>
                             <span className="block truncate text-xs font-semibold text-ink">{localizedTaskScheduleLabel(task)}</span>
                           </span>
                           <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted" aria-hidden="true" />
@@ -1307,7 +1307,7 @@ const Calendar: React.FC = () => {
                         <div className="mt-3 flex min-h-11 items-center gap-2 rounded-control border border-line bg-inset px-2.5 py-2">
                           <CalendarRange className="h-4 w-4 shrink-0 text-muted" aria-hidden="true" />
                           <span className="min-w-0">
-                            <span className="block text-[10px] font-medium text-muted">{t('Schedule')}</span>
+                            <span className="block text-[11px] font-medium text-muted">{t('Schedule')}</span>
                           <span className="block truncate text-xs font-semibold text-ink">{localizedTaskScheduleLabel(task)}</span>
                           </span>
                         </div>
@@ -1316,7 +1316,7 @@ const Calendar: React.FC = () => {
                       {dueDate && (
                         <p
                           className={clsx(
-                            'mt-2 flex items-center gap-1 text-[10px] font-medium',
+                            'mt-2 flex items-center gap-1 text-[11px] font-medium',
                             isOverdue ? 'font-bold text-red-700' : 'text-slate-500',
                           )}
                         >

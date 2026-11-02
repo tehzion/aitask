@@ -617,7 +617,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                     onKeyDown={handleCustomKeyDown}
                     placeholder={t('Add custom service…')}
                     maxLength={40}
-                    className="w-full bg-white border border-dashed border-slate-300 text-slate-800 text-sm rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 block px-3 py-2 outline-none placeholder:text-slate-400"
+                    className="w-full bg-white border border-dashed border-slate-300 text-slate-800 text-sm rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 block px-3 py-2 outline-none placeholder:text-muted"
                   />
                 </div>
                 <button

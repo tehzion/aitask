@@ -472,6 +472,8 @@ test('first login reaches the app and critical responsive routes remain usable',
     };
     const now = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 8);
+    // The calendar has no Sunday column: start on a Tuesday so every clicked date is a weekday.
+    while (start.getDay() !== 2) start.setDate(start.getDate() + 1);
     const due = new Date(start);
     due.setDate(start.getDate() + 2);
     const extendedDue = new Date(start);

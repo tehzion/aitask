@@ -856,7 +856,7 @@ const Clients: React.FC = () => {
                       <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div data-i18n-skip className="font-semibold text-ink">{client.name}</div><div className="mt-1.5 flex flex-wrap gap-1.5">{serviceContext?.plan && <StatusChip tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{t(serviceContext.plan.status)}</StatusChip>}{!client.profile && <StatusChip tone="amber">{t('Needs profile')}</StatusChip>}</div></div></div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {Array.from(client.sources).map(source => (
-                          <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[10px] font-medium', sourceClasses[source])}>
+                          <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[11px] font-medium', sourceClasses[source])}>
                             {t(source)}
                           </span>
                         ))}
@@ -888,7 +888,7 @@ const Clients: React.FC = () => {
                       {serviceContext?.plan && <p className="mb-2 text-xs font-semibold text-ink">{serviceContext.plan.name}</p>}
                       <div className="flex max-w-[220px] flex-wrap gap-1.5">
                         {Array.from(client.services).slice(0, 4).map(service => (
-                          <Badge key={service} tone="slate" className="text-[10px]">
+                          <Badge key={service} tone="slate" className="text-[11px]">
                             {service}
                           </Badge>
                         ))}
@@ -1007,7 +1007,7 @@ const Clients: React.FC = () => {
                   <div className="flex min-w-0 flex-col gap-4 lg:items-end">
                     <div className="flex flex-wrap gap-1.5 lg:justify-end">
                       {Array.from(client.services).slice(0, 3).map(service => (
-                        <Badge key={service} tone="slate" className="text-[10px]">
+                        <Badge key={service} tone="slate" className="text-[11px]">
                           {service}
                         </Badge>
                       ))}
@@ -1285,7 +1285,7 @@ const Clients: React.FC = () => {
                   <h3 className="text-sm font-bold text-slate-900">{t('Services & Notes')}</h3>
                   <div className="mt-3 flex flex-wrap gap-1.5">
                     {Array.from(selectedClient.services).map(service => (
-                      <Badge key={service} tone="slate" className="text-[10px]">
+                      <Badge key={service} tone="slate" className="text-[11px]">
                         {service}
                       </Badge>
                     ))}

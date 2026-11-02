@@ -5,7 +5,9 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
   await page.goto('/login');
   // Let the app finish its startup load so seeded state is not overwritten.
   await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
-  const clientId = await page.evaluate(async () => {
+  // Start the plan this month so its published cycle is the current one, whatever today's date is.
+  const monthStart = (() => { const today = new Date(); return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`; })();
+  const clientId = await page.evaluate(async startDate => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
@@ -18,7 +20,7 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Ads Feedback Co', planName: 'Ads Management', origin: 'custom',
       serviceItems: [{ id: 'ads-fee', name: 'ADS Management Fee', platforms: [], unit: 'month', quantity: 1, unitPriceMinor: 10000 }],
-      startDate: '2026-10-01', billingDay: 1, discountType: 'none', discountValue: 0, taxRateBps: 0,
+      startDate, billingDay: 1, discountType: 'none', discountValue: 0, taxRateBps: 0,
     });
     if (!created.ok) throw new Error(created.error);
     const activated = useStore.getState().activateClientPlan(created.planId!);
@@ -26,7 +28,7 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
     const published = useStore.getState().setServiceCycleStatus(activated.cycleId!, 'Published');
     if (!published.ok) throw new Error(published.error);
     return useStore.getState().clientPlans.find(plan => plan.id === created.planId)!.clientId;
-  });
+  }, monthStart);
   await page.goto(`/clients/${clientId}`);
   await page.getByRole('tab', { name: locale === 'zh' ? '周期' : 'Cycles', exact: true }).click();
   await expect(page.getByText(locale === 'zh' ? '0 个关联任务' : '0 linked task(s)', { exact: true })).toBeVisible();

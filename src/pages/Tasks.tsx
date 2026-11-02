@@ -896,25 +896,25 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
                                 <h4 data-i18n-skip className={cn("text-xs font-bold leading-5 truncate flex-1", isOverdue ? "text-red-900" : "text-slate-800")}>
                                   {task.title}
                                 </h4>
-                                {!isClientUser && <Badge tone={task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : task.priority === 'Medium' ? 'blue' : 'slate'} className="text-[9px] px-1.5 py-0 shrink-0">
+                                {!isClientUser && <Badge tone={task.priority === 'Urgent' ? 'red' : task.priority === 'High' ? 'amber' : task.priority === 'Medium' ? 'blue' : 'slate'} className="text-[11px] px-1.5 py-0 shrink-0">
                                   {getLocalizedPriority(task.priority, locale)}
                                 </Badge>}
                               </div>
 
-                              <div data-i18n-skip className="text-[10px] text-slate-500 mt-1.5 truncate">
+                              <div data-i18n-skip className="text-[11px] text-slate-500 mt-1.5 truncate">
                                 {isClientUser ? task.serviceType : `${task.clientName}${task.projectName ? ` · ${task.projectName}` : ''}`}
                               </div>
 
                               {!isClientUser && <div className="flex items-center gap-1.5 mt-2 flex-wrap">
-                                <span className={cn("text-[9px] font-bold px-1.5 py-0.5 rounded-md", getDeptBadge(task.department))}>
+                                <span className={cn("text-[11px] font-bold px-1.5 py-0.5 rounded-md", getDeptBadge(task.department))}>
                                   {getLocalizedDepartment(task.department, locale)}
                                 </span>
-                                <span className="text-[9px] text-slate-500 font-medium">
+                                <span className="text-[11px] text-slate-500 font-medium">
                                   {task.serviceType}
                                 </span>
                               </div>}
 
-                              <div className="mt-3 flex items-center justify-between text-[10px]">
+                              <div className="mt-3 flex items-center justify-between text-[11px]">
                                 <span
                                   className={cn("font-medium", isOverdue ? "text-red-600 font-extrabold" : "text-slate-500")}
                                   title={dueDateParsed ? `${t('Due')}: ${formatLocalizedDate(dueDateParsed, locale)}` : t('common.noDueDate')}
@@ -922,10 +922,10 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
                                   {getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}
                                 </span>
                                 <div className="flex items-center gap-1 bg-slate-50 px-1.5 py-0.5 rounded border border-slate-200">
-                                  <div className="w-4 h-4 rounded-full bg-accent-soft text-accent flex items-center justify-center text-[9px] font-bold">
+                                  <div className="w-4 h-4 rounded-full bg-accent-soft text-accent flex items-center justify-center text-[11px] font-bold">
                                     {getUserName(task.assignedTo).charAt(0)}
                                   </div>
-                                  <span className="text-slate-600 font-semibold text-[9px] max-w-[50px] truncate">{getUserName(task.assignedTo)}</span>
+                                  <span className="text-slate-600 font-semibold text-[11px] max-w-[50px] truncate">{getUserName(task.assignedTo)}</span>
                                 </div>
                               </div>
 
@@ -934,7 +934,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
                                 <div className="flex-1 bg-slate-100 h-1.5 rounded-full overflow-hidden border border-slate-200/40">
                                   <div className="bg-accent h-full rounded-full" style={{ width: `${getTaskProgress(task, users, isClientUser)}%` }}></div>
 	                              </div>
-                                <span className="text-[9px] font-bold text-slate-600 shrink-0">{getTaskProgress(task, users, isClientUser)}%</span>
+                                <span className="text-[11px] font-bold text-slate-600 shrink-0">{getTaskProgress(task, users, isClientUser)}%</span>
                               </div>
 
                               {isClientUser && (
@@ -945,7 +945,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
 
                               {/* Action Badges in Card */}
                               {(task.attachmentLink || task.revisionCount > 0) && (
-                                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2 text-[9px] text-slate-500">
+                                <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center gap-2 text-[11px] text-slate-500">
                                   {task.attachmentLink && <Paperclip className="w-3 h-3 text-slate-400" />}
                                   {task.revisionCount > 0 && <span className="text-amber-700 font-bold">{task.revisionCount} {t('rev')}</span>}
                                 </div>
@@ -1077,7 +1077,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
 
               {/* Status */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1">{t('Status')}</label>
+                <label className="block text-[11px] font-bold text-slate-400 mb-1">{t('Status')}</label>
                 <span className={`inline-flex rounded-md px-2.5 py-1.5 text-xs font-semibold ${getStatusColor(currentTask.status)}`}>
                   {getLocalizedTaskStatus(currentTask.status, locale)}
                 </span>
@@ -1085,7 +1085,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
 
               {/* Priority */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1">{t('Priority')}</label>
+                <label className="block text-[11px] font-bold text-slate-400 mb-1">{t('Priority')}</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white appearance-none cursor-pointer")}
@@ -1110,7 +1110,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
 
               {/* Assignee */}
               <div>
-                <label className="block text-[10px] font-bold text-slate-400 mb-1">{t('Assignee')}</label>
+                <label className="block text-[11px] font-bold text-slate-400 mb-1">{t('Assignee')}</label>
                 <div className="relative">
                   <select
                     className={cn(inputBase, "w-full text-xs py-1.5 pl-2.5 pr-8 bg-white disabled:bg-slate-50 disabled:text-slate-400 appearance-none cursor-pointer")}
@@ -1139,7 +1139,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
                   <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                 </div>
                 {!canAssignOthers && (
-                  <p className="mt-1 text-[10px] text-slate-400">{t('Only Boss Koo can reassign tasks.')}</p>
+                  <p className="mt-1 text-[11px] text-slate-400">{t('Only Boss Koo can reassign tasks.')}</p>
                 )}
               </div>
             </div>

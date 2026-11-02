@@ -1,4 +1,5 @@
 import '../lib/actionFeedbackCopy';
+import { formatLocalizedDateRange } from '../lib/i18n';
 import { msg, type MessageDescriptor } from '../lib/messages';
 import { getCycleExtras } from '../lib/opsSignals';
 import type { UiFeedback } from '../lib/actionFeedback';
@@ -614,7 +615,7 @@ const OperationsClientWorkspace = () => {
 
       {(
         <div hidden={tab !== 'overview'} style={tab !== 'overview' ? { display: 'none' } : undefined} id={`${CLIENT_WORKSPACE_TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
-          <Surface variant="inset" className="border-l-2 border-accent p-6 sm:p-8">
+          <Surface variant="inset" className="p-6 sm:p-8">
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
             <DeliveryProgress published={Boolean(currentCycle)} total={currentCycleDeliverables.length} delivered={currentDelivered}
               draft={!isClient && allCycles.some(item => item.status === 'Draft' && parseOptionalDate(item.periodStart) && parseOptionalDate(item.periodEnd) && parseOptionalDate(item.periodStart)! <= today && today <= parseOptionalDate(item.periodEnd)!)} />
@@ -791,7 +792,7 @@ const OperationsClientWorkspace = () => {
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
                   <div>
                     <h2 className="font-semibold text-ink">
-                      {cycle.periodStart} – {cycle.periodEnd}
+                      {formatLocalizedDateRange(cycle.periodStart, cycle.periodEnd, locale)}
                     </h2>
                     <p className="mt-1 text-sm text-muted">
                       {cycleDeliverables.length} {t("deliverables")} · {t("plan revision")}{" "}
@@ -897,7 +898,7 @@ const OperationsClientWorkspace = () => {
                                   >
                                     <span
                                       className={cn(
-                                        "absolute -left-[2.1rem] flex h-6 w-6 items-center justify-center rounded-full border bg-surface text-[10px] font-semibold",
+                                        "absolute -left-[2.1rem] flex h-6 w-6 items-center justify-center rounded-full border bg-surface text-[11px] font-semibold",
                                         task.isCompleted
                                           ? "border-[rgb(var(--calm-success)/.55)] bg-[rgb(var(--calm-success-soft))] text-[rgb(var(--calm-success))]"
                                           : waiting

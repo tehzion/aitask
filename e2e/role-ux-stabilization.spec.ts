@@ -120,6 +120,8 @@ test('Staff collapsed navigation is labelled and mobile layout remains accessibl
 });
 
 test('Staff and Boss dashboards stay accessible across desktop and mobile', async ({ page }) => {
+  // Four full-page accessibility scans across two roles and two widths.
+  test.setTimeout(90_000);
   for (const role of [
     { username: 'Staff Demo', heading: 'My work' },
     { username: 'Boss Koo', heading: 'Agency operations' },

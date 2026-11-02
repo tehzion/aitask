@@ -42,6 +42,7 @@ import { TaskWorkflowSteps } from './TaskCard';
 import { fieldLabel, inputBase } from './uiTokens';
 import ContextualTutorialLink from './ContextualTutorialLink';
 import ActionAvailabilityNotice from './ActionAvailabilityNotice';
+import UserAvatar from './UserAvatar';
 
 interface Props {
   isOpen: boolean;
@@ -1014,7 +1015,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t(isClientTaskViewer ? 'Assigned Contact' : 'Assignee')}</label>
                   <div className="flex items-center gap-2">
                     {assignee?.avatar ? (
-                      <img src={assignee.avatar} alt="" className="w-6 h-6 rounded-full object-cover" />
+                      <UserAvatar src={assignee.avatar} name={assignee.name} className="h-6 w-6 rounded-full" />
                     ) : (
                       <span className="flex h-6 w-6 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
                         {(assignee?.name || 'A').charAt(0)}
@@ -1250,7 +1251,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   return (
                   <div key={comment.id} className="flex gap-3">
                     {commentAuthor?.avatar ? (
-                      <img src={commentAuthor.avatar} alt="" className="w-8 h-8 rounded-full object-cover shrink-0 mt-1" />
+                      <UserAvatar src={commentAuthor.avatar} name={commentAuthor.name} className="mt-1 h-8 w-8 rounded-full" />
                     ) : (
                       <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-50 text-xs font-semibold text-blue-700">
                         {(commentAuthor?.name || '?').charAt(0)}

@@ -91,7 +91,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
   return (
     <div className="space-y-6">
       <section className="grid gap-5 xl:grid-cols-[minmax(0,1.65fr)_minmax(280px,.7fr)]" aria-labelledby="client-focus-title">
-        <Surface variant="inset" className="relative overflow-hidden border-l-2 border-accent p-6 sm:p-8">
+        <Surface variant="inset" className="relative overflow-hidden p-6 sm:p-8">
           {focusTask ? (
             <div className="relative max-w-3xl">
               <div className="flex items-center gap-2 text-accent">
@@ -113,7 +113,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
                   <p className="mt-1">{latestTeamComment?.text ? <span data-i18n-skip>{latestTeamComment.text}</span> : <>{t('clientPortal.currentExpectedDate')} {expectedDate(focusTask, locale, t('clientPortal.dateToBeConfirmed'))}. {contactName()} {t('clientPortal.contactForTiming')}</>}</p>
                 </div>
               )}
-              <Link to={taskPath(focusTask)} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-5 text-sm font-semibold text-white shadow-[0_12px_28px_-18px_rgb(var(--calm-accent)/0.9)] transition duration-160 hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 active:translate-y-px dark:text-[rgb(var(--calm-accent-ink))]">
+              <Link to={taskPath(focusTask)} className="mt-6 inline-flex min-h-12 items-center justify-center gap-2 rounded-control bg-accent px-5 text-sm font-semibold text-white transition duration-160 hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 active:translate-y-px dark:text-[rgb(var(--calm-accent-ink))]">
                 {focusStage === 'needs_review' ? t('delivery.review') : t('delivery.view')}<ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -140,7 +140,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
       <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80" aria-labelledby="needs-review-title">
         <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line/70 px-4 py-4 sm:px-5">
           <div><h2 id="needs-review-title" className="font-semibold text-ink">{t('clientPortal.needsReview')}</h2><p className="mt-1 text-sm text-muted">{t('clientPortal.reviewCount', { count: groups.needs_review.length })}</p></div>
-          <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">{t('clientPortal.viewAllReviews', { count: groups.needs_review.length })}<ArrowRight className="h-4 w-4" /></Link>
+          {groups.needs_review.length > 0 && <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">{t('clientPortal.viewAllReviews', { count: groups.needs_review.length })}<ArrowRight className="h-4 w-4" /></Link>}
         </header>
         <div className="divide-y divide-line/70">
           {reviewQueue.map(task => deliveryRow(task, t('Review deliverable')))}

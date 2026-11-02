@@ -346,7 +346,7 @@ const Reports: React.FC = () => {
             {departmentStats.length === 0 ? (
               <ChartEmptyState>{t('No department data yet')}</ChartEmptyState>
             ) : departmentStats.map(dept => (
-              <article key={dept.name} className="rounded-control border border-line bg-inset/50 p-4">
+              <article key={dept.name} className="rounded-control bg-inset/60 p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-2">
                     <Users className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />

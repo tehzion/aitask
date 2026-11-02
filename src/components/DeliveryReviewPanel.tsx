@@ -29,6 +29,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   const [pending, setPending] = React.useState<PendingReview | null>(null);
   const [unlinkTask, setUnlinkTask] = React.useState<{ id: string; title: string } | null>(null);
   const unlinkTitleId = React.useId();
+  const [showLinking, setShowLinking] = React.useState(false);
   const [showOlderDrafts, setShowOlderDrafts] = React.useState(false);
   React.useEffect(() => { setSelections({}); setMessage(''); setPending(null); }, [clientId, store.currentUser?.id]);
   // A selected link is an in-memory choice that remains mounted while the
@@ -82,10 +83,10 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   };
   if (!store.currentUser || store.currentUser.role === 'Client') return null;
   if (!reviewTasks.length && !records.draftCycles.length && !records.expiredDraftCycles.length && !pending && !message) return null;
-  return <section className="mt-5 rounded-control border border-line p-4" aria-label={t('Delivery records need review')}>
-    <h3 className="font-semibold text-ink">{t('Delivery records need review')}</h3>
-    <p className="mt-1 text-xs text-muted">{t('Review links and publication before confirming delivery.')}</p>
-    {!canLink && <p className="mt-1 text-xs text-muted">{t('Relinking tasks is restricted for your role; task links are read-only on this list.')}</p>}
+  return <section className="mt-5 rounded-control border border-line p-4" aria-label={t('Delivery records')}>
+    <h3 className="font-semibold text-ink">{t('Delivery records')}</h3>
+    <p className="mt-1 text-xs text-muted">{t('Linking tasks is optional. A delivery counts once a Project Manager marks it delivered.')}</p>
+    {!canLink && showLinking && <p className="mt-1 text-xs text-muted">{t('Relinking tasks is restricted for your role; task links are read-only on this list.')}</p>}
     {message && <p className="mt-3 text-sm" role="status"><SystemMessage message={message} /></p>}
     {pending && <Button className="mt-3" disabled={busy} onClick={() => save(() => ({ ok: true }), pending.command)}>{t('Retry pending save')}</Button>}
     <div className="mt-3 space-y-4">
@@ -101,7 +102,10 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
           <p className="text-xs text-muted">{t('Expired unpublished cycle')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p>
         </div>)}</div>}
       </div>}
-      {reviewTasks.map(task => {
+      {reviewTasks.length > 0 && <Button variant="secondary" aria-expanded={showLinking} onClick={() => setShowLinking(value => !value)}>
+        {t('Link completed tasks to deliverables (optional)')} ({reviewTasks.length})
+      </Button>}
+      {showLinking && reviewTasks.map(task => {
         const editable = canLink && canEditTask(store.currentUser, task, store.rolePermissions, { clients: store.clients, projects: store.projects });
         const invalidLink = hasInvalidDeliveryLink(task, store.deliverables);
         const eligible = store.deliverables.filter(item => item.clientId === task.clientId && item.status !== 'Delivered' && cycles.some(cycle => cycle.id === item.cycleId && ['Draft', 'Published'].includes(cycle.status)));

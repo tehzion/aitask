@@ -313,11 +313,8 @@ const Notifications: React.FC = () => {
           </div>
         ) : groups.length === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-            <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-slate-100 text-slate-500">
-              <Bell className="h-5 w-5" />
-            </div>
-            <h2 className="mt-4 text-base font-semibold text-slate-900">{tab === 'unread' ? t('No unread notifications') : t('No notifications found')}</h2>
-            <p className="mt-1 max-w-sm text-sm leading-6 text-slate-500">
+            <h2 className="text-base font-semibold text-ink">{tab === 'unread' ? t('No unread notifications') : t('No notifications found')}</h2>
+            <p className="mt-1 max-w-sm text-sm leading-6 text-muted">
               {tab === 'unread'
                 ? t('You are all caught up. New assignments, deadlines, and reviews will appear here.')
                 : t('Try another category or search, or switch back to All.')}
@@ -338,7 +335,8 @@ const Notifications: React.FC = () => {
                     const allRead = group.unreadCount === 0;
                     return (
                       <article key={`${group.id}:${group.latest.id}`} className={cn('relative border-b border-slate-100 last:border-b-0', !allRead && 'bg-blue-50/30')}>
-                        {!allRead && <span className="absolute inset-y-0 left-0 w-1 bg-blue-600" />}
+                        {/* Unread is a small dot, not a side stripe. */}
+                        {!allRead && <span aria-hidden="true" className="absolute left-1.5 top-6 h-2 w-2 rounded-full bg-accent" />}
                         <div className="flex flex-col gap-3 px-4 py-4 sm:px-5 lg:flex-row lg:items-start">
                           <div className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-control', categoryTone[group.category])}>
                             <Icon className="h-5 w-5" />

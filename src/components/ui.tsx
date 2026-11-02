@@ -164,11 +164,12 @@ export type StripMetric = { label: string; value: React.ReactNode; to?: string; 
 
 // One quiet row of headline numbers. Tone appears only when a value needs action.
 export const MetricStrip = ({ label, items }: { label: string; items: StripMetric[] }) => (
-  <dl aria-label={label} className={`grid gap-px overflow-hidden rounded-panel bg-line/70 ring-1 ring-line/70 ${items.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : items.length > 4 ? 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-6' : 'grid-cols-2 sm:grid-cols-4'}`}>
+  // Cells draw their own dividers on a surface background, so a short last row stays clean instead of showing a grey block.
+  <dl aria-label={label} className={`grid overflow-hidden rounded-panel bg-surface ring-1 ring-line/70 ${items.length === 3 ? 'grid-cols-1 sm:grid-cols-3' : items.length > 4 ? 'grid-cols-2 sm:grid-cols-[repeat(auto-fit,minmax(9rem,1fr))]' : 'grid-cols-2 sm:grid-cols-4'}`}>
     {items.map(item => {
       const toneClass = item.tone === 'danger' && Number(item.value) > 0 ? 'text-red-700' : item.tone === 'warning' && Number(item.value) > 0 ? 'text-amber-700' : 'text-ink';
       // Valid dl structure (div > dt + dd); a stretched link keeps the whole cell clickable.
-      return <div key={item.label} className={`relative bg-surface px-4 py-3 ${item.to ? 'transition-colors hover:bg-inset focus-within:ring-2 focus-within:ring-inset focus-within:ring-accent/40' : ''}`}>
+      return <div key={item.label} className={`relative bg-surface px-4 py-3 shadow-[inset_-1px_-1px_0_rgb(var(--calm-line)/0.7)] ${item.to ? 'transition-colors hover:bg-inset focus-within:ring-2 focus-within:ring-inset focus-within:ring-accent/40' : ''}`}>
         <dt className="text-xs font-medium text-muted">{item.label}</dt>
         <dd className={`calm-number mt-1 text-2xl font-semibold tracking-[-0.04em] ${toneClass}`}>
           {item.to ? <Link to={item.to} aria-label={`${item.label}: ${item.value}`} className="after:absolute after:inset-0 focus:outline-none">{item.value}</Link> : item.value}

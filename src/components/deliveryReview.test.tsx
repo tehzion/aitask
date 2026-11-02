@@ -41,7 +41,8 @@ describe('role-specific delivery review', () => {
     const html = render(<DeliveryReviewPanel />);
     expect(html).not.toContain('Hidden internal work');
     if (role === 'Client') expect(html).toBe('');
-    else expect(html).toContain('Owned completed work');
+    // Linking is folded away; the count covers only the actor's own work.
+    else expect(html).toContain('Link completed tasks to deliverables (optional) (1)');
   });
   it('respects permission overrides and leaves current drafts read-only', () => {
     const actor = { id: 'actor', name: 'Actor', role: 'HOD', departments: ['Designer'], permissions: { ...defaultRolePermissions.HOD, viewAssignedServiceClients: true, manageServiceCycles: false, editTasks: false } } as User;

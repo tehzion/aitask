@@ -44,6 +44,7 @@ import {
   serializeClientProjectedTask,
   setSecureNotificationsRead,
   type WorkspaceOperation,
+  partitionOperationsForRpc,
 } from './secureWorkspace';
 
 beforeEach(() => {
@@ -1779,5 +1780,42 @@ describe('review evidence command boundary', () => {
     expect(operation?.data).toHaveProperty('title', 'Reviewed output');
     expect(operation?.data).not.toHaveProperty('reviewAccess');
     expect(operation?.data).not.toHaveProperty('reviewEvidence');
+  });
+});
+
+describe('service command grouping by entity owner', () => {
+  const op = (entityType: string, action: 'insert' | 'update', entityId = `${entityType}-1`) => ({ kind: 'entity' as const, action, entityType, entityId, expectedVersion: action === 'insert' ? 0 : 1, data: { id: entityId } });
+
+  it('sends an update-only rename across service rows as one command per owner', () => {
+    const groups = partitionOperationsForRpc([
+      op('client_plan', 'update'), op('service_cycle', 'update'), op('deliverable', 'update'), op('addon', 'update'), op('cycle_comment', 'update'),
+    ]);
+    expect(groups.map(group => [group.type, group.operations.map(item => item.entityType)])).toEqual([
+      ['client_plan.manage', ['client_plan']],
+      ['service_cycle.manage', ['service_cycle']],
+      ['deliverable.manage', ['deliverable']],
+      ['addon.manage', ['addon']],
+      ['cycle_comment.manage', ['cycle_comment']],
+    ]);
+  });
+
+  it('keeps a plan activation together under the plan command', () => {
+    const groups = partitionOperationsForRpc([
+      op('client_plan', 'update'), op('service_cycle', 'insert'), op('deliverable', 'insert'), op('service_pricing_snapshot', 'insert'),
+    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].type).toBe('client_plan.manage');
+  });
+
+  it('keeps a new add-on with its pricing and draft cycle under the add-on command', () => {
+    const groups = partitionOperationsForRpc([
+      op('addon', 'insert'), op('service_pricing_snapshot', 'insert'), op('service_cycle', 'update'),
+    ]);
+    expect(groups.map(group => group.type)).toEqual(['addon.manage']);
+  });
+
+  it('leaves a deliverable status change with its cycle on the deliverable command', () => {
+    const groups = partitionOperationsForRpc([op('deliverable', 'update'), op('service_cycle', 'update')]);
+    expect(groups.map(group => group.type)).toEqual(['deliverable.manage']);
   });
 });

@@ -41,7 +41,10 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
 
   await page.reload();
   await expect(root).toHaveClass(/dark/);
-  await expect(page.getByRole('button', { name: 'Keyboard shortcuts' })).toBeVisible();
+  // Shortcuts live in the appearance menu; the ? key still opens them.
+  await page.getByRole('button', { name: 'Appearance settings' }).click();
+  await expect(page.getByRole('menuitem', { name: 'Keyboard shortcuts' })).toBeVisible();
+  await page.keyboard.press('Escape');
 
   await page.keyboard.press('?');
   const guide = page.getByRole('dialog', { name: 'Keyboard shortcuts' });
@@ -59,7 +62,7 @@ test('day/night mode and keyboard shortcuts remain accessible', async ({ page })
   await appearanceTrigger.click();
   await expect(page.getByRole('menuitemradio', { name: 'Dark' })).toBeFocused();
   await page.keyboard.press('End');
-  await expect(page.getByRole('menuitemradio', { name: 'System' })).toBeFocused();
+  await expect(page.getByRole('menuitemcheckbox', { name: 'Notification sound' })).toBeFocused();
   await page.keyboard.press('Home');
   await expect(page.getByRole('menuitemradio', { name: 'Light' })).toBeFocused();
   await page.keyboard.press('Escape');

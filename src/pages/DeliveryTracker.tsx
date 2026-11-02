@@ -30,7 +30,7 @@ import {
 import { Badge, Button, EmptyState, PageHeader, ProgressBar, SegmentedTabs, StatusChip } from '../components/ui';
 import { pageShell, tableShell } from '../components/uiTokens';
 import { cn } from '../lib/utils';
-import { formatLocalizedDate } from '../lib/i18n';
+import { formatLocalizedDateRange, formatLocalizedDate } from '../lib/i18n';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import ContextualTutorialLink from '../components/ContextualTutorialLink';
 
@@ -260,7 +260,7 @@ const DeliveryTracker: React.FC = () => {
               <article key={summary.clientName} className="bg-surface">
                 <div className="grid gap-4 px-4 py-5 sm:px-5 xl:grid-cols-[minmax(13rem,1.2fr)_minmax(11rem,.9fr)_minmax(11rem,.9fr)_minmax(10rem,.8fr)_auto] xl:items-center">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{summary.clientName.slice(0, 2).toUpperCase()}</span><div className="min-w-0"><h3 data-i18n-skip className="truncate font-semibold text-ink">{summary.clientName}</h3><p className="mt-0.5 text-xs text-muted">{summary.cycle ? `${summary.cycle.periodStart} – ${summary.cycle.periodEnd}` : t('No service cycle in this period')}</p></div></div>
+                    <div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{summary.clientName.slice(0, 2).toUpperCase()}</span><div className="min-w-0"><h3 data-i18n-skip className="truncate font-semibold text-ink">{summary.clientName}</h3><p className="mt-0.5 text-xs text-muted">{summary.cycle ? formatLocalizedDateRange(summary.cycle.periodStart, summary.cycle.periodEnd, locale) : t('No service cycle in this period')}</p></div></div>
                   </div>
                   <div>
                     <div className="flex flex-wrap gap-1.5"><StatusChip tone={summary.overdue ? 'red' : 'blue'}>{summary.open} {t('open')}</StatusChip>{summary.overdue > 0 && <StatusChip tone="red">{summary.overdue} {t('overdue')}</StatusChip>}<StatusChip tone="emerald">{summary.completed} {t('completed')}</StatusChip></div>
@@ -269,7 +269,7 @@ const DeliveryTracker: React.FC = () => {
                   <div>
                     <ProgressBar value={summary.progress} label={t('Work progress')} />
                     <p className="mt-2 text-xs text-muted">{summary.included > 0
-                      ? <>{summary.delivered}/{summary.included} {t('deliverables completed')}</>
+                      ? <>{summary.delivered}/{summary.included} {t('deliverables completed')}{summary.completed > 0 && <> · {summary.completed} {t('tasks done')}</>}</>
                       : <>{summary.completed}/{summary.open + summary.completed} {t('tasks completed')}</>}</p>
                   </div>
                   <div className="min-w-0">

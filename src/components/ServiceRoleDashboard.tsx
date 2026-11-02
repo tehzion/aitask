@@ -241,11 +241,22 @@ const ServiceRoleDashboard = () => {
       ]} />
       <section aria-labelledby="pm-action-title" className="space-y-3">
         <h2 id="pm-action-title" className="text-lg font-semibold text-ink">{t('Requires your action')}</h2>
-        <div className="grid gap-4 xl:grid-cols-3">
-          <TaskQueue title={t('Awaiting your review')} tasks={personal.mine} empty={t('Nothing is waiting for your review.')} />
-          <TaskQueue title={t('Ready to finalize')} tasks={personal.completion} empty={t('No tasks awaiting final completion.')} />
-          <TaskQueue title={t('Due today / overdue')} tasks={urgent} empty={t('No urgent portfolio delivery work.')} />
-        </div>
+        {/* Only queues with work take a column; empty ones fold into one line instead of full-height blank panels. */}
+        {(() => {
+          const queues = [
+            { title: t('Awaiting your review'), tasks: personal.mine, empty: t('Nothing is waiting for your review.') },
+            { title: t('Ready to finalize'), tasks: personal.completion, empty: t('No tasks awaiting final completion.') },
+            { title: t('Due today / overdue'), tasks: urgent, empty: t('No urgent portfolio delivery work.') },
+          ];
+          const busy = queues.filter(queue => queue.tasks.length > 0);
+          const clear = queues.filter(queue => queue.tasks.length === 0);
+          return <>
+            {busy.length > 0 && <div className={`grid gap-4 ${busy.length === 3 ? 'xl:grid-cols-3' : busy.length === 2 ? 'lg:grid-cols-2' : ''}`}>
+              {busy.map(queue => <TaskQueue key={queue.title} title={queue.title} tasks={queue.tasks} empty={queue.empty} />)}
+            </div>}
+            {clear.length > 0 && <p className="text-sm text-muted">{busy.length === 0 ? t('Nothing needs your action right now.') : <>{t('All clear')}: {clear.map(queue => queue.title).join(' · ')}</>}</p>}
+          </>;
+        })()}
       </section>
       {/* Unassigned work needs the PM to act, so it is listed here, not under waiting on others. */}
       <StuckWorkPanel tasks={scopeTasks} />

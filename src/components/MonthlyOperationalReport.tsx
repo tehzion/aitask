@@ -116,7 +116,7 @@ const MonthlyOperationalReport: React.FC = () => {
         </div>
       </div>
       <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
-        {metrics.map(metric => <div key={metric.label} className="rounded-control border border-line/70 bg-inset/40 p-3"><p className={cn('calm-number text-2xl font-semibold', metricTone[metric.tone])}>{metric.value}</p><p className="mt-1 text-xs font-medium text-muted">{metric.label}</p></div>)}
+        {metrics.map(metric => <div key={metric.label} className="rounded-control bg-inset/60 p-3"><p className={cn('calm-number text-2xl font-semibold', metricTone[metric.tone])}>{metric.value}</p><p className="mt-1 text-xs font-medium text-muted">{metric.label}</p></div>)}
       </div>
       <div className="border-t border-line/70 px-5 py-4">
         <h3 className="font-semibold text-ink">{t('Project-level monthly detail')}</h3>
