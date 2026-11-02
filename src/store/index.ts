@@ -474,7 +474,12 @@ export const isWorkspaceMutationLocked = (state: StoreState) => (
   && (
     state.backend.upgradeRequired === true
     || state.backend.isRestoring === true
-    || hasRetainedSecureMutation()
+    // A save that is still on its way, or a dropped save being resent
+    // automatically, does not block new edits: they are saved right after it
+    // (syncBackendNow / retryMutation send "newer changes" on success). A
+    // conflict being merged keeps the lock until the record is reloaded.
+    || (hasRetainedSecureMutation()
+      && !((state.backend.isSaving && !state.backend.conflict) || autoRecoveryAcceptsEdits))
     || isPendingMutationResolution(state.backend)
   )
 );
@@ -512,6 +517,12 @@ const waitForSyncIdle = async (timeoutMs = syncIdleWaitPolicy.timeoutMs) => {
 export const automaticRecoveryPolicy = { delaysMs: [1000, 3000, 6000] };
 let autoRecoveryAttempt = 0;
 let autoRecoveryToken = 0;
+// While a network-type failure is resent, people can keep working: the resend
+// carries exactly their earlier change, and anything edited meanwhile is saved
+// next. A merged conflict keeps the short lock, because the local copy still
+// holds the other person's old values until the next reload.
+let autoRecoveryAcceptsEdits = false;
+let autoRecoveryEpoch = 0;
 // The server rebuilds these on every save (aitask_guard_task_workflow keeps
 // the stored activity log), so both sides "changing" them is not a clash.
 const SERVER_OWNED_CONFLICT_FIELDS = new Set(['updatedAt', 'workHistory']);
@@ -520,15 +531,19 @@ export const isMergeableConflict = (conflict?: MutationConflict) => Boolean(
   && conflict.serverChangedFields && conflict.changedFields?.length
   && !conflict.changedFields.some(field => !SERVER_OWNED_CONFLICT_FIELDS.has(field) && conflict.serverChangedFields!.includes(field)),
 );
-const resetAutomaticRecovery = () => { autoRecoveryAttempt = 0; };
+const resetAutomaticRecovery = () => { autoRecoveryAttempt = 0; autoRecoveryAcceptsEdits = false; };
 const scheduleAutomaticRecovery = (
   result: { code?: MutationErrorCode; error?: string; conflict?: MutationConflict },
   sessionToken: ReturnType<typeof captureWorkspaceSession>,
 ) => {
-  if (typeof window === 'undefined' || autoRecoveryAttempt >= automaticRecoveryPolicy.delaysMs.length) return false;
-  const recoverable = (result.code === 'RETRY_REQUIRED' && result.error !== BACKEND_UPGRADE_REQUIRED_MESSAGE)
-    || (result.code === 'CONFLICT' && isMergeableConflict(result.conflict));
-  if (!recoverable) return false;
+  const transient = result.code === 'RETRY_REQUIRED' && result.error !== BACKEND_UPGRADE_REQUIRED_MESSAGE;
+  const recoverable = transient || (result.code === 'CONFLICT' && isMergeableConflict(result.conflict));
+  if (typeof window === 'undefined' || !recoverable || autoRecoveryAttempt >= automaticRecoveryPolicy.delaysMs.length) {
+    autoRecoveryAcceptsEdits = false;
+    return false;
+  }
+  if (!autoRecoveryAcceptsEdits) autoRecoveryEpoch = localMutationEpoch;
+  autoRecoveryAcceptsEdits = transient;
   const delay = automaticRecoveryPolicy.delaysMs[autoRecoveryAttempt];
   autoRecoveryAttempt += 1;
   autoRecoveryPending = true;
@@ -1821,9 +1836,10 @@ export const useStore = create<StoreState>()(
           return { ok: false, code: result.code, error: result.error };
         }
 
+        const editedDuringRecovery = autoRecoveryAcceptsEdits && localMutationEpoch !== autoRecoveryEpoch;
         resetAutomaticRecovery();
         const savedAt = new Date().toISOString();
-        const hasNewerChanges = !workspaceStatesEqual(workspaceBeforeRetry, selectPersistedWorkspaceState(get()));
+        const hasNewerChanges = editedDuringRecovery || !workspaceStatesEqual(workspaceBeforeRetry, selectPersistedWorkspaceState(get()));
         apply((state) => ({
           backend: {
             ...state.backend,
