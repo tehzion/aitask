@@ -1553,6 +1553,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Team members': '团队成员',
   'Nothing needs your action right now.': '目前没有需要您处理的事项。',
   'All clear': '已无待办',
+  'Notification sound': '通知提示音',
   '{days} days overdue': '已逾期 {days} 天',
   'New due date for {title}': '{title} 的新截止日期',
   'Re-date': '修改日期',

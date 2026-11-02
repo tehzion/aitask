@@ -118,11 +118,14 @@ const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleAppearanceKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, index: number) => {
+    // Only items shown at this width take part (the shortcuts item is hidden on phones).
+    const items = appearanceItemRefs.current.filter((node): node is HTMLButtonElement => Boolean(node && node.offsetParent));
+    const position = Math.max(0, items.indexOf(appearanceItemRefs.current[index]!));
     let nextIndex: number | undefined;
-    if (event.key === 'ArrowDown') nextIndex = (index + 1) % 3;
-    if (event.key === 'ArrowUp') nextIndex = (index + 2) % 3;
+    if (event.key === 'ArrowDown') nextIndex = (position + 1) % items.length;
+    if (event.key === 'ArrowUp') nextIndex = (position + items.length - 1) % items.length;
     if (event.key === 'Home') nextIndex = 0;
-    if (event.key === 'End') nextIndex = 2;
+    if (event.key === 'End') nextIndex = items.length - 1;
     if (event.key === 'Escape') {
       event.preventDefault();
       closeAppearance(true);
@@ -130,7 +133,7 @@ const Navbar: React.FC<NavbarProps> = ({
     }
     if (nextIndex === undefined) return;
     event.preventDefault();
-    appearanceItemRefs.current[nextIndex]?.focus();
+    items[nextIndex]?.focus();
   };
 
   useEffect(() => {
@@ -288,26 +291,12 @@ const Navbar: React.FC<NavbarProps> = ({
           <button ref={appearanceTriggerRef} type="button" onClick={() => setShowAppearance(value => !value)} onKeyDown={event => { if (event.key === 'Escape' && showAppearance) { event.preventDefault(); closeAppearance(true); } }} aria-label={t('Appearance settings')} aria-haspopup="menu" aria-expanded={showAppearance} aria-controls="appearance-menu" className="flex h-11 w-11 items-center justify-center rounded-r-control text-muted hover:bg-inset hover:text-ink"><ChevronDown className="h-4 w-4" /></button>
           {showAppearance && <div id="appearance-menu" role="menu" aria-label={t('Appearance')} className="absolute right-0 top-12 z-50 w-44 rounded-panel bg-surface p-1.5 shadow-float ring-1 ring-line">
             {([{ id: 'light', label: 'Light', icon: Sun }, { id: 'dark', label: 'Dark', icon: Moon }, { id: 'system', label: 'System', icon: Monitor }] as const).map((option, index) => <button key={option.id} ref={node => { appearanceItemRefs.current[index] = node; }} type="button" role="menuitemradio" aria-checked={themePreference === option.id} onKeyDown={event => handleAppearanceKeyDown(event, index)} onClick={() => { onSetThemePreference(option.id); closeAppearance(true); }} className={cn('flex min-h-11 w-full items-center gap-2.5 rounded-control px-3 text-sm transition-colors duration-160', themePreference === option.id ? 'bg-accent-soft font-semibold text-accent' : 'text-muted hover:bg-inset hover:text-ink')}><option.icon className="h-4 w-4" />{t(option.label)}</button>)}
+            {/* Less-used controls live here so the header keeps only search, language, theme and notifications. */}
+            <div role="separator" className="my-1 h-px bg-line" />
+            <button ref={node => { appearanceItemRefs.current[3] = node; }} type="button" role="menuitem" onKeyDown={event => handleAppearanceKeyDown(event, 3)} onClick={() => { closeAppearance(false); onOpenShortcuts(); }} aria-keyshortcuts="?" className="hidden min-h-11 w-full items-center gap-2.5 rounded-control px-3 text-sm text-muted transition-colors duration-160 hover:bg-inset hover:text-ink sm:flex"><Keyboard className="h-4 w-4" />{t('Keyboard shortcuts')}</button>
+            <button ref={node => { appearanceItemRefs.current[4] = node; }} type="button" role="menuitemcheckbox" aria-checked={soundEnabled} onKeyDown={event => handleAppearanceKeyDown(event, 4)} onClick={handleToggleSound} className="flex min-h-11 w-full items-center gap-2.5 rounded-control px-3 text-sm text-muted transition-colors duration-160 hover:bg-inset hover:text-ink">{soundEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}{t('Notification sound')}</button>
           </div>}
         </div>
-        <IconButton
-          onClick={onOpenShortcuts}
-          label={t('Keyboard shortcuts')}
-          aria-keyshortcuts="?"
-          className="hidden sm:inline-flex"
-        >
-          <Keyboard className="h-5 w-5" />
-        </IconButton>
-        <IconButton
-          onClick={handleToggleSound}
-          label={soundEnabled ? t('Mute notifications') : t('Unmute notifications')}
-          className="hidden sm:inline-flex"
-        >
-          {soundEnabled
-            ? <Volume2 className="w-5 h-5" />
-            : <VolumeX className="w-5 h-5 text-slate-400" />}
-        </IconButton>
-
         {/* Phones reach notifications from the bottom bar's Inbox, so the header keeps only search, language and theme. */}
         <div className="relative hidden sm:block" ref={notifRef}>
           <IconButton
