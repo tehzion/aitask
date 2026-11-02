@@ -186,3 +186,28 @@ it('recovers a dropped save by itself without showing a retry banner', async () 
     automaticRecoveryPolicy.delaysMs = [];
   }
 });
+
+it('accepts an edit made while an earlier save is still on its way and saves it next', async () => {
+  await useStore.getState().pullBackendNow({force:true});
+  expect((await saveSecureWorkspace(useStore.getState())).ok).toBe(true);
+  await useStore.getState().pullBackendNow({force:true});
+  const originalRpc = mocks.rpc.getMockImplementation()!;
+  let release!: () => void;
+  const held = new Promise<void>(resolve => { release = resolve; });
+  let heldOnce = false;
+  mocks.rpc.mockImplementation(async (...args) => {
+    if (args[0] === 'aitask_execute_command' && !heldOnce) { heldOnce = true; await held; }
+    return originalRpc(...args);
+  });
+  expect(useStore.getState().upsertClientProfile('Old Company', { phone: '111' }).ok).toBe(true);
+  const firstSave = useStore.getState().commitPendingMutation();
+  await vi.waitFor(() => expect(heldOnce).toBe(true));
+  // A slow first save must not refuse the next edit (the form sends the whole profile).
+  expect(useStore.getState().upsertClientProfile('Old Company', { phone: '111', address: 'Level 2' })).toMatchObject({ ok: true });
+  release();
+  expect(await firstSave).toEqual({ ok: true });
+  expect(await useStore.getState().commitPendingMutation()).toEqual({ ok: true });
+  const saved = entities.find(e => e.entity_type === 'client')!.data;
+  expect(saved).toMatchObject({ phone: '111', address: 'Level 2' });
+  expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false });
+});

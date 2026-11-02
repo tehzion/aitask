@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-10-28T00:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "Production verified through repository 20261028150000_hod_patch_empty_defaults. The 20261028 migrations were applied with the same versions on 2026-10-28; the earlier tail resolves through connector-generated migration aliases. 20261028160000_optional_task_output was applied to production on 2026-10-28 in one transaction and recorded with the same version. 20261029120000_pm_company_handover was applied to production on 2026-10-29 in one transaction and recorded with the same version. 20261102120000_plan_activation_entity_types was applied to production on 2026-11-02 in one transaction and recorded with the same version. 20261102130000_hod_assignee_output_files was applied to production on 2026-11-02 and recorded with the same version. 20261102140000_addon_save_entity_types was applied to production on 2026-11-02 and recorded with the same version. 20261102150000_task_assigned_at_format and 20261102160000_company_rename_with_projects were applied to production on 2026-11-02, each in one transaction, and recorded with the same versions.",
+  "status": "Production verified through repository 20261028150000_hod_patch_empty_defaults. The 20261028 migrations were applied with the same versions on 2026-10-28; the earlier tail resolves through connector-generated migration aliases. 20261028160000_optional_task_output was applied to production on 2026-10-28 in one transaction and recorded with the same version. 20261029120000_pm_company_handover was applied to production on 2026-10-29 in one transaction and recorded with the same version. 20261102120000_plan_activation_entity_types was applied to production on 2026-11-02 in one transaction and recorded with the same version. 20261102130000_hod_assignee_output_files was applied to production on 2026-11-02 and recorded with the same version. 20261102140000_addon_save_entity_types was applied to production on 2026-11-02 and recorded with the same version. 20261102150000_task_assigned_at_format and 20261102160000_company_rename_with_projects were applied to production on 2026-11-02, each in one transaction, and recorded with the same versions. 20261103090000_hod_legacy_task_reassign was applied to production on 2026-11-03 in one transaction and recorded with the same version.",
   "validatedMigrationTail": [
     "20261021110000_monthly_plan_renewal_integrity",
     "20261023120000_pm_hod_staff_assignment_state",
@@ -22,12 +22,13 @@
     "20261102130000_hod_assignee_output_files",
     "20261102140000_addon_save_entity_types",
     "20261102150000_task_assigned_at_format",
-    "20261102160000_company_rename_with_projects"
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign"
   ],
   "pendingProductionMigrations": [],
   "productionVerification": {
     "historyAligned": false,
-    "historyThrough": "20261102160000_company_rename_with_projects",
+    "historyThrough": "20261103090000_hod_legacy_task_reassign",
     "migrationResolution": {
       "status": "connector_aliases_verified",
       "repositoryToProduction": [
@@ -98,6 +99,10 @@
         {
           "repository": "20261102160000_company_rename_with_projects",
           "production": "20261102160000_company_rename_with_projects"
+        },
+        {
+          "repository": "20261103090000_hod_legacy_task_reassign",
+          "production": "20261103090000_hod_legacy_task_reassign"
         }
       ]
     }
@@ -113,7 +118,8 @@
     "20261102130000_hod_assignee_output_files": "An HOD who is the assignee may change outputAttachments on that task (uploading their own output); other restricted fields and Staff-routed work stay protected, and the output file guard still validates files.",
     "20261102140000_addon_save_entity_types": "An addon.manage command may insert its pricing snapshot and update draft cycles (the add-on listing); published cycles stay protected. Since 20261023180000 every new add-on was rejected as invalid data.",
     "20261102150000_task_assigned_at_format": "HOD saves compare assignedAt as an instant (to the millisecond). Older tasks stored the Postgres text form while the app re-sends the JavaScript ISO form, so every HOD save on those tasks was rejected as a restricted-field change.",
-    "20261102160000_company_rename_with_projects": "A company rename sends the company, its projects and its tasks in one command; the executor checks all operations before writing, so the project and task name checks saw the old company name and every rename of a company with projects was rejected. The command wrappers record this command's renames for the transaction and the two name checks accept either name for exactly those companies."
+    "20261102160000_company_rename_with_projects": "A company rename sends the company, its projects and its tasks in one command; the executor checks all operations before writing, so the project and task name checks saw the old company name and every rename of a company with projects was rejected. The command wrappers record this command's renames for the transaction and the two name checks accept either name for exactly those companies.",
+    "20261103090000_hod_legacy_task_reassign": "The department HOD on a task's project may reassign older tasks that record no responsible HOD; before this, every such handoff was refused although the app offered it. Work outside the HOD's departments or projects stays refused."
   },
   "qualityGates": {
     "disposableSupabaseStack": "PASS (2026-10-28): CI=true pnpm verify:supabase:rollout — 77 pgTAP files / 1148 tests, storage, staff saves, HOD status, onboarding, workflow review gate, HOD output UI and security audit checks.",
@@ -123,6 +129,7 @@
     "planActivationApply": "APPLIED 2026-11-02 to production after a rolled-back replay of a real failed activation (rejected before, ok after); recorded as 20261102120000.",
     "hodAssigneeOutputApply": "APPLIED 2026-11-02 to production after a rolled-back check: own task allowed, Staff task and department change still refused.",
     "addonSaveApply": "APPLIED 2026-11-02 to production after a rolled-back replay of a real add-on save (rejected before, ok after); local stack 81 pgTAP files / 1164 tests pass.",
-    "assignedAtAndRenameApply": "APPLIED 2026-11-02 to production after a rolled-back replay on live data (Mabel's approval of T-999271 refused before, allowed after; two real company renames with projects and tasks through the RPC as the owning PM succeeded and were rolled back). Local stack 83 pgTAP files / 1175 tests pass; role x action matrix through the real store and Auth/REST: 0 server rejections across 47 saves."
+    "assignedAtAndRenameApply": "APPLIED 2026-11-02 to production after a rolled-back replay on live data (Mabel's approval of T-999271 refused before, allowed after; two real company renames with projects and tasks through the RPC as the owning PM succeeded and were rolled back). Local stack 83 pgTAP files / 1175 tests pass; role x action matrix through the real store and Auth/REST: 0 server rejections across 47 saves.",
+    "hodLegacyReassignApply": "APPLIED 2026-11-03 to production after a rolled-back replay on live data (Mabel handing an older Video Editor task to Xin Di: refused before, allowed after; Designer task and off-project Staff still refused). Full 33-action role replay (HOD, Staff, PMs, Boss) on production matched expectations; local stack 84 pgTAP files / 1179 tests pass."
   }
 }
