@@ -34,7 +34,7 @@ try {
   // This fixed workspace is required by the real frontend module. Refuse to
   // replace existing data even inside the isolated validation container.
   assert.equal(sql("select count(*) from public.aitask_members where workspace_id='aitask-main';").trim().split('\n').map(x => x.trim()).includes('0'), true, 'validation workspace must have no existing members');
-  for (const [id, role, department, isBoss] of [['boss', 'Project Manager', 'Management', true], ['pm', 'Project Manager', 'Management', false], ['hod', 'HOD', 'Designer', false], ['staff', 'Staff', 'Designer', false], ['other', 'Staff', 'Designer', false], ['customer', 'Client', 'Client', false]]) {
+  for (const [id, role, department, isBoss] of [['boss', 'Project Manager', 'Management', true], ['pm', 'Project Manager', 'Management', false], ['outside-pm', 'Project Manager', 'Management', false], ['hod', 'HOD', 'Designer', false], ['staff', 'Staff', 'Designer', false], ['other', 'Staff', 'Designer', false], ['customer', 'Client', 'Client', false]]) {
     const email = `${id}-${suffix}@aitask.local`;
     const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
     assert.ifError(created.error);
@@ -118,8 +118,11 @@ try {
   assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').status, 'In Progress');
   assert.equal(useStore.getState().deliverables.find(item => item.id === 'deliverable').deliveredAt, undefined);
   assert.equal(useStore.getState().serviceCycles.find(item => item.id === 'cycle').status, 'Published');
-  const newId = useStore.getState().addTask({ ...baseTask, projectId: 'curated', createdBy: 'staff', assignedBy: undefined, serviceCycleId: undefined, deliverableId: undefined, title: 'Staff-created work' });
-  await save('Staff task creation', { ok: Boolean(newId) }, 'task.create');
+  const rejectedId = useStore.getState().addTask({ ...baseTask, projectId: 'curated', createdBy: 'staff', assignedBy: undefined, serviceCycleId: undefined, deliverableId: undefined, title: 'Staff-created work' });
+  assert.equal(Boolean(rejectedId), false, 'ordinary Staff task creation is disabled');
+  // Existing Staff-created tasks remain independently eligible for deletion.
+  const newId = 'legacy-staff-created';
+  insert('task', { ...baseTask, id: newId, projectId: 'curated', createdBy: 'staff', serviceCycleId: undefined, deliverableId: undefined, title: 'Legacy Staff-created work' });
   await login('staff');
   assert.equal(useStore.getState().tasks.find(item => item.id === newId).createdBy, 'staff');
   await save('Staff task deletion', useStore.getState().deleteTask(newId), 'task.delete');
@@ -235,14 +238,39 @@ try {
   await save('PM moves work to an accessible company', useStore.getState().updateTask('pm-move', { clientName: 'Second PM QA' }), 'task.update');
   await login('pm');
   assert.equal(useStore.getState().tasks.find(task => task.id === 'pm-move').clientId, 'pm-second', 'company ID persists with the new name');
-  assert.equal(useStore.getState().updateTaskAssignee('pm-direct', 'staff').ok, false, 'PM hands work to the department HOD before staff');
-  await save('Directly assigned PM delegates work to the department HOD', useStore.getState().updateTaskAssignee('pm-direct', 'hod'), 'task.update');
+  await save('Directly assigned PM delegates work directly to Staff', useStore.getState().updateTaskAssignee('pm-direct', 'staff'), 'task.update');
   await login('pm');
   assert.equal(useStore.getState().tasks.some(task => task.id === 'pm-direct'), false, 'delegation does not retain unrelated task access');
   assert.equal(useStore.getState().clients.some(client => client.id === 'pm-assigned-company'), false, 'delegation does not retain unrelated company access');
   console.log('[staff-saves] PM company identity edits and directly assigned delegation persisted through authenticated REST and reload.');
 
-  console.log('[staff-saves] Actual frontend actions persisted through authenticated REST: creation/deletion, edits, status, priority, dates, comments, derived delivery/reopening, HOD delegation, reload and lost-confirmation retry.');
+  insert('project', { id: 'direct-project', clientId: 'client', clientName: 'Save QA', projectName: 'Direct assignment', projectManagerIds: ['pm'], hodMemberIds: [], staffMemberIds: [], departments: ['Video Editor'] });
+  insert('task', { ...baseTask, id: 'cross-department', projectId: 'direct-project', department: 'Video Editor', assignedTo: 'pm', serviceCycleId: undefined, deliverableId: undefined });
+  await login('pm');
+  await save('PM assigns outside-project and department HOD', useStore.getState().updateTaskAssignee('cross-department', 'hod'), 'task.update');
+  await login('hod');
+  assert.equal(useStore.getState().tasks.some(task => task.id === 'cross-department'), true);
+  await save('Outside HOD accepts assignment', useStore.getState().updateTaskWork('cross-department', { kind: 'accept' }), 'task.update');
+  await login('hod');
+  await save('Outside HOD edits assigned task', useStore.getState().updateTask('cross-department', { notes: 'Accepted outside department' }), 'task.update');
+  await login('pm');
+  await save('PM assigns another PM outside project', useStore.getState().updateTaskAssignee('cross-department', 'outside-pm'), 'task.update');
+  await login('outside-pm');
+  await save('Outside PM accepts assignment', useStore.getState().updateTaskWork('cross-department', { kind: 'accept' }), 'task.update');
+  await login('outside-pm');
+  await save('Outside PM edits assigned task', useStore.getState().updateTask('cross-department', { notes: 'Accepted by outside PM' }), 'task.update');
+  assert.equal(useStore.getState().updateTaskAssignee('cross-department', 'staff').ok, false, 'outsider PM cannot reassign a project they do not manage');
+  console.log('[staff-saves] Cross-department HOD and outsider PM assignment, acceptance and editing passed through authenticated REST.');
+  insert('project', { id: 'hod-department-project', clientId: 'client', clientName: 'Save QA', projectName: 'Department delegation', projectManagerIds: ['pm'], hodMemberIds: ['hod'], staffMemberIds: [], departments: ['Designer'] });
+  insert('task', { ...baseTask, id: 'department-delegate', projectId: 'hod-department-project', assignedTo: 'hod', responsibleHodId: 'hod', assignmentState: 'pending_hod', serviceCycleId: undefined, deliverableId: undefined });
+  await login('hod');
+  await save('HOD delegates to department Staff absent from project', useStore.getState().updateTaskAssignee('department-delegate', 'staff'), 'task.update');
+  await login('staff');
+  assert.equal(useStore.getState().tasks.find(task => task.id === 'department-delegate')?.assignedTo, 'staff');
+  console.log('[staff-saves] Department HOD delegation outside project Staff membership persisted through authenticated REST.');
+
+
+  console.log('[staff-saves] Actual frontend actions persisted through authenticated REST: creation rejection/legacy deletion, edits, status, priority, dates, comments, derived delivery/reopening, HOD delegation, reload and lost-confirmation retry.');
 } finally {
   globalThis.fetch = originalFetch;
   if (supabase) await supabase.auth.signOut();

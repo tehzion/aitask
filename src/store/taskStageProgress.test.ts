@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Task, User } from '../types';
-import { getTaskStatusOptions, TASK_HOD_ASSIGNMENT_REQUIRED, TASK_HOD_REQUIRED } from '../lib/taskWorkflowAccess';
+import { getTaskStatusOptions, TASK_HOD_REQUIRED } from '../lib/taskWorkflowAccess';
 import { useStore } from './index';
 
 const initial = useStore.getState();
@@ -120,9 +120,9 @@ describe('role readiness at alternate entry points', () => {
     expect(useStore.getState().updateTaskStatus(task.id, 'Waiting Approval').ok).toBe(true);
     expect(useStore.getState().notifications.some(n => n.targetUserId === hod.id && n.title === 'Task Ready for Approval')).toBe(true);
   });
-  it('requires a Project Manager to hand work to the department HOD first', () => {
-    expect(useStore.getState().updateTaskAssignee(task.id, staff.id)).toEqual({ ok: false, error: TASK_HOD_ASSIGNMENT_REQUIRED });
-    expect(current().assignedTo).toBe('');
+  it('allows PM direct assignment while retaining optional HOD delegation', () => {
+    expect(useStore.getState().updateTaskAssignee(task.id, staff.id)).toEqual({ ok: true });
+    expect(current().assignedTo).toBe(staff.id);
     expect(useStore.getState().updateTaskAssignee(task.id, hod.id).ok).toBe(true);
     expect(current().completionPercentage).toBe(10);
     actor(hod);
@@ -131,22 +131,22 @@ describe('role readiness at alternate entry points', () => {
 
     actor(pm);
     useStore.setState({ tasks: [{ ...task }] });
-    expect(useStore.getState().updateTask(task.id, { assignedTo: staff.id })).toEqual({ ok: false, error: TASK_HOD_ASSIGNMENT_REQUIRED });
+    expect(useStore.getState().updateTask(task.id, { assignedTo: staff.id })).toEqual({ ok: true });
 
     // Departments without an HOD keep the project-manager fallback.
     useStore.setState({ users: [pm, staff, client] });
     expect(useStore.getState().updateTask(task.id, { assignedTo: staff.id }).ok).toBe(true);
   });
 
-  it('rejects a Project Manager moving a staff-assigned task into an HOD department', () => {
+  it('allows a PM to change department without requiring an HOD handoff', () => {
     const multiDeptStaff: User = { ...staff, departments: ['Designer', 'Video Editor'], department: 'Designer' };
     useStore.setState({
       tasks: [{ ...task, department: 'Video Editor', assignedTo: multiDeptStaff.id, createdBy: pm.id }],
       users: [pm, hod, multiDeptStaff, client],
     });
     actor(pm);
-    expect(useStore.getState().updateTask(task.id, { department: 'Designer' })).toEqual({ ok: false, error: TASK_HOD_ASSIGNMENT_REQUIRED });
-    expect(current()).toMatchObject({ department: 'Video Editor', assignedTo: multiDeptStaff.id });
+    expect(useStore.getState().updateTask(task.id, { department: 'Designer' })).toEqual({ ok: true });
+    expect(current()).toMatchObject({ department: 'Designer', assignedTo: multiDeptStaff.id });
   });
 
   it('notifies the assignee when a reviewer returns submitted work through the status picker', () => {

@@ -125,7 +125,7 @@ test('creates a client profile first, then a named project', async ({ page }) =>
   await taskDialog.getByLabel(/Link to Company \/ Brand/).selectOption(project!.id);
   await taskDialog.getByLabel('Task Title').fill('Launch creative brief');
   await taskDialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
-  await taskDialog.getByLabel('Responsible HOD').selectOption('u-hod-demo-local');
+  await taskDialog.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption('u-hod-demo-local');
   await taskDialog.getByRole('button', { name: 'Create & open task' }).click();
   await expect(taskDialog).toBeHidden();
   await expect(page).toHaveURL(/\/tasks\?taskId=/);

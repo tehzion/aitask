@@ -30,7 +30,7 @@ const openTask = async (page: Page) => {
   await dialog.getByLabel(/Link to Company \/ Brand/).selectOption('creation-project');
   await dialog.getByLabel('Task Title').fill('Recoverable creation');
   await dialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
-  await dialog.getByLabel('Responsible HOD').selectOption('u-hod-demo-local');
+  await dialog.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption('u-hod-demo-local');
   return dialog;
 };
 

@@ -38,7 +38,7 @@ select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000983
 select set_config('request.jwt.claim.role', 'authenticated', true);
 set local role authenticated;
 
-select is(private.aitask_has_permission('pgtap-editable-defaults', 'createTasks'), true, 'Staff inherits createTasks from the built-in Staff template');
+select is(private.aitask_has_permission('pgtap-editable-defaults', 'createTasks'), false, 'Staff cannot inherit createTasks from a permissive template');
 select is(private.aitask_has_permission('pgtap-editable-defaults', 'viewAllTasks'), false, 'Staff template keeps viewAllTasks off');
 reset role;
 

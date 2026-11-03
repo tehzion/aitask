@@ -53,7 +53,7 @@ select is((pg_temp.route_task('insert', 'routing-task', jsonb_build_object(
   'department', 'Designer', 'assignedTo', 'routing-hod', 'responsibleHodId', 'routing-hod',
   'assignmentState', 'pending_hod', 'createdBy', 'routing-pm', 'status', 'Pending',
   'visibility', 'internal', 'isCompleted', false
-))->>'ok')::boolean, true, 'PM creation is accepted only with the eligible HOD as owner');
+))->>'ok')::boolean, true, 'PM may optionally create a task with an HOD as owner');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000009902', true);
 select is((pg_temp.route_task('update', 'routing-task', (select data from public.aitask_entities where workspace_id = 'pgtap-pm-hod-staff-routing' and entity_type = 'task' and entity_id = 'routing-task') || jsonb_build_object(
@@ -71,7 +71,7 @@ select is((pg_temp.route_task('update', 'routing-task', (select data from public
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000009901', true);
 select is((pg_temp.route_task('update', 'routing-task', (select data from public.aitask_entities where workspace_id = 'pgtap-pm-hod-staff-routing' and entity_type = 'task' and entity_id = 'routing-task') || jsonb_build_object(
   'assignedTo', 'foreign-staff', 'assignmentState', 'assigned_staff', 'responsibleHodId', 'routing-hod'
-))->>'ok')::boolean, false, 'PM cannot bypass project Staff scope');
+))->>'ok')::boolean, true, 'PM can assign active Staff outside project membership');
 
 select is((pg_temp.route_task('insert', 'routing-override', jsonb_build_object(
   'id', 'routing-override', 'clientId', 'routing-client', 'clientName', 'Routing Co',
@@ -83,7 +83,7 @@ select is((pg_temp.route_task('insert', 'routing-override', jsonb_build_object(
 
 select is((pg_temp.route_task('update', 'routing-override', (select data from public.aitask_entities where workspace_id = 'pgtap-pm-hod-staff-routing' and entity_type = 'task' and entity_id = 'routing-override') || jsonb_build_object(
   'assignedTo', 'routing-staff', 'responsibleHodId', 'routing-hod', 'assignmentState', 'assigned_staff'
-))->>'ok')::boolean, false, 'PM cannot bypass the HOD stage without an override reason');
+))->>'ok')::boolean, true, 'PM can assign Staff directly without an override reason');
 
 select is((pg_temp.route_task('update', 'routing-override', (select data from public.aitask_entities where workspace_id = 'pgtap-pm-hod-staff-routing' and entity_type = 'task' and entity_id = 'routing-override') || jsonb_build_object(
   'assignedTo', 'routing-staff', 'assignmentState', 'assigned_staff', 'responsibleHodId', 'routing-hod',

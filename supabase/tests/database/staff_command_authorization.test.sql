@@ -144,9 +144,20 @@ select is(
       )
     ))
   ) ->> 'ok')::boolean,
-  true,
-  'ordinary Staff can still create a task assigned to themselves'
+  false,
+  'ordinary Staff cannot create a task even when assigned to themselves'
 );
+
+-- Seed a pre-existing self-assigned task for the independent deletion checks.
+reset role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', '', true);
+insert into public.aitask_entities(workspace_id, entity_type, entity_id, data)
+values ('pgtap-staff-authorization', 'task', 'pgtap-self-task',
+  '{"id":"pgtap-self-task","title":"Self task","clientName":"Test Client","department":"Designer","assignedTo":"pgtap-staff-actor","createdBy":"pgtap-staff-actor","status":"Pending","visibility":"internal"}'::jsonb);
+select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000912', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+set local role authenticated;
 
 -- Revoking the Staff/HOD Create tasks permission must be enforced server-side,
 -- beyond the creator-identity check in aitask_can_mutate_entity.
@@ -206,8 +217,8 @@ select is(
       )
     ))
   ) ->> 'ok')::boolean,
-  true,
-  'restoring default permissions re-enables self-assigned task creation'
+  false,
+  'restoring default permissions cannot re-enable Staff task creation'
 );
 
 select is(

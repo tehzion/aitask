@@ -224,6 +224,7 @@ export const departmentScopedRestrictedPermissionKeys: RolePermissionKey[] = [
 export const getGrantablePermissionGroups = (baseRole: Role, options: { departmentScoped?: boolean } = {}) => {
   const restricted = new Set<RolePermissionKey>([
     ...nonSuperAdminOnlyPermissionKeys,
+    ...(baseRole === 'Staff' ? ['createTasks' as const] : []),
     ...(baseRole === 'HOD' ? hodRestrictedPermissionKeys : []),
     ...(baseRole === 'Project Manager' ? projectManagerRestrictedPermissionKeys : []),
     ...(baseRole === 'Staff' && options.departmentScoped === true ? departmentScopedRestrictedPermissionKeys : []),
@@ -253,6 +254,7 @@ export const sanitizeRolePermissions = (permissions: RolePermissions, baseRole: 
   restricted.forEach(key => {
     sanitized[key] = false;
   });
+  if (baseRole === 'Staff') sanitized.createTasks = false;
   return sanitized;
 };
 
@@ -302,7 +304,6 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
     'viewDeliveryTracker',
     'viewReports',
     'viewSettings',
-    'createTasks',
     'viewAssignedServiceClients',
   ]),
   Client: makePermissions([
@@ -644,6 +645,7 @@ export const canViewTask = (
     return getClientKey(task.clientName) === getClientKey(user.companyName) && task.visibility !== 'internal';
   }
   if (isBossKoo(user)) return true;
+  if (task.assignedTo === user.id) return true;
   if (user.role === 'Project Manager') {
     if (task.projectId) return ownedProjectIds(user, scope, customRoles).has(task.projectId);
     return task.assignedTo === user.id
@@ -682,6 +684,7 @@ export const canEditTask = (
 ) => {
   if (!user) return false;
   if (task.projectId && isClosedProject(scope.projects?.find(project => project.id === task.projectId))) return false;
+  if (task.assignedTo === user.id && user.role !== 'Client') return true;
   if (user.role === 'Project Manager' && task.projectId
     && !ownedProjectIds(user, scope, customRoles).has(task.projectId)) return false;
   if (isHodUser(user, customRoles) && task.projectId && !isProjectInHodScope(user, task.projectId, scope, customRoles)) return false;
@@ -846,6 +849,7 @@ export const getVisibleTasks = (
         .filter(Boolean),
     );
     return tasks.filter(task => {
+      if (task.assignedTo === user.id) return true;
       if (task.projectId) return ownedProjects.has(task.projectId);
       return task.assignedTo === user.id
         || (!task.assignedTo && task.assignedBy === user.id)

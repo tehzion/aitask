@@ -261,7 +261,7 @@ describe('task store authorization', () => {
     });
   });
 
-  it('limits Staff task creation to their own departments', () => {
+  it('disables Staff task creation even in their own department', () => {
     const taskInput = { ...ownTask, title: 'New scoped work' };
     useStore.setState({
       users: [...useStore.getState().users, owningPm],
@@ -298,19 +298,8 @@ describe('task store authorization', () => {
       assignedTo: staff.id,
       createdBy: staff.id,
     });
-    expect(createdTaskId).not.toBe('');
-    expect(useStore.getState().notifications).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        title: 'Task Created by Staff',
-        targetUserId: owningPm.id,
-        route: { page: 'tasks', entityId: createdTaskId },
-      }),
-      expect.objectContaining({
-        title: 'New Task Assigned',
-        targetUserId: staff.id,
-        route: { page: 'tasks', entityId: createdTaskId },
-      }),
-    ]));
+    expect(createdTaskId).toBe('');
+    expect(useStore.getState().notifications).toEqual([]);
 
     expect(useStore.getState().addTask({
       ...taskInput,
@@ -319,11 +308,11 @@ describe('task store authorization', () => {
       department: 'Designer',
       assignedTo: '',
       createdBy: staff.id,
-    })).not.toBe('');
-    expect(useStore.getState().tasks.find(task => task.title === 'Unassigned scoped work')?.assignedTo).toBe('');
+    })).toBe('');
+    expect(useStore.getState().tasks.find(task => task.title === 'Unassigned scoped work')?.assignedTo).toBeUndefined();
   });
 
-  it('allows Staff to create a deliverable-linked task from an assigned client workspace', () => {
+  it('refuses Staff task creation from an assigned client workspace', () => {
     const deliverable: Deliverable = {
       id: 'deliverable-acme',
       clientId: 'client-acme',
@@ -351,11 +340,8 @@ describe('task store authorization', () => {
       createdBy: staff.id,
     });
 
-    expect(createdTaskId).not.toBe('');
-    expect(useStore.getState().tasks.find(task => task.id === createdTaskId)).toMatchObject({
-      clientId: deliverable.clientId,
-      deliverableId: deliverable.id,
-    });
+    expect(createdTaskId).toBe('');
+    expect(useStore.getState().deliverables[0].taskIds).toEqual([]);
   });
 
   it('records completion, preserves it during edits, and clears it when reopened', () => {

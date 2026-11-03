@@ -42,14 +42,14 @@ describe('department-scoped custom roles', () => {
     expect(permissions.viewAllTasks).toBe(false);
     expect(permissions.viewAllClients).toBe(false);
     expect(permissions.viewDashboard).toBe(true);
-    expect(permissions.createTasks).toBe(true);
+    expect(permissions.createTasks).toBe(false);
   });
 
   it('does not offer workspace-wide view keys to a department-scoped role editor', () => {
     const keys = getGrantablePermissionGroups('Staff', { departmentScoped: true }).flatMap(group => group.keys);
     expect(keys).not.toContain('viewAllTasks');
     expect(keys).not.toContain('viewAllClients');
-    expect(keys).toContain('createTasks');
+    expect(keys).not.toContain('createTasks');
   });
 
   it('keeps those keys grantable for a plain Staff role', () => {

@@ -125,7 +125,7 @@ describe('staff permission matrix', () => {
 
     const permissions = getEffectivePermissions(staff);
     expect(permissions).toMatchObject({
-      createTasks: true,
+      createTasks: false,
       manageCreatedTasks: false,
       viewAllTasks: false,
       viewAllClients: false,
@@ -220,7 +220,7 @@ describe('staff permission matrix', () => {
     expect(pmPermissions.editTasks).toBe(false);
   });
 
-  it('offers only Project Manager-created or legacy companies when Staff create tasks', () => {
+  it('keeps existing assigned project scope after Staff task creation is disabled', () => {
     const companySet: Project[] = [
       { ...projects[0], createdBy: admin.id },
       { ...projects[1], createdBy: staff.id },
@@ -230,7 +230,6 @@ describe('staff permission matrix', () => {
     expect(getAssignableProjects(staff, companySet, tasks, [], members).map(project => project.id)).toEqual([
       'project-acme',
       'project-beta',
-      'project-legacy',
     ]);
     expect(getAssignableProjects(admin, companySet, tasks, [], members).map(project => project.id)).toEqual([
       'project-acme',
@@ -668,9 +667,9 @@ describe('staff permission matrix', () => {
     const scope = { clients: [{ id: 'owned-client', clientName: 'Acme', createdBy: admin.id, createdAt: '', updatedAt: '' }], projects: scopeProjects };
 
     expect(getVisibleProjects(admin, scopeProjects, scopedTasks, [], scope).map(project => project.id)).toEqual(['pm-a-project']);
-    expect(getVisibleTasks(admin, scopedTasks, [], scope).map(task => task.id)).toEqual(['pm-a-work']);
-    expect(canEditTask(admin, scopedTasks[1], [], scope)).toBe(false);
-    expect(canEditTask(admin, scopedTasks[2], [], scope)).toBe(false);
+    expect(getVisibleTasks(admin, scopedTasks, [], scope).map(task => task.id)).toEqual(['pm-a-work', 'pm-b-work', 'unassigned-work']);
+    expect(canEditTask(admin, scopedTasks[1], [], scope)).toBe(true);
+    expect(canEditTask(admin, scopedTasks[2], [], scope)).toBe(true);
     expect(canEditProject(admin, scopeProjects[1])).toBe(false);
     expect(canEditProject(admin, scopeProjects[2])).toBe(false);
     expect(getVisibleProjects(superAdmin, scopeProjects, scopedTasks, [], scope).map(project => project.id)).toHaveLength(3);
@@ -869,4 +868,9 @@ describe('project manager ownership follow-ups', () => {
     expect(canEditClientProfile(admin, 'AirCare', [assignedTask], [], [bossProfile])).toBe(true);
     expect(canEditClientProfile(admin, 'AirCare', [unrelatedTask], [], [bossProfile])).toBe(false);
   });
+});
+
+it('disables Staff task creation even with a direct override, while retaining HOD creation', () => {
+  expect(getEffectivePermissions({ ...staff, permissions: { ...defaultRolePermissions.Staff, createTasks: true } }).createTasks).toBe(false);
+  expect(getEffectivePermissions({ ...staff, customRoleId: BUILTIN_HOD_ROLE_ID }).createTasks).toBe(true);
 });

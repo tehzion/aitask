@@ -2324,6 +2324,8 @@ const zhSystemCopy: Record<string, string> = {
   'New password must be different from the current password.': '新密码必须与当前密码不同。',
   'This browser could not save the new password.': '此浏览器无法保存新密码。',
   'You do not have permission to edit this task.': '您没有编辑此任务的权限。',
+  'You do not have permission to move this task.': '您没有移动此任务的权限。',
+  'Choose active Staff in this department.': '请选择此部门的活跃员工。',
   'You do not have permission to reassign this task.': '您没有重新分配此任务的权限。',
   'You do not have permission to change the task department.': '您没有更改任务部门的权限。',
   'You can only manage tasks within your departments.': '您只能管理所属部门内的任务。',

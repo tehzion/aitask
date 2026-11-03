@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { User } from '../types';
 import { assignableDepartments, STAFF_DEPARTMENTS } from './departments';
-import { assignableTaskAssignees, TASK_HOD_ASSIGNMENT_REQUIRED } from './taskWorkflowAccess';
+import { assignableTaskAssignees } from './taskWorkflowAccess';
 
 const pm: User = { id: 'pm', name: 'PM', role: 'Project Manager', departments: ['Management'], department: 'Management' };
 const hod: User = { id: 'hod', name: 'HOD', role: 'HOD', departments: ['Designer'], department: 'Designer' };
@@ -21,10 +21,10 @@ describe('assignableDepartments', () => {
 });
 
 describe('assignableTaskAssignees', () => {
-  it('hides staff from a Project Manager when the department has an HOD', () => {
+  it('allows Staff alongside HODs for a PM', () => {
     const ids = assignableTaskAssignees(pm, 'Designer', users).map(user => user.id);
     expect(ids).toContain('hod');
-    expect(ids).not.toContain('staff');
+    expect(ids).toContain('staff');
   });
 
   it('allows the project-manager fallback when the department has no HOD', () => {
@@ -43,8 +43,8 @@ describe('assignableTaskAssignees', () => {
     expect(ids).not.toContain('video');
   });
 
-  it('still reports the HOD-first error for a direct Project Manager assignment', () => {
-    expect(assignableTaskAssignees(pm, 'Designer', users).some(user => user.id === 'staff')).toBe(false);
-    expect(TASK_HOD_ASSIGNMENT_REQUIRED).toMatch(/HOD/);
+  it('allows cross-department internal members but excludes disabled accounts and Clients', () => {
+    const options = assignableTaskAssignees(pm, 'Designer', [...users, { ...staff, id: 'disabled', hasLogin: false }, { ...staff, id: 'client', role: 'Client' }]);
+    expect(options.map(user => user.id)).toEqual(['pm', 'hod', 'staff', 'video']);
   });
 });

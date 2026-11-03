@@ -283,7 +283,7 @@ describe('retryPendingSave', () => {
     expect(useStore.getState().backend.status).toBe('live');
     expect(useStore.getState().backend.hasLocalChanges).toBe(false);
     expect(useStore.getState().backend.pendingMutations).toBe(0);
-    expect(useStore.getState().users.find(user => user.id === staff.id)?.permissions).toMatchObject(permissions);
+    expect(useStore.getState().users.find(user => user.id === staff.id)?.permissions).toMatchObject({ ...permissions, createTasks: false });
   });
 
   it('retries a timed-out Staff department update through the global retry control', async () => {

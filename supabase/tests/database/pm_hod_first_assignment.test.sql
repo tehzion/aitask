@@ -50,8 +50,8 @@ select is(
       'data', '{"id":"pgtap-pmhod-a","clientId":"pgtap-pmhod-client","clientName":"PMHod Co","title":"Designer task","department":"Designer","assignedTo":"pgtap-pmhod-staff","createdBy":"pgtap-pmhod-pm","status":"Pending","visibility":"internal"}'::jsonb
     ))
   ) ->> 'ok')::boolean,
-  false,
-  'PM cannot assign a department task straight to staff when an HOD exists'
+  true,
+  'PM can assign a department task straight to staff when an HOD exists'
 );
 
 -- 2. PM assigns to the department HOD (stage 1).
@@ -110,8 +110,8 @@ select is(
       'data', '{"id":"pgtap-pmhod-e","clientId":"pgtap-pmhod-client","clientName":"PMHod Co","title":"Cross department task","department":"Designer","assignedTo":"pgtap-pmhod-both","createdBy":"pgtap-pmhod-pm","status":"Pending","visibility":"internal","updatedAt":"2026-10-16T00:00:00.000Z"}'::jsonb
     ))
   ) ->> 'ok')::boolean,
-  false,
-  'PM cannot skip the HOD by moving a staff-assigned task into an HOD department'
+  true,
+  'PM can move a staff-assigned task into an HOD department'
 );
 
 -- 6. PM finalizes a waiting task that opted out of internal approval.

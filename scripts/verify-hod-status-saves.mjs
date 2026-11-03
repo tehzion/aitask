@@ -155,14 +155,21 @@ try {
     const operations = route.request().postDataJSON()?.p_operations || [];
     if (!lostBrowserResponse && operations.some(operation => operation.entityType === 'task' && operation.entityId === 'status-task')) {
       lostBrowserResponse = true;
-      await route.fetch();
+      const committed = await route.fetch();
+      const result = await committed.json();
+      assert.equal(result.ok, true, `Lost-response fixture must commit first: ${result.code || ''} ${result.error || ''}`);
       await route.abort('failed');
     } else await route.continue();
   });
   await dialog.getByRole('button', { name: 'Send for review', exact: true }).click();
   // The lost response is resent automatically (the server replays its receipt),
   // so the change confirms without the user being asked to retry.
-  await expect.poll(() => canonicalStatus('status-task'), { timeout: 30000 }).toBe('Waiting Approval');
+  try {
+    await expect.poll(() => canonicalStatus('status-task'), { timeout: 30000 }).toBe('Waiting Approval');
+  } catch (error) {
+    console.error('[hod-status] Browser submission diagnostic:', JSON.stringify({ lostBrowserResponse, runtimeErrors, alerts: await dialog.getByRole('alert').allTextContents() }));
+    throw error;
+  }
   assert.equal(lostBrowserResponse, true);
   await expect(dialog.getByRole('alert')).toHaveCount(0);
   await expect(dialog.getByRole('button', { name: 'Retry my changes', exact: true })).toHaveCount(0);

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Project, Task, User } from '../types';
+import { defaultRolePermissions } from './access';
 import { useStore } from '../store';
 import { eligibleTaskHods, eligibleTaskStaff } from './taskWorkflowAccess';
 
@@ -52,32 +53,16 @@ beforeEach(() => useStore.setState({
 afterEach(() => useStore.setState(initial, true));
 
 describe('PM to HOD routing', () => {
-  it('resolves only project-authorized HODs and project-authorized Staff', () => {
+  it('resolves project-authorized HODs and department Staff', () => {
     expect(eligibleTaskHods('Designer', project, [pm, hod, secondHod])).toEqual([hod]);
-    expect(eligibleTaskStaff('Designer', project, [staff, otherStaff])).toEqual([staff]);
+    expect(eligibleTaskStaff('Designer', { ...project, staffMemberIds: [] }, [staff, otherStaff, { ...staff, id: 'wrong-department', departments: ['Video Editor'] }, { ...staff, id: 'inactive', hasLogin: false }]).map(user => user.id).sort()).toEqual([staff.id, otherStaff.id].sort());
   });
 
-  it('automatically assigns a sole HOD and keeps Staff unassigned', () => {
-    const id = useStore.getState().addTask(taskDraft);
+  it('preserves the PM choice without an HOD handoff even when the project has no Staff members', () => {
+    useStore.setState({ projects: [{ ...project, hodMemberIds: [], staffMemberIds: [] }] });
+    const id = useStore.getState().addTask({ ...taskDraft, assignedTo: staff.id });
     expect(id).toBeTruthy();
-    expect(useStore.getState().tasks[0]).toMatchObject({
-      assignedTo: hod.id,
-      responsibleHodId: hod.id,
-      assignmentState: 'pending_hod',
-    });
-  });
-
-  it('requires an explicit HOD when multiple HODs are eligible', () => {
-    useStore.setState({ users: [pm, hod, secondHod, staff, client], projects: [{ ...project, hodMemberIds: [hod.id, secondHod.id] }] });
-    expect(useStore.getState().addTask({ ...taskDraft, assignmentState: 'pending_hod' })).toBe('');
-    const id = useStore.getState().addTask({ ...taskDraft, responsibleHodId: secondHod.id, assignedTo: secondHod.id, assignmentState: 'pending_hod' });
-    expect(id).toBeTruthy();
-    expect(useStore.getState().tasks[0].responsibleHodId).toBe(secondHod.id);
-  });
-
-  it('blocks the explicit new-task route when the department HOD is not on the project', () => {
-    useStore.setState({ projects: [{ ...project, hodMemberIds: [] }] });
-    expect(useStore.getState().addTask({ ...taskDraft, assignmentState: 'pending_hod' })).toBe('');
+    expect(useStore.getState().tasks[0]).toMatchObject({ assignedTo: staff.id, responsibleHodId: undefined, assignmentState: undefined });
   });
 
   it('lets the PM assign Staff directly when the department has no HOD', () => {
@@ -87,7 +72,7 @@ describe('PM to HOD routing', () => {
     expect(useStore.getState().tasks.find(task => task.id === id)).toMatchObject({
       assignedTo: staff.id,
       responsibleHodId: undefined,
-      assignmentState: 'assigned_staff',
+      assignmentState: undefined,
     });
   });
 });
@@ -104,11 +89,47 @@ describe('HOD delegation state', () => {
     });
   });
 
-  it('allows a scoped PM override only through the explicit action', () => {
+  it('allows the scoped PM to assign directly without an override reason', () => {
     const id = useStore.getState().addTask(taskDraft);
-    expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(false);
-    expect(useStore.getState().overrideTaskAssignee(id, staff.id, 'Urgent client escalation').ok).toBe(true);
-    expect(useStore.getState().tasks[0].assignmentOverride?.reason).toBe('Urgent client escalation');
-    expect(useStore.getState().tasks[0].workHistory?.at(-1)?.fields).toEqual(expect.arrayContaining(['assignedTo', 'assignmentState', 'assignmentOverride']));
+    expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(true);
+    expect(useStore.getState().tasks[0].assignmentOverride).toBeUndefined();
   });
+});
+
+it('lets the project HOD delegate to department Staff without project Staff membership', () => {
+  const id = useStore.getState().addTask(taskDraft);
+  expect(id).toBeTruthy();
+  useStore.setState({ currentUser: hod, projects: [{ ...project, staffMemberIds: [] }] });
+  expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(true);
+  expect(useStore.getState().tasks.find(task => task.id === id)?.assignedTo).toBe(staff.id);
+});
+
+it('refuses ordinary Staff task creation even when their override requests it', () => {
+  useStore.setState({ currentUser: { ...staff, permissions: { ...defaultRolePermissions.Staff, createTasks: true } } });
+  expect(useStore.getState().addTask({ ...taskDraft, createdBy: staff.id, assignedTo: staff.id })).toBe('');
+  expect(useStore.getState().tasks).toHaveLength(0);
+});
+
+
+it('lets an assigned HOD outside project and department accept and edit their task', () => {
+  const outsideHod: User = { ...hod, id: 'outside-hod', departments: ['Video Editor'] };
+  useStore.setState({ users: [pm, outsideHod, staff, client], projects: [{ ...project, hodMemberIds: [], staffMemberIds: [] }] });
+  const id = useStore.getState().addTask({ ...taskDraft, assignedTo: outsideHod.id });
+  expect(id).toBeTruthy();
+  useStore.setState({ currentUser: outsideHod, projects: [] });
+  expect(useStore.getState().updateTaskWork(id, { kind: 'accept' }).ok).toBe(true);
+  expect(useStore.getState().updateTask(id, { notes: 'Working on the brief' }).ok).toBe(true);
+  expect(useStore.getState().tasks[0].notes).toBe('Working on the brief');
+  expect(useStore.getState().tasks[0].projectName).toBe(taskDraft.projectName);
+});
+
+it('lets an outside PM edit assigned work but keeps project moves and reassignment scoped', () => {
+  const outsidePm: User = { ...pm, id: 'outside-pm' };
+  const otherProject: Project = { ...project, id: 'outside-pm-project', projectManagerIds: [outsidePm.id] };
+  useStore.setState({ users: [pm, outsidePm, hod, staff, client] });
+  const id = useStore.getState().addTask({ ...taskDraft, assignedTo: outsidePm.id });
+  useStore.setState({ currentUser: outsidePm, projects: [otherProject] });
+  expect(useStore.getState().updateTask(id, { notes: 'Execution update' }).ok).toBe(true);
+  expect(useStore.getState().updateTask(id, { projectId: otherProject.id }).ok).toBe(false);
+  expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(false);
 });

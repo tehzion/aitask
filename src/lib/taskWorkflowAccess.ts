@@ -178,28 +178,23 @@ export const resolveTaskAssignmentState = (
   return responsibleHodId ? 'pending_hod' : undefined;
 };
 
-/** Staff eligible for HOD delegation within a project and department. */
+/** Active Staff eligible for HOD delegation within the department. */
 export const eligibleTaskStaff = (
   department: Department | undefined,
-  project: Project | undefined,
+  _project: Project | undefined,
   users: readonly User[],
   roles: CustomRole[] = [],
 ) => {
   if (!department) return [];
-  const projectStaffIds = project?.staffMemberIds;
   return users
     .filter(user => user.hasLogin !== false && user.role === 'Staff' && !isHodUser(user, roles))
     .filter(user => isEligibleTaskAssignee(user, department))
-    .filter(user => !project || projectStaffIds === undefined || projectStaffIds.includes(user.id))
     .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
 };
 
 /**
- * Stage 1 of the workflow: a Project Manager hands work to the department HOD,
- * who then delegates to staff (stage 2). When a department has an HOD, a PM may
- * not assign its tasks straight to staff. Departments without an HOD keep the
- * project-manager fallback and allow direct staff assignment. Boss Koo and
- * non-PM actors are unaffected (HOD/Staff delegation rules apply elsewhere).
+ * Compatibility hook for older callers. PM assignment no longer requires
+ * an HOD handoff; eligibility is enforced by the picker and mutation guards.
  */
 export const taskAssignmentStageError = (
   actor: User | null | undefined,
@@ -209,18 +204,14 @@ export const taskAssignmentStageError = (
   roles: CustomRole[] = [],
   options: { allowDirectStaff?: boolean } = {},
 ): string | undefined => {
-  if (!actor || isBossKoo(actor) || actor.role !== 'Project Manager') return undefined;
-  if (options.allowDirectStaff) return undefined;
-  const nextAssignee = nextAssigneeId ? users.find(user => user.id === nextAssigneeId) : undefined;
-  if (!nextAssignee) return undefined;
-  if (isHodUser(nextAssignee, roles)) return undefined;
-  if (nextAssignee.role === 'Project Manager') return undefined;
-  return departmentHasHod(task?.department, users, roles) ? TASK_HOD_ASSIGNMENT_REQUIRED : undefined;
+  // Assignment eligibility is checked by the actor-specific picker and server.
+  void actor; void task; void nextAssigneeId; void users; void roles; void options;
+  return undefined;
 };
 
 /**
- * Assignee options for a task in a department, filtered by eligibility and the
- * stage-1 HOD-first rule so the UI never offers a choice the store/DB rejects.
+ * PMs choose active internal members; department-scoped actors retain
+ * their department eligibility.
  */
 export const assignableTaskAssignees = (
   actor: User | null | undefined,
@@ -229,6 +220,7 @@ export const assignableTaskAssignees = (
   roles: CustomRole[] = [],
   options: { allowDirectStaff?: boolean } = {},
 ): User[] => {
+  if (actor?.role === 'Project Manager') return users.filter(user => user.role !== 'Client' && user.hasLogin !== false);
   if (!department) return [];
   return users.filter(user => isEligibleTaskAssignee(user, department)
     && !taskAssignmentStageError(actor, { department }, user.id, users, roles, options));
