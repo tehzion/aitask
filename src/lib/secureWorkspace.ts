@@ -8,6 +8,7 @@ import type {
   ClientProfile,
   ClientServicePlan,
   ServicePackage,
+  ServiceCyclePayment,
   ServiceCycle,
   Deliverable,
   CycleComment,
@@ -52,7 +53,7 @@ const WORKSPACE_PAGE_SIZE = 500;
 export const WORKSPACE_ENTITY_TYPES = [
   'task', 'project', 'client', 'comment', 'approval', 'task_status', 'custom_role',
   'registration', 'service_package', 'client_plan', 'service_cycle', 'deliverable',
-  'cycle_comment', 'addon', 'service_workflow_template', 'service_pricing_snapshot',
+  'service_cycle_payment', 'cycle_comment', 'addon', 'service_workflow_template', 'service_pricing_snapshot',
 ] as const;
 const PENDING_COMMAND_STORAGE_VERSION = 1;
 const PENDING_COMMAND_STORAGE_PREFIX = 'aitask:secure-pending-command';
@@ -86,6 +87,8 @@ export const SECURE_COMMAND_TYPES = [
   'service_package.manage',
   'client_plan.manage',
   'service_cycle.manage',
+  'service_cycle_payment.record',
+  'service_cycle_payment.void',
   'deliverable.manage',
   'cycle_comment.manage',
   'addon.manage',
@@ -885,6 +888,7 @@ const stateToRows = (state: PersistedWorkspaceState) => {
     discountValue: 0,
     taxRateBps: 0,
   } as unknown as Record<string, unknown>, item.version, item.planId));
+  state.serviceCyclePayments?.forEach(item => push('entity', 'service_cycle_payment', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
   state.deliverables?.forEach(item => push('entity', 'deliverable', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
   state.cycleComments?.forEach(item => push('entity', 'cycle_comment', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
   state.addons?.forEach(item => push('entity', 'addon', item.id, { ...item, unitPriceMinor: 0 } as unknown as Record<string, unknown>, item.version, item.planId));
@@ -936,13 +940,14 @@ const superAdminOnlyEntityTypes = new Set(['custom_role', 'task_status', 'regist
 // handles too.
 const serviceEntityTypes = new Set([
   'service_package', 'service_workflow_template', 'service_pricing_snapshot',
-  'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon',
+  'client_plan', 'service_cycle', 'service_cycle_payment', 'deliverable', 'cycle_comment', 'addon',
 ]);
 
 // Command types handled by the service RPC. The generic RPC rejects service
 // entity types, so a mixed diff must never be sent under a single generic type.
 const serviceCommandTypes = new Set<SecureCommandType>([
   'service_package.manage', 'client_plan.manage', 'service_cycle.manage',
+  'service_cycle_payment.record', 'service_cycle_payment.void',
   'deliverable.manage', 'cycle_comment.manage', 'addon.manage',
   'service_workflow.manage', 'deliverable.workflow.generate',
 ]);
@@ -1052,6 +1057,7 @@ export const inferSecureCommandType = (
   // subscription can save that paired change before its UI handler supplies a
   // command type, so keep the whole operation on the service RPC.
   if ([...entityTypes].every(entityType => serviceEntityTypes.has(entityType))) {
+    if (entityTypes.has('service_cycle_payment')) return actions.has('update') ? 'service_cycle_payment.void' : 'service_cycle_payment.record';
     if (entityTypes.has('deliverable')) return 'deliverable.manage';
     if (entityTypes.has('service_cycle')) return 'service_cycle.manage';
     if (entityTypes.has('cycle_comment')) return 'cycle_comment.manage';
@@ -1178,7 +1184,8 @@ export const partitionOperationsForRpc = (
       operations: genericOperations,
     });
   }
-  groups.push(...serviceCommandGroups(serviceOperations, selfMemberId));
+  groups.push(...serviceCommandGroups(serviceOperations.filter(operation => operation.entityType !== 'service_cycle_payment'), selfMemberId));
+  groups.push(...serviceOperations.filter(operation => operation.entityType === 'service_cycle_payment').map(operation => ({ type: inferSecureCommandType([operation]), operations: [operation] })));
   return groups;
 };
 
@@ -1195,6 +1202,14 @@ export const partitionOperationsWithExplicitType = (
   type: SecureCommandType,
   selfMemberId?: string,
 ): { type: SecureCommandType; operations: WorkspaceOperation[] }[] => {
+  const paymentOperations = operations.filter(operation => operation.entityType === 'service_cycle_payment');
+  if (paymentOperations.length > 0) {
+    const remaining = operations.filter(operation => operation.entityType !== 'service_cycle_payment');
+    return [
+      ...(remaining.length ? partitionOperationsWithExplicitType(remaining, type.startsWith('service_cycle_payment.') ? inferSecureCommandType(remaining, { selfMemberId }) : type, selfMemberId) : []),
+      ...paymentOperations.map(operation => ({ type: inferSecureCommandType([operation]), operations: [operation] })),
+    ];
+  }
   if (serviceCommandTypes.has(type)) {
     return [{ type, operations }];
   }
@@ -1204,7 +1219,8 @@ export const partitionOperationsWithExplicitType = (
   if (genericOperations.length > 0) {
     groups.push({ type, operations: genericOperations });
   }
-  groups.push(...serviceCommandGroups(serviceOperations, selfMemberId));
+  groups.push(...serviceCommandGroups(serviceOperations.filter(operation => operation.entityType !== 'service_cycle_payment'), selfMemberId));
+  groups.push(...serviceOperations.filter(operation => operation.entityType === 'service_cycle_payment').map(operation => ({ type: inferSecureCommandType([operation]), operations: [operation] })));
   return groups;
 };
 
@@ -1392,6 +1408,7 @@ export const overlayRetainedWorkspaceEntities = (
     servicePackages: overlayList(remote.servicePackages, local.servicePackages, 'service_package'),
     clientPlans: overlayList(remote.clientPlans, local.clientPlans, 'client_plan'),
     serviceCycles: overlayList(remote.serviceCycles, local.serviceCycles, 'service_cycle'),
+    serviceCyclePayments: overlayList(remote.serviceCyclePayments, local.serviceCyclePayments, 'service_cycle_payment'),
     deliverables: overlayList(remote.deliverables, local.deliverables, 'deliverable'),
     cycleComments: overlayList(remote.cycleComments, local.cycleComments, 'cycle_comment'),
     addons: overlayList(remote.addons, local.addons, 'addon'),
@@ -1438,7 +1455,7 @@ const executeCommand = async (
       p_operations: command.operations,
       p_expected_workspace_version: workspaceVersion ?? null,
     }))
-    : withSyncTimeout(supabase.rpc(serviceCommand ? 'aitask_execute_service_command' : 'aitask_execute_command', {
+    : withSyncTimeout(supabase.rpc(command.type.startsWith('service_cycle_payment.') ? 'aitask_execute_payment_command' : serviceCommand ? 'aitask_execute_service_command' : 'aitask_execute_command', {
       p_workspace_id: SECURE_WORKSPACE_ID,
       p_command_id: command.id,
       p_command_type: command.type,
@@ -1918,6 +1935,7 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: WorkspaceLoa
     servicePackages: dataFor<ServicePackage>('service_package'),
     clientPlans: dataFor<ClientServicePlan>('client_plan'),
     serviceCycles: dataFor<ServiceCycle>('service_cycle'),
+    serviceCyclePayments: dataFor<ServiceCyclePayment>('service_cycle_payment'),
     deliverables: dataFor<Deliverable>('deliverable'),
     cycleComments: dataFor<CycleComment>('cycle_comment'),
     addons: dataFor<Addon>('addon'),

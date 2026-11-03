@@ -1,3 +1,4 @@
+import { cyclePaymentSummary } from '../lib/cyclePayments';
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
@@ -27,6 +28,7 @@ import {
   ServiceItem,
   ServicePackage,
   ClientServicePlan,
+  ServiceCyclePayment,
   ServiceCycle,
   Deliverable,
   CycleComment,
@@ -336,6 +338,7 @@ export interface StoreState {
   servicePackages: ServicePackage[];
   clientPlans: ClientServicePlan[];
   serviceCycles: ServiceCycle[];
+  serviceCyclePayments: ServiceCyclePayment[];
   deliverables: Deliverable[];
   cycleComments: CycleComment[];
   addons: Addon[];
@@ -405,6 +408,8 @@ export interface StoreState {
   activateClientPlan: (planId: string) => { ok: boolean; cycleId?: string; error?: string };
   generateDueLocalServiceCycles: () => void;
   setClientPlanStatus: (planId: string, status: ClientServicePlan['status']) => { ok: boolean; error?: string };
+  recordServiceCyclePayment: (cycleId: string, amountMinor: number, paymentDate: string) => { ok: boolean; id?: string; error?: string };
+  voidServiceCyclePayment: (paymentId: string, reason: string) => { ok: boolean; error?: string };
   setServiceCycleStatus: (cycleId: string, status: ServiceCycleStatus) => { ok: boolean; error?: string };
   updateDeliverableStatus: (deliverableId: string, status: DeliverableStatus) => { ok: boolean; error?: string };
   linkTaskToDeliverable: (taskId: string, cycleId?: string, deliverableId?: string) => { ok: boolean; error?: string };
@@ -632,7 +637,7 @@ export const stripSensitiveWorkspaceFields = (value: unknown): unknown => {
 };
 
 const sanitizeWorkspaceStateForSnapshot = (
-  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'deliverables' | 'cycleComments' | 'addons' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
+  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'addons' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
 ): PersistedWorkspaceState => stripSensitiveWorkspaceFields({
   users: state.users.map(user => stripPassword(user as User & { password?: string })),
   clients: state.clients || [],
@@ -649,6 +654,7 @@ const sanitizeWorkspaceStateForSnapshot = (
   servicePackages: state.servicePackages || [],
   clientPlans: state.clientPlans || [],
   serviceCycles: state.serviceCycles || [],
+  serviceCyclePayments: state.serviceCyclePayments || [],
   deliverables: state.deliverables || [],
   cycleComments: state.cycleComments || [],
   addons: state.addons || [],
@@ -976,7 +982,7 @@ const excludedServiceMetadataEntityTypes = (user: User | null | undefined, roleP
   const excluded = new Set<string>();
   if (!canManageTaskTemplates(user, rolePermissions)) excluded.add('service_workflow_template');
   if (!canManageServiceCatalog(user, rolePermissions)) excluded.add('service_package');
-  if (!canViewServicePrices(user, rolePermissions)) excluded.add('service_pricing_snapshot');
+  if (!canViewServicePrices(user, rolePermissions)) { excluded.add('service_pricing_snapshot'); excluded.add('service_cycle_payment'); }
   return excluded;
 };
 
@@ -1008,7 +1014,7 @@ const setLocalServiceDemoVersion = () => {
 };
 
 const hasLocalServiceData = (state: Pick<StoreState,
-  'servicePackages' | 'clientPlans' | 'serviceCycles' | 'deliverables' | 'cycleComments' | 'addons' | 'servicePricingSnapshots'
+  'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'addons' | 'servicePricingSnapshots'
 >) => (
   state.servicePackages.length > 0 ||
   state.clientPlans.length > 0 ||
@@ -1097,7 +1103,7 @@ const mergePersistedWorkspace = (persistedState: unknown, currentState: StoreSta
 const workspaceMutationFields: Array<keyof StoreState> = [
   'users', 'clients', 'projects', 'tasks', 'notifications', 'registrations', 'rolePermissions', 'taskStatuses',
   'deletedUserIds', 'deletedRoleIds', 'deletedTaskStatuses', 'deletedClientIds',
-  'servicePackages', 'clientPlans', 'serviceCycles', 'deliverables', 'cycleComments', 'addons',
+  'servicePackages', 'clientPlans', 'serviceCycles', 'serviceCyclePayments', 'deliverables', 'cycleComments', 'addons',
   'serviceWorkflowTemplates', 'servicePricingSnapshots',
 ];
 
@@ -1126,6 +1132,7 @@ export const useStore = create<StoreState>()(
       servicePackages: [],
       clientPlans: [],
       serviceCycles: [],
+      serviceCyclePayments: [],
       deliverables: [],
       cycleComments: [],
       addons: [],
@@ -4503,12 +4510,37 @@ export const useStore = create<StoreState>()(
         return { ok: true, planId };
       },
 
+      recordServiceCyclePayment: (cycleId, amountMinor, paymentDate) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        const cycle = state.serviceCycles.find(item => item.id === cycleId);
+        if (!actor || actor.role === 'Client' || !cycle || !canManageServiceCycles(actor, state.rolePermissions) || !canViewServicePrices(actor, state.rolePermissions) || !isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: 'You cannot record payments for this client.' };
+        if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return { ok: false, error: 'Enter a positive amount in MYR.' };
+        if (!isValidIsoDate(paymentDate) || paymentDate > getBillingToday()) return { ok: false, error: 'Choose a payment date that is not in the future.' };
+        const summary = cyclePaymentSummary(cycle, state.servicePricingSnapshots, state.serviceCyclePayments);
+        if (amountMinor > summary.remaining) return { ok: false, error: 'The amount exceeds the remaining balance.' };
+        const id = nowId('PAY');
+        set({ serviceCyclePayments: [...state.serviceCyclePayments, { id, cycleId, clientId: cycle.clientId, amountMinor, paymentDate, createdBy: actor.id, createdAt: new Date().toISOString() }] });
+        return { ok: true, id };
+      },
+      voidServiceCyclePayment: (paymentId, reason) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        const receipt = state.serviceCyclePayments.find(item => item.id === paymentId);
+        if (!actor || actor.role === 'Client' || !receipt || !canManageServiceCycles(actor, state.rolePermissions) || !canViewServicePrices(actor, state.rolePermissions) || !isServiceClientInScope(state, receipt.clientId)) return { ok: false, error: 'You cannot record payments for this client.' };
+        if (receipt.voidedAt) return { ok: false, error: 'This receipt has already been voided.' };
+        if (!reason.trim()) return { ok: false, error: 'Enter a reason for voiding this receipt.' };
+        set({ serviceCyclePayments: state.serviceCyclePayments.map(item => item.id === paymentId ? { ...item, voidedAt: new Date().toISOString(), voidedBy: actor.id, voidReason: reason.trim().slice(0, 1000) } : item) });
+        return { ok: true };
+      },
       createClientPlanRevision: (planId) => {
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot revise client plans.' };
         const source = state.clientPlans.find(item => item.id === planId);
-        if (!source || !['Active', 'Ended'].includes(source.status)) return { ok: false, error: 'Only an active or ended plan can be renewed.' };
+        if (!source || !['Active', 'Paused', 'Ended'].includes(source.status)) return { ok: false, error: 'Only an active or ended plan can be renewed.' };
         if (!isServiceClientInScope(state, source.clientId)) return { ok: false, error: serviceClientScopeError };
         const pending = state.clientPlans.find(item => item.supersedesPlanId === source.id && item.status === 'Draft');
         if (pending) return { ok: true, planId: pending.id };
@@ -4550,7 +4582,7 @@ export const useStore = create<StoreState>()(
         });
         set(current => ({
           clientPlans: [...current.clientPlans, nextPlan],
-          servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
+          servicePricingSnapshots: canViewServicePrices(state.currentUser, state.rolePermissions) ? [...current.servicePricingSnapshots, pricing] : current.servicePricingSnapshots,
         }));
         return { ok: true, planId: nextPlanId };
       },
@@ -4636,7 +4668,7 @@ export const useStore = create<StoreState>()(
         });
         set(current => ({
           clientPlans: current.clientPlans.map(item => item.id === plan.id ? next : item),
-          servicePricingSnapshots: current.servicePricingSnapshots.some(item => item.parentId === plan.id)
+          servicePricingSnapshots: !canViewServicePrices(state.currentUser, state.rolePermissions) ? current.servicePricingSnapshots : current.servicePricingSnapshots.some(item => item.parentId === plan.id)
             ? current.servicePricingSnapshots.map(item => item.parentId === plan.id ? { ...pricing, createdAt: item.createdAt } : item)
             : [...current.servicePricingSnapshots, pricing],
         }));
@@ -6439,6 +6471,7 @@ export const useStore = create<StoreState>()(
           servicePackages: state.servicePackages,
           clientPlans: state.clientPlans,
           serviceCycles: state.serviceCycles,
+          serviceCyclePayments: state.serviceCyclePayments,
           deliverables: state.deliverables,
           cycleComments: state.cycleComments,
           addons: state.addons,
@@ -6658,6 +6691,7 @@ export const startBackendAutoSync = () => {
       state.servicePackages !== previousState.servicePackages ||
       state.clientPlans !== previousState.clientPlans ||
       state.serviceCycles !== previousState.serviceCycles ||
+      state.serviceCyclePayments !== previousState.serviceCyclePayments ||
       state.deliverables !== previousState.deliverables ||
       state.cycleComments !== previousState.cycleComments ||
       state.addons !== previousState.addons;
@@ -6686,6 +6720,7 @@ export const startBackendAutoSync = () => {
         servicePackages: previousState.servicePackages,
         clientPlans: previousState.clientPlans,
         serviceCycles: previousState.serviceCycles,
+        serviceCyclePayments: previousState.serviceCyclePayments,
         deliverables: previousState.deliverables,
         cycleComments: previousState.cycleComments,
         addons: previousState.addons,
@@ -6849,7 +6884,7 @@ export const clearWorkspaceSession = (options: { discardPending?: boolean } = {}
     currentUser: null,
     ...(shouldUseSupabase() ? {
       taskStatuses: [], users: [], clients: [], projects: [], tasks: [], notifications: [], registrations: [], rolePermissions: [],
-      clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], servicePackages: [],
+      clientPlans: [], serviceCycles: [], serviceCyclePayments: [], deliverables: [], cycleComments: [], addons: [], servicePackages: [],
       serviceWorkflowTemplates: [], servicePricingSnapshots: [], notificationUnreadCount: 0,
       deletedUserIds: [], deletedRoleIds: [], deletedTaskStatuses: [], deletedClientIds: [],
     } : {}),

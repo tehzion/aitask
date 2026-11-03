@@ -199,4 +199,19 @@ describe('monthly service cycle rollover', () => {
     useStore.setState(current => ({ tasks: [...current.tasks, sourceTask], currentUser: { ...pm, role: 'Staff' } }));
     expect(useStore.getState().carryForwardTaskToCycle(sourceTask.id, targetCycle.id).ok).toBe(false);
   });
+  it('edits one pending revision while leaving a paused source and all existing months intact', () => {
+    const id = createPlan(); useStore.getState().activateClientPlan(id);
+    useStore.getState().setClientPlanStatus(id, 'Paused');
+    const source = structuredClone(useStore.getState().clientPlans.find(plan => plan.id === id));
+    const history = structuredClone(useStore.getState().serviceCycles);
+    const revision = useStore.getState().createClientPlanRevision(id);
+    expect(revision.ok).toBe(true);
+    expect(useStore.getState().createClientPlanRevision(id)).toEqual(revision);
+    expect(useStore.getState().updateDraftClientPlan(revision.planId!, { name: 'Future terms', billingDay: 15, taxRateBps: 600, discountType: 'fixed', discountValue: 1000 }).ok).toBe(true);
+    expect(useStore.getState().scheduleClientPlanRevision(revision.planId!, '2026-10-09').ok).toBe(false);
+    setDay(2026, 10, 10); useStore.getState().generateDueLocalServiceCycles();
+    expect(useStore.getState().clientPlans.find(plan => plan.id === id)).toEqual(source);
+    expect(useStore.getState().serviceCycles).toEqual(history);
+  });
+
 });

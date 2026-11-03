@@ -204,6 +204,8 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
         <legend className="sr-only">{t('Next month’s plan')}</legend>
         <div className="grid gap-4 border-b border-line p-5 md:grid-cols-2">
           <label className="text-sm font-medium text-ink">{t('Plan name')}<input required maxLength={160} data-i18n-skip className={fieldClass} value={draft.name} onChange={event => update({ name: event.target.value })} /></label>
+          <label className="text-sm font-medium text-ink">{t('Start date')}<input required type="date" disabled={Boolean(plan.supersedesPlanId)} className={fieldClass} value={draft.startDate} onChange={event => update({ startDate: event.target.value })} /></label>
+          <label className="text-sm font-medium text-ink">{t('Monthly billing day')}<input required type="number" min={1} max={31} step={1} className={fieldClass} value={draft.billingDay} onChange={event => update({ billingDay: Number(event.target.value) })} /></label>
           <label className="text-sm font-medium text-ink">{t('Contract end date (reminder only)')}<input type="date" min={contractStartDate} aria-describedby={contractHelpId} className={fieldClass} value={draft.contractEndDate} onChange={event => update({ contractEndDate: event.target.value })} /><span id={contractHelpId} className="mt-1 block text-xs font-normal leading-5 text-muted">{t('This is a reminder for the original contract, not a stop date for monthly cycles.')}</span></label>
         </div>
         <div className="divide-y divide-line">{draft.serviceItems.map((item, index) => <fieldset key={item.id} className="p-5">

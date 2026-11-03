@@ -1,7 +1,7 @@
 import type { ClientServicePlan } from '../types';
 
 /** Editable slice of a client plan revision, used for draft recovery snapshots. */
-export const revisionDraftOf = (plan: ClientServicePlan) => ({ name: plan.name, contractEndDate: plan.contractEndDate || '', serviceItems: structuredClone(plan.serviceItems), discountType: plan.discountType, discountValue: plan.discountValue, taxRateBps: plan.taxRateBps });
+export const revisionDraftOf = (plan: ClientServicePlan) => ({ name: plan.name, startDate: plan.startDate, billingDay: plan.billingDay, contractEndDate: plan.contractEndDate || '', serviceItems: structuredClone(plan.serviceItems), discountType: plan.discountType, discountValue: plan.discountValue, taxRateBps: plan.taxRateBps });
 
 const PREFIX = 'aitask:draft-recovery:v1:';
 const MAX_AGE = 24 * 60 * 60 * 1000;

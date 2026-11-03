@@ -313,6 +313,20 @@ export interface AttachmentRef {
   uploadedAt: string;
 }
 
+export interface ServiceCyclePayment {
+  id: string;
+  version?: number;
+  cycleId: string;
+  clientId: string;
+  amountMinor: number;
+  paymentDate: string;
+  createdBy: string;
+  createdAt: string;
+  voidedBy?: string;
+  voidedAt?: string;
+  voidReason?: string;
+}
+
 export interface ServiceCycle {
   id: string;
   version?: number;
