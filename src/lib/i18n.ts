@@ -7,6 +7,7 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'The change was not saved. Task details may show the attempted change until you restore saved data.': '更改未保存。在恢复已保存数据之前，任务详情可能显示您尝试提交的更改。',
   'Save needs attention': '保存需要处理',
   'Saving the plan change. Please wait for confirmation.': '正在保存方案更改，请等待确认。',
   'The save needs attention. Use the recovery options below before reviewing or scheduling.': '保存需要处理。请先使用下方恢复选项，再检查或安排。',

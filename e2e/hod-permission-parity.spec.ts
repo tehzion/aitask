@@ -53,6 +53,28 @@ test('HOD delegates assigned work only to an eligible staff member and preserves
   await expect(dialog.getByRole('heading', { name: 'Task Delegation' })).toHaveCount(0);
 });
 
+test('rejected delegation explains the attempted assignment and restores the saved assignee', async ({ page }) => {
+  await seedHod(page);
+  const dialog = await openDetails(page, 'hod-assigned', 'Assigned delegation work');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const canonical = structuredClone(useStore.getState().tasks);
+    useStore.setState({
+      commitPendingMutation: async () => {
+        const error = 'You do not have permission to make this change.';
+        useStore.setState(state => ({ backend: { ...state.backend, mode: 'supabase', status: 'retry_required', errorCode: 'FORBIDDEN', error, hasLocalChanges: true, pendingMutations: 1 } }));
+        return { ok: false, code: 'FORBIDDEN', error };
+      },
+      discardMutation: async () => { useStore.setState(state => ({ tasks: canonical, backend: { ...state.backend, mode: 'supabase', status: 'live', error: undefined, errorCode: undefined, hasLocalChanges: false, pendingMutations: 0 } })); },
+    });
+  });
+  await dialog.getByRole('combobox', { name: 'Choose a team member' }).selectOption('audit-editor');
+  await dialog.getByRole('button', { name: 'Assign Task', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('The change was not saved. Task details may show the attempted change until you restore saved data.');
+  await dialog.getByRole('button', { name: 'Restore saved data' }).click();
+  await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(item => item.id === 'hod-assigned')?.assignedTo)).toBe('audit-hod');
+});
+
 test('department oversight permits edits but does not grant reassignment or foreign task access', async ({ page }) => {
   await seedHod(page);
   const dialog = await openDetails(page, 'hod-oversight', 'Legacy Editor oversight');

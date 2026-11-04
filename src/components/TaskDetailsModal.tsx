@@ -658,6 +658,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
         {(mutationError || pendingResolution || isDeletingTask) && (
           <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
             <p><SystemMessage message={mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
+            {pendingResolution && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('The change was not saved. Task details may show the attempted change until you restore saved data.')}</p>}
             {(pendingResolution || isDeletingTask) && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {canRetrySave(backend) && <button

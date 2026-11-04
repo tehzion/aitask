@@ -16,6 +16,7 @@ interface BackendFreshnessProps {
   className?: string;
   onRetry?: () => Promise<void>;
   onDiscard?: () => void | Promise<void>;
+  hideBackendError?: boolean;
 }
 
 const conflictFieldLabels: Record<string, string> = {
@@ -38,7 +39,7 @@ const getFreshnessTone = (backend: ReturnType<typeof useStore.getState>['backend
   return 'emerald';
 };
 
-const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, className, onRetry, onDiscard }) => {
+const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, className, onRetry, onDiscard, hideBackendError = false }) => {
   const { locale, t } = useI18n();
   const { backend, pullBackendNow, retryPendingSave, discardMutation } = useStore();
   const { busy, run } = useSaveAction();
@@ -150,7 +151,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           </Button>
         </div>
       )}
-      {backend.error && <p className="basis-full text-sm text-red-700" role="alert"><SystemMessage message={backend.error} /></p>}
+      {backend.error && !hideBackendError && <p className="basis-full text-sm text-red-700" role="alert"><SystemMessage message={backend.error} /></p>}
       {actionError && actionError !== backend.error && <p className="basis-full text-sm text-red-700" role="alert"><SystemMessage message={actionError} /></p>}
       {needsResolution && !canRetrySave(backend) && <p className="basis-full text-sm text-muted">{t('Restore saved data, correct the rejected change or check your access, then save again.')}</p>}
       {!compact && backend.conflict && (
