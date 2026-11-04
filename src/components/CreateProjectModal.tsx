@@ -1,3 +1,8 @@
+import ConfirmDialog from './ConfirmDialog';
+import { Button } from './ui';
+import { useToastStore } from '../store/useToastStore';
+import { msg } from '../lib/messages';
+import { projectDeletionBlocker } from '../lib/projectManagement';
 import SystemMessage from './SystemMessage';
 import { getTodayInputDate } from '../lib/utils';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
@@ -13,7 +18,7 @@ import { getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOpti
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { fieldLabel, modalFooter } from './uiTokens';
-import { canCreateClientProfiles, canViewAllClients, getVisibleClientNames, isBossKoo, isHodUser } from '../lib/access';
+import { canCreateClientProfiles, canDeleteProject, canViewAllClients, getVisibleClientNames, isBossKoo, isHodUser } from '../lib/access';
 import CreateClientProfileModal from './CreateClientProfileModal';
 import { useI18n } from './I18nProvider';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
@@ -77,9 +82,14 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const [customError, setCustomError]       = useState('');
   const [formError, setFormError]           = useState('');
   const [isSubmitting, setIsSubmitting]     = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const deleteBusy = useRef(false);
+  const deleteTitleId = React.useId();
+  const [deleteError, setDeleteError] = useState('');
   const [formEdited, setFormEdited] = React.useState(false);
   React.useEffect(() => { if (!isOpen) setFormEdited(false); }, [isOpen]);
-  const markPristine = useUnsavedChanges(isOpen && (formEdited || isSubmitting));
+  const markPristine = useUnsavedChanges(isOpen && (formEdited || isSubmitting || deletePending));
   const [pendingProjectId, setPendingProjectId] = useState('');
   const pendingProjectSnapshot = useRef<Project | null>(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -126,6 +136,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     if (initializedFormKeyRef.current === formKey) return;
     initializedFormKeyRef.current = formKey;
     setFormError('');
+    setConfirmDelete(false); setDeletePending(false); setDeleteError(''); deleteBusy.current = false;
     setIsSubmitting(false);
     setPendingProjectId('');
     pendingProjectSnapshot.current = null;
@@ -235,7 +246,54 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   };
 
   const handleClose = () => { recovery.clear(); markPristine(); setFormEdited(false); resetForm(); clearCompanySearch(); onClose(); };
-  const requestClose = () => { if (!isSubmitting && (!formEdited || window.confirm(t('Discard unsaved changes?')))) handleClose(); };
+  const requestClose = () => { if (!isSubmitting && !deletePending && (!formEdited || window.confirm(t('Discard unsaved changes?')))) handleClose(); };
+
+  // Why this account cannot delete the project yet, from the current project
+  // record as the store's delete uses. Not shown once a delete is pending,
+  // because its unlinked tasks are then already staged.
+  const deleteBlocker = project && !deletePending
+    ? projectDeletionBlocker(currentUser, projects.find(item => item.id === project.id) || project, tasks, isHodUser(currentUser, rolePermissions)) || ''
+    : '';
+
+  const handleDelete = async () => {
+    if (!project || deleteBusy.current || isSubmitting) return;
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
+    const formKey = initializedFormKeyRef.current;
+    const isCurrent = () => mounted.current && isWorkspaceSessionCurrent(session)
+      && useStore.getState().currentUser?.id === actorId && initializedFormKeyRef.current === formKey;
+    deleteBusy.current = true; setIsSubmitting(true); setDeleteError('');
+    try {
+      if (!deletePending) {
+        const staged = useStore.getState().deleteProject(project.id);
+        if (!staged.ok) { setDeleteError(staged.error || 'Unable to delete this project.'); return; }
+        setDeletePending(true);
+      }
+      const saved = deletePending
+        ? await useStore.getState().retryPendingSave('project.delete')
+        : await useStore.getState().commitPendingMutation('project.delete');
+      if (!isCurrent()) return;
+      if (!saved.ok) {
+        // The server rejects the delete when the project still links tasks this
+        // account cannot see, so their unlink never reached the save.
+        setDeleteError(saved.code === 'VALIDATION'
+          ? 'This project still has tasks you cannot see. Ask its Project Manager or Boss Koo to delete it.'
+          : saved.error || 'Unable to delete this project.');
+        return;
+      }
+      if (useStore.getState().projects.some(item => item.id === project.id)) {
+        setDeletePending(false);
+        setDeleteError('The project was not deleted. Review it before trying again.');
+        return;
+      }
+      useToastStore.getState().addToast(msg('project.deleted', { name: project.projectName }), 'success');
+      setDeletePending(false); setConfirmDelete(false); handleClose();
+    } catch (error) {
+      if (isCurrent()) setDeleteError(error instanceof Error ? error.message : 'Unable to delete this project.');
+    } finally {
+      if (isCurrent()) { deleteBusy.current = false; setIsSubmitting(false); }
+    }
+  };
 
   const confirmProjectSave = async (id: string) => {
     const session = captureWorkspaceSession();
@@ -269,7 +327,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || deletePending) return;
     setFormError('');
     setCustomError('');
 
@@ -403,7 +461,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         {/* Body */}
         <div className="p-6 overflow-y-auto flex-1">
           <form id="create-project-form" onSubmit={handleSubmit} className="space-y-5">
-            <fieldset disabled={isSubmitting || Boolean(pendingProjectId)} className="contents">
+            <fieldset disabled={isSubmitting || Boolean(pendingProjectId) || deletePending} className="contents">
             <div>
               <div className="mb-1 flex items-center justify-between gap-3">
                 <label htmlFor={clientSelectId} className={fieldLabel}>
@@ -660,6 +718,11 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
 
         {/* Footer */}
         <div className={modalFooter}>
+          {project && canDeleteProject(currentUser, project, rolePermissions) && <Button
+            type="button" variant="danger" className="mr-auto"
+            disabled={isSubmitting || Boolean(pendingProjectId) || (pendingResolution && !deletePending)}
+            onClick={() => { if (!deletePending) setDeleteError(''); setConfirmDelete(true); }}
+          >{t(deletePending ? 'Retry deleting project' : 'Delete project')}</Button>}
           <button
             type="button" onClick={requestClose}
             className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
@@ -668,13 +731,24 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
           </button>
           <button
             type="submit" form="create-project-form"
-            disabled={isSubmitting || pendingResolution}
+            disabled={isSubmitting || pendingResolution || deletePending}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
         {isSubmitting ? t('Saving...') : pendingProjectId ? t('Retry saving') : isEditing ? t('Save changes') : t('Create project')}
           </button>
         </div>
       </ModalShell>
+      {confirmDelete && project && <ConfirmDialog
+        labelledBy={deleteTitleId}
+        title={t('Delete project')}
+        description={`${t('Delete “{projectName}”? This cannot be undone. Existing tasks will be kept and unlinked from this project.').replace('{projectName}', project.projectName)}${formEdited ? ` ${t('Unsaved project edits will be discarded.')}` : ''}`}
+        error={deleteError || deleteBlocker}
+        confirmDisabled={Boolean(deleteBlocker) && !deleteError}
+        confirmLabel={deletePending ? 'Retry deleting project' : 'Delete project'}
+        busy={isSubmitting}
+        onConfirm={handleDelete}
+        onClose={() => setConfirmDelete(false)}
+      />}
       {isClientModalOpen && <CreateClientProfileModal
         onClose={() => setIsClientModalOpen(false)}
         onCreated={(newClientId) => {

@@ -1,3 +1,4 @@
+import CyclePaymentControl from './CyclePaymentControl';
 import { CalendarClock, Eye, History, Plus } from 'lucide-react';
 import type { ClientServicePlan, ServiceCycle } from '../types';
 import { useI18n } from './I18nProvider';
@@ -6,12 +7,13 @@ import { getCurrentPlanCycle } from '../lib/dashboardData';
 import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
 import { Button, StatusChip } from './ui';
 
-const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upcomingPlan, onCreateNextPlan, onViewNextPlan, onViewCycle, onViewHistory }: {
+const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upcomingPlan, onEditDetails, onCreateNextPlan, onViewNextPlan, onViewCycle, onViewHistory }: {
   plan: ClientServicePlan;
   cycles: ServiceCycle[];
   today: Date;
   canManagePlans?: boolean;
   upcomingPlan?: ClientServicePlan;
+  onEditDetails?: () => void;
   onCreateNextPlan?: () => void;
   onViewNextPlan?: () => void;
   onViewCycle?: (cycleId: string) => void;
@@ -46,6 +48,7 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
         <p className="mt-1 text-sm font-medium text-ink" data-i18n-skip>{plan.name}</p>
       </div>
       <div className="flex flex-wrap gap-2">
+        {canManagePlans && plan.status !== 'Ended' && <Button variant="secondary" onClick={onEditDetails}>{t('Edit details')}</Button>}
         {upcomingPlan ? <Button variant="secondary" onClick={onViewNextPlan}><Eye aria-hidden="true" className="h-4 w-4" />{t('View Next Month’s Plan')}</Button>
           : canManagePlans && (plan.status === 'Active' || plan.status === 'Ended') && <Button onClick={onCreateNextPlan}><Plus aria-hidden="true" className="h-4 w-4" />{t("Create Next Month's Plan")}</Button>}
         {history.length > 0 && <Button variant="secondary" onClick={onViewHistory}><History aria-hidden="true" className="h-4 w-4" />{t('View Plan History')}</Button>}
@@ -70,8 +73,8 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
     {history.length > 0 && <div className="mt-5 overflow-x-auto border-t border-line pt-4">
       <h3 className="text-sm font-semibold text-ink">{t('Plan History')}</h3>
       <table className="mt-3 w-full min-w-[520px] text-left text-sm">
-        <thead className="text-xs text-muted"><tr><th className="pb-2 font-medium">{t('Month')}</th><th className="pb-2 font-medium">{t('Period')}</th><th className="pb-2 font-medium">{t('Status')}</th><th className="pb-2 text-right font-medium">{t('Action')}</th></tr></thead>
-        <tbody className="divide-y divide-line/70">{history.map(item => <tr key={item.id}><td className="py-3 font-medium text-ink">{dateLabel(item.periodStart)}</td><td className="py-3 text-muted">{dateLabel(item.periodStart)} – {dateLabel(item.periodEnd)}</td><td className="py-3"><StatusChip tone={cycleState(item) === 'Active' ? 'emerald' : cycleState(item) === 'Upcoming' ? 'amber' : 'slate'}>{t(cycleState(item))}</StatusChip></td><td className="py-3 text-right"><Button variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => onViewCycle?.(item.id)}>{t('View')}</Button></td></tr>)}</tbody>
+        <thead className="text-xs text-muted"><tr><th className="pb-2 font-medium">{t('Month')}</th><th className="pb-2 font-medium">{t('Period')}</th><th className="pb-2 font-medium">{t('Status')}</th><th className="pb-2 font-medium">{t('Payment')}</th><th className="pb-2 text-right font-medium">{t('Action')}</th></tr></thead>
+        <tbody className="divide-y divide-line/70">{history.map(item => <tr key={item.id}><td className="py-3 font-medium text-ink">{dateLabel(item.periodStart)}</td><td className="py-3 text-muted">{dateLabel(item.periodStart)} – {dateLabel(item.periodEnd)}</td><td className="py-3"><StatusChip tone={cycleState(item) === 'Active' ? 'emerald' : cycleState(item) === 'Upcoming' ? 'amber' : 'slate'}>{t(cycleState(item))}</StatusChip></td><td className="py-3"><CyclePaymentControl cycle={item} /></td><td className="py-3 text-right"><Button variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => onViewCycle?.(item.id)}>{t('View')}</Button></td></tr>)}</tbody>
       </table>
     </div>}
   </section>;

@@ -16,7 +16,7 @@ import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignabl
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { assignableDepartments, getMemberDepartments } from '../lib/departments';
-import { assignableTaskAssignees } from '../lib/taskWorkflowAccess';
+import { formatTaskAssigneeName, assignableTaskAssignees } from '../lib/taskWorkflowAccess';
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { modalFooter } from './uiTokens';
@@ -611,7 +611,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     >
                       <option value="">{t('Unassigned')}</option>
                       {filteredUsers.map(u => (
-                        <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>
+                        <option key={u.id} data-i18n-skip value={u.id}>{formatTaskAssigneeName(u, rolePermissions)}</option>
                       ))}
                     </select>
                     <ChevronDown className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />

@@ -1,3 +1,4 @@
+import { cyclePaymentSummary } from '../lib/cyclePayments';
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
@@ -27,6 +28,7 @@ import {
   ServiceItem,
   ServicePackage,
   ClientServicePlan,
+  ServiceCyclePayment,
   ServiceCycle,
   Deliverable,
   CycleComment,
@@ -53,7 +55,7 @@ import {
 } from '../mock/localServiceDemo';
 import { canLoginWithSeedAccount, classifyLoginFailure, DEFAULT_USER_PASSWORD, loginFailure, shouldShowDemoLogin } from '../lib/auth';
 import { msg, type MessageDescriptor } from '../lib/messages';
-import { canManageProjectLifecycle, getEffectiveTaskApprovalMode, getProjectClosureWarnings, hasProjectClosureWarnings, isClosedProject, makeMilestoneId } from '../lib/projectManagement';
+import { canManageProjectLifecycle, getEffectiveTaskApprovalMode, getProjectClosureWarnings, hasProjectClosureWarnings, isClosedProject, makeMilestoneId, projectDeletionBlocker } from '../lib/projectManagement';
 import { clearLocalUserPassword, getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import type { PersistedWorkspaceState, SnapshotResult } from '../lib/supabaseSnapshot';
@@ -159,6 +161,7 @@ import {
   makeCycleRecords,
   makePricingSnapshot,
   nextBillingDate,
+  nextRevisionBoundary,
   resolveDeliverableStatus,
   canSetDeliverableStatus,
   getPlanContractStartDate,
@@ -210,6 +213,7 @@ type TaskUpdateInput = Partial<Pick<
   | 'assignedTo'
   | 'startDate'
   | 'dueDate'
+  | 'postingDate'
   | 'priority'
   | 'status'
   | 'completionPercentage'
@@ -336,6 +340,7 @@ export interface StoreState {
   servicePackages: ServicePackage[];
   clientPlans: ClientServicePlan[];
   serviceCycles: ServiceCycle[];
+  serviceCyclePayments: ServiceCyclePayment[];
   deliverables: Deliverable[];
   cycleComments: CycleComment[];
   addons: Addon[];
@@ -405,6 +410,8 @@ export interface StoreState {
   activateClientPlan: (planId: string) => { ok: boolean; cycleId?: string; error?: string };
   generateDueLocalServiceCycles: () => void;
   setClientPlanStatus: (planId: string, status: ClientServicePlan['status']) => { ok: boolean; error?: string };
+  recordServiceCyclePayment: (cycleId: string, amountMinor: number, paymentDate: string) => { ok: boolean; id?: string; error?: string };
+  voidServiceCyclePayment: (paymentId: string, reason: string) => { ok: boolean; error?: string };
   setServiceCycleStatus: (cycleId: string, status: ServiceCycleStatus) => { ok: boolean; error?: string };
   updateDeliverableStatus: (deliverableId: string, status: DeliverableStatus) => { ok: boolean; error?: string };
   linkTaskToDeliverable: (taskId: string, cycleId?: string, deliverableId?: string) => { ok: boolean; error?: string };
@@ -632,7 +639,7 @@ export const stripSensitiveWorkspaceFields = (value: unknown): unknown => {
 };
 
 const sanitizeWorkspaceStateForSnapshot = (
-  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'deliverables' | 'cycleComments' | 'addons' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
+  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'addons' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
 ): PersistedWorkspaceState => stripSensitiveWorkspaceFields({
   users: state.users.map(user => stripPassword(user as User & { password?: string })),
   clients: state.clients || [],
@@ -649,6 +656,7 @@ const sanitizeWorkspaceStateForSnapshot = (
   servicePackages: state.servicePackages || [],
   clientPlans: state.clientPlans || [],
   serviceCycles: state.serviceCycles || [],
+  serviceCyclePayments: state.serviceCyclePayments || [],
   deliverables: state.deliverables || [],
   cycleComments: state.cycleComments || [],
   addons: state.addons || [],
@@ -976,7 +984,7 @@ const excludedServiceMetadataEntityTypes = (user: User | null | undefined, roleP
   const excluded = new Set<string>();
   if (!canManageTaskTemplates(user, rolePermissions)) excluded.add('service_workflow_template');
   if (!canManageServiceCatalog(user, rolePermissions)) excluded.add('service_package');
-  if (!canViewServicePrices(user, rolePermissions)) excluded.add('service_pricing_snapshot');
+  if (!canViewServicePrices(user, rolePermissions)) { excluded.add('service_pricing_snapshot'); excluded.add('service_cycle_payment'); }
   return excluded;
 };
 
@@ -1008,7 +1016,7 @@ const setLocalServiceDemoVersion = () => {
 };
 
 const hasLocalServiceData = (state: Pick<StoreState,
-  'servicePackages' | 'clientPlans' | 'serviceCycles' | 'deliverables' | 'cycleComments' | 'addons' | 'servicePricingSnapshots'
+  'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'addons' | 'servicePricingSnapshots'
 >) => (
   state.servicePackages.length > 0 ||
   state.clientPlans.length > 0 ||
@@ -1097,7 +1105,7 @@ const mergePersistedWorkspace = (persistedState: unknown, currentState: StoreSta
 const workspaceMutationFields: Array<keyof StoreState> = [
   'users', 'clients', 'projects', 'tasks', 'notifications', 'registrations', 'rolePermissions', 'taskStatuses',
   'deletedUserIds', 'deletedRoleIds', 'deletedTaskStatuses', 'deletedClientIds',
-  'servicePackages', 'clientPlans', 'serviceCycles', 'deliverables', 'cycleComments', 'addons',
+  'servicePackages', 'clientPlans', 'serviceCycles', 'serviceCyclePayments', 'deliverables', 'cycleComments', 'addons',
   'serviceWorkflowTemplates', 'servicePricingSnapshots',
 ];
 
@@ -1126,6 +1134,7 @@ export const useStore = create<StoreState>()(
       servicePackages: [],
       clientPlans: [],
       serviceCycles: [],
+      serviceCyclePayments: [],
       deliverables: [],
       cycleComments: [],
       addons: [],
@@ -3133,6 +3142,7 @@ export const useStore = create<StoreState>()(
         const serviceType = data.serviceType !== undefined ? data.serviceType.trim() : task.serviceType;
         const startDate = data.startDate !== undefined ? normalizeRequiredStartDate(data.startDate) : normalizeRequiredStartDate(task.startDate);
         const dueDate = data.dueDate !== undefined ? normalizeOptionalIsoDate(data.dueDate) : task.dueDate;
+        const postingDate = data.postingDate !== undefined ? normalizeOptionalIsoDate(data.postingDate) || undefined : task.postingDate;
         const status = data.status !== undefined
           ? resolveTaskStatus(data.status, state.taskStatuses)
           : task.status;
@@ -3146,6 +3156,7 @@ export const useStore = create<StoreState>()(
         if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) {
           return { ok: false, error: 'Due date cannot be earlier than the start date.' };
         }
+        if (postingDate && !isValidIsoDate(postingDate)) return { ok: false, error: 'Posting date must be valid when provided.' };
         if (data.status !== undefined && !status) return { ok: false, error: 'Choose a valid task status.' };
         if (data.priority !== undefined && !allowedPriorities.has(data.priority)) {
           return { ok: false, error: 'Choose a valid priority.' };
@@ -3196,6 +3207,7 @@ export const useStore = create<StoreState>()(
           assignedAt: assignmentChanged && !isHodUser(currentUser, state.rolePermissions) ? now : task.assignedAt,
           startDate,
           dueDate,
+          postingDate,
           status,
           isCompleted,
           completedAt: statusChanged
@@ -3248,7 +3260,7 @@ export const useStore = create<StoreState>()(
         if (state.backend.mode === 'local') notifications.push(...localHodReviewNotifications(
           state.users, state.rolePermissions, task, updatedTask, currentUser.id, { clients: state.clients, projects: state.projects },
         ));
-        const datesChanged = task.startDate !== updatedTask.startDate || task.dueDate !== updatedTask.dueDate;
+        const datesChanged = task.startDate !== updatedTask.startDate || task.dueDate !== updatedTask.dueDate || (task.postingDate || '') !== (updatedTask.postingDate || '');
         const instructionsChanged = ['title', 'description', 'notes', 'priority'].some(field => (
           JSON.stringify(task[field as keyof Task] ?? null) !== JSON.stringify(updatedTask[field as keyof Task] ?? null)
         ));
@@ -3953,16 +3965,8 @@ export const useStore = create<StoreState>()(
         if (!currentUser || !project || !canDeleteProject(currentUser, project, state.rolePermissions)) {
           return { ok: false, error: 'You do not have permission to delete this project.' };
         }
-        const linkedTasks = state.tasks.filter(task => task.projectId === projectId);
-        const canDetachLinkedTasks = isBossKoo(currentUser)
-          || currentUser.role === 'Project Manager'
-          || linkedTasks.every(task => task.assignedTo === currentUser.id);
-        if (!canDetachLinkedTasks) {
-          return {
-            ok: false,
-            error: 'Only a Project Manager or Boss Koo can delete this project while it contains tasks assigned to other staff.',
-          };
-        }
+        const blocker = projectDeletionBlocker(currentUser, project, state.tasks, isHodUser(currentUser, state.rolePermissions));
+        if (blocker) return { ok: false, error: blocker };
 
         set(current => ({
           projects: current.projects.filter(item => item.id !== projectId),
@@ -3971,7 +3975,6 @@ export const useStore = create<StoreState>()(
             : task
           ),
         }));
-        useToastStore.getState().addToast(msg('project.deleted', { name: project.projectName }), 'success');
         return { ok: true };
       },
 
@@ -4503,12 +4506,37 @@ export const useStore = create<StoreState>()(
         return { ok: true, planId };
       },
 
+      recordServiceCyclePayment: (cycleId, amountMinor, paymentDate) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        const cycle = state.serviceCycles.find(item => item.id === cycleId);
+        if (!actor || actor.role === 'Client' || !cycle || !canManageServiceCycles(actor, state.rolePermissions) || !canViewServicePrices(actor, state.rolePermissions) || !isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: 'You cannot record payments for this client.' };
+        if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return { ok: false, error: 'Enter a positive amount in MYR.' };
+        if (!isValidIsoDate(paymentDate) || paymentDate > getBillingToday()) return { ok: false, error: 'Choose a payment date that is not in the future.' };
+        const summary = cyclePaymentSummary(cycle, state.servicePricingSnapshots, state.serviceCyclePayments);
+        if (amountMinor > summary.remaining) return { ok: false, error: 'The amount exceeds the remaining balance.' };
+        const id = nowId('PAY');
+        set({ serviceCyclePayments: [...state.serviceCyclePayments, { id, cycleId, clientId: cycle.clientId, amountMinor, paymentDate, createdBy: actor.id, createdAt: new Date().toISOString() }] });
+        return { ok: true, id };
+      },
+      voidServiceCyclePayment: (paymentId, reason) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        const receipt = state.serviceCyclePayments.find(item => item.id === paymentId);
+        if (!actor || actor.role === 'Client' || !receipt || !canManageServiceCycles(actor, state.rolePermissions) || !canViewServicePrices(actor, state.rolePermissions) || !isServiceClientInScope(state, receipt.clientId)) return { ok: false, error: 'You cannot record payments for this client.' };
+        if (receipt.voidedAt) return { ok: false, error: 'This receipt has already been voided.' };
+        if (!reason.trim()) return { ok: false, error: 'Enter a reason for voiding this receipt.' };
+        set({ serviceCyclePayments: state.serviceCyclePayments.map(item => item.id === paymentId ? { ...item, voidedAt: new Date().toISOString(), voidedBy: actor.id, voidReason: reason.trim().slice(0, 1000) } : item) });
+        return { ok: true };
+      },
       createClientPlanRevision: (planId) => {
         const state = get();
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot revise client plans.' };
         const source = state.clientPlans.find(item => item.id === planId);
-        if (!source || !['Active', 'Ended'].includes(source.status)) return { ok: false, error: 'Only an active or ended plan can be renewed.' };
+        if (!source || !['Active', 'Paused', 'Ended'].includes(source.status)) return { ok: false, error: 'Only an active or ended plan can be renewed.' };
         if (!isServiceClientInScope(state, source.clientId)) return { ok: false, error: serviceClientScopeError };
         const pending = state.clientPlans.find(item => item.supersedesPlanId === source.id && item.status === 'Draft');
         if (pending) return { ok: true, planId: pending.id };
@@ -4550,7 +4578,7 @@ export const useStore = create<StoreState>()(
         });
         set(current => ({
           clientPlans: [...current.clientPlans, nextPlan],
-          servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
+          servicePricingSnapshots: canViewServicePrices(state.currentUser, state.rolePermissions) ? [...current.servicePricingSnapshots, pricing] : current.servicePricingSnapshots,
         }));
         return { ok: true, planId: nextPlanId };
       },
@@ -4564,8 +4592,8 @@ export const useStore = create<StoreState>()(
         if (expectedVersion !== undefined && plan.version !== expectedVersion) return { ok: false, error: 'This revision changed elsewhere. Review the saved revision before saving.' };
         const source = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
         if (!source || source.status !== 'Active') return { ok: false, error: 'Resume the active plan before scheduling a revision.' };
-        const next = source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay);
-        if (next <= getBillingToday() || next !== effectiveDate) return { ok: false, error: 'The billing date changed. Refresh and review the next cycle before scheduling.' };
+        const next = nextRevisionBoundary(source, getBillingToday());
+        if (next !== effectiveDate) return { ok: false, error: 'The billing date changed. Refresh and review the next cycle before scheduling.' };
         const error = validateRevisionItems(plan.serviceItems);
         if (error) return { ok: false, error };
         set({ clientPlans: state.clientPlans.map(item => item.id === plan.id ? { ...item, revisionScheduleStatus: 'scheduled', startDate: next, effectiveFromCycleStart: next, updatedAt: new Date().toISOString() } : item) });
@@ -4593,13 +4621,15 @@ export const useStore = create<StoreState>()(
         const itemError = validateRevisionItems(data.serviceItems || plan.serviceItems);
         if (itemError) return { ok: false, error: itemError };
         if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
+        const mayEditPrices = canViewServicePrices(state.currentUser, state.rolePermissions);
         const serviceItems = (data.serviceItems || plan.serviceItems).map(item => ({
           ...item,
           name: item.name.trim().slice(0, 160),
           platforms: item.platforms.map(value => value.trim()).filter(Boolean).slice(0, 20),
           unit: item.unit.trim().slice(0, 80) || 'item',
           quantity: Math.max(1, Math.trunc(item.quantity)),
-          unitPriceMinor: Math.max(0, Math.trunc(item.unitPriceMinor)),
+          unitPriceMinor: mayEditPrices ? Math.max(0, Math.trunc(item.unitPriceMinor))
+            : plan.serviceItems.find(saved => saved.id === item.id)?.unitPriceMinor ?? 0,
           workflow: item.workflow ? { ...item.workflow, steps: item.workflow.steps.map(step => ({ ...step })) } : undefined,
         })).filter(item => item.name);
         if (!serviceItems.length || serviceItems.reduce((sum, item) => sum + item.quantity, 0) > 400) return { ok: false, error: 'Draft plans need 1–400 deliverable slots.' };
@@ -4624,8 +4654,9 @@ export const useStore = create<StoreState>()(
           serviceItems,
           startDate: nextStartDate,
           billingDay: nextBillingDay,
-          discountValue: Math.max(0, Math.trunc(data.discountValue ?? plan.discountValue)),
-          taxRateBps: Math.min(10_000, Math.max(0, Math.trunc(data.taxRateBps ?? plan.taxRateBps))),
+          discountType: mayEditPrices ? data.discountType ?? plan.discountType : plan.discountType,
+          discountValue: mayEditPrices ? Math.max(0, Math.trunc(data.discountValue ?? plan.discountValue)) : plan.discountValue,
+          taxRateBps: mayEditPrices ? Math.min(10_000, Math.max(0, Math.trunc(data.taxRateBps ?? plan.taxRateBps))) : plan.taxRateBps,
           contractEndDate: nextContractEnd,
           updatedAt: now,
         };
@@ -4636,7 +4667,7 @@ export const useStore = create<StoreState>()(
         });
         set(current => ({
           clientPlans: current.clientPlans.map(item => item.id === plan.id ? next : item),
-          servicePricingSnapshots: current.servicePricingSnapshots.some(item => item.parentId === plan.id)
+          servicePricingSnapshots: !canViewServicePrices(state.currentUser, state.rolePermissions) ? current.servicePricingSnapshots : current.servicePricingSnapshots.some(item => item.parentId === plan.id)
             ? current.servicePricingSnapshots.map(item => item.parentId === plan.id ? { ...pricing, createdAt: item.createdAt } : item)
             : [...current.servicePricingSnapshots, pricing],
         }));
@@ -6439,6 +6470,7 @@ export const useStore = create<StoreState>()(
           servicePackages: state.servicePackages,
           clientPlans: state.clientPlans,
           serviceCycles: state.serviceCycles,
+          serviceCyclePayments: state.serviceCyclePayments,
           deliverables: state.deliverables,
           cycleComments: state.cycleComments,
           addons: state.addons,
@@ -6658,6 +6690,7 @@ export const startBackendAutoSync = () => {
       state.servicePackages !== previousState.servicePackages ||
       state.clientPlans !== previousState.clientPlans ||
       state.serviceCycles !== previousState.serviceCycles ||
+      state.serviceCyclePayments !== previousState.serviceCyclePayments ||
       state.deliverables !== previousState.deliverables ||
       state.cycleComments !== previousState.cycleComments ||
       state.addons !== previousState.addons;
@@ -6686,6 +6719,7 @@ export const startBackendAutoSync = () => {
         servicePackages: previousState.servicePackages,
         clientPlans: previousState.clientPlans,
         serviceCycles: previousState.serviceCycles,
+        serviceCyclePayments: previousState.serviceCyclePayments,
         deliverables: previousState.deliverables,
         cycleComments: previousState.cycleComments,
         addons: previousState.addons,
@@ -6849,7 +6883,7 @@ export const clearWorkspaceSession = (options: { discardPending?: boolean } = {}
     currentUser: null,
     ...(shouldUseSupabase() ? {
       taskStatuses: [], users: [], clients: [], projects: [], tasks: [], notifications: [], registrations: [], rolePermissions: [],
-      clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], servicePackages: [],
+      clientPlans: [], serviceCycles: [], serviceCyclePayments: [], deliverables: [], cycleComments: [], addons: [], servicePackages: [],
       serviceWorkflowTemplates: [], servicePricingSnapshots: [], notificationUnreadCount: 0,
       deletedUserIds: [], deletedRoleIds: [], deletedTaskStatuses: [], deletedClientIds: [],
     } : {}),

@@ -1,3 +1,4 @@
+import ModalShell from '../components/ModalShell';
 import '../lib/actionFeedbackCopy';
 import { formatLocalizedDateRange } from '../lib/i18n';
 import { msg, type MessageDescriptor } from '../lib/messages';
@@ -197,6 +198,7 @@ const OperationsClientWorkspace = () => {
   }, [clientId, store.currentUser?.id, addonDefaultDate]);
   useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== addonDefaultDate));
 
+  const [detailsPlanId, setDetailsPlanId] = React.useState<string | null>(null);
   if (!client) return store.currentUser?.role === "Client" ? <Navigate to="/projects" replace /> : <UnavailableWork />;
 
   const canManagePlans = canManageClientPlans(
@@ -475,6 +477,13 @@ const OperationsClientWorkspace = () => {
     setAddonSheetOpen(false);
   };
 
+  const detailsPlan = store.clientPlans.find(item => item.id === detailsPlanId && item.clientId === client.id);
+  const editDetails = async () => {
+    if (!activePlan || !canManagePlans) return;
+    if (activePlan.status === 'Draft') { setDetailsPlanId(activePlan.id); return; }
+    const result = store.createClientPlanRevision(activePlan.id);
+    if (await saveAndCommit(result, 'client_plan.manage')) setDetailsPlanId(result.planId || null);
+  };
   const createRevision = async () => {
     if (!renewalSourcePlan || addonSaving) return;
     const result = store.createClientPlanRevision(renewalSourcePlan.id);
@@ -593,6 +602,7 @@ const OperationsClientWorkspace = () => {
           ) : null
         }
       />
+      {detailsPlan && canManagePlans && <ModalShell labelledBy="plan-details-title" onClose={() => setDetailsPlanId(null)} panelClassName="max-w-4xl"><div className="p-4"><h2 id="plan-details-title" className="mb-4 font-semibold">{t('Edit details')}</h2><DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${detailsPlan.id}`} plan={detailsPlan} source={store.clientPlans.find(item => item.id === detailsPlan.supersedesPlanId) || detailsPlan} /><Button variant="secondary" className="mt-4" onClick={() => setDetailsPlanId(null)}>{t('Close')}</Button></div></ModalShell>}
       {canManagePlans && <div className="flex justify-end"><ContextualTutorialLink tutorialId="manage-service-plans" label={t("How do service plans work?")} /></div>}
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
         <SegmentedTabs<Tab> items={tabs} value={tab} onChange={next => {
@@ -632,7 +642,7 @@ const OperationsClientWorkspace = () => {
 
       {tab === "plan" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-plan`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-plan`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} canManagePlans={canManagePlans} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => setTab('cycles')} />}
+          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} canManagePlans={canManagePlans} onEditDetails={() => void editDetails()} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => setTab('cycles')} />}
           <section className={cn(cardBase, "overflow-hidden")}>
             <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
               <div>
@@ -765,14 +775,14 @@ const OperationsClientWorkspace = () => {
             )}
           </section>
           {canManagePlans && scheduledRevision && revisionSource && (
-            <DraftServicePlanEditor key={scheduledRevision.id} plan={scheduledRevision} source={revisionSource} />
+            <DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${scheduledRevision.id}`} plan={scheduledRevision} source={revisionSource} />
           )}
         </div>
       )}
 
       {tab === "cycles" && (
         <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-cycles`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-cycles`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} canManagePlans={canManagePlans} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => setTab('cycles')} />}
+          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} canManagePlans={canManagePlans} onEditDetails={() => void editDetails()} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => setTab('cycles')} />}
           {(selectedCycle ? [selectedCycle] : []).map((cycle) => {
             const cycleDeliverables = deliverables.filter(
               (item) => item.cycleId === cycle.id,

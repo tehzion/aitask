@@ -3,6 +3,7 @@ import type {
   ClientProfile,
   ClientServicePlan,
   ServicePackage,
+  ServiceCyclePayment,
   ServiceCycle,
   Deliverable,
   CycleComment,
@@ -60,6 +61,7 @@ export interface SafeWorkspaceState {
   servicePackages: ServicePackage[];
   clientPlans: ClientServicePlan[];
   serviceCycles: ServiceCycle[];
+  serviceCyclePayments: ServiceCyclePayment[];
   deliverables: Deliverable[];
   cycleComments: CycleComment[];
   addons: Addon[];
@@ -452,6 +454,7 @@ export const parseTask = (value: unknown): Task | null => {
     assignedAt: safeIsoTimestamp(value.assignedAt),
     startDate: safeIsoDate(value.startDate, today),
     dueDate: cleanText(value.dueDate, 10) ? safeIsoDate(value.dueDate, '') : '',
+    postingDate: cleanText(value.postingDate, 10) ? safeIsoDate(value.postingDate, '') || undefined : undefined,
     priority,
     status,
     completionPercentage: Math.min(100, Math.max(0, Number(value.completionPercentage) || 0)),
@@ -583,6 +586,7 @@ export const parseWorkspaceSnapshot = (value: unknown): SafeWorkspaceState => {
     servicePackages: parseIdentifiedRecords<ServicePackage>(record.servicePackages),
     clientPlans: parseIdentifiedRecords<ClientServicePlan>(record.clientPlans),
     serviceCycles: parseIdentifiedRecords<ServiceCycle>(record.serviceCycles),
+    serviceCyclePayments: parseIdentifiedRecords<ServiceCyclePayment>(record.serviceCyclePayments),
     deliverables: parseIdentifiedRecords<Deliverable>(record.deliverables),
     cycleComments: parseIdentifiedRecords<CycleComment>(record.cycleComments),
     addons: parseIdentifiedRecords<Addon>(record.addons),

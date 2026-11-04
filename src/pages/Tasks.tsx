@@ -19,7 +19,7 @@ import { canAssignTasksToOthers, canCreateTasks, canEditTask as canEditTaskByRol
 import { SkeletonTableRow, SkeletonMobileCard } from '../components/SkeletonCard';
 import { safeHttpsUrl } from '../lib/security';
 import { DEPARTMENTS } from '../lib/departments';
-import { assignableTaskAssignees } from '../lib/taskWorkflowAccess';
+import { formatTaskAssigneeName, assignableTaskAssignees } from '../lib/taskWorkflowAccess';
 import { getOperationsPeriod, isTaskOpen, isTaskOverdue, type TeamWorkloadPeriod } from '../lib/taskReporting';
 import { getClientTaskStage } from '../lib/clientPortal';
 import { getLocalizedDepartment, getLocalizedPriority, getLocalizedTaskStatus } from '../lib/localeLabels';
@@ -993,7 +993,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
                     className={cn(inputBase, 'p-2 pr-8 text-slate-700 appearance-none cursor-pointer')}
                   >
                     <option value="All">{t('All assignees')}</option>
-                    {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
+                    {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{formatTaskAssigneeName(user, rolePermissions)}</option>)}
                   </select>
                   <ChevronDown className="w-4 h-4 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />
                 </div>}
@@ -1133,7 +1133,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
                           return current && !options.some(u => u.id === current.id) ? [current, ...options] : options;
                         })()
                       : users.filter(u => u.id === currentTask.assignedTo)).map(u => (
-                      <option key={u.id} data-i18n-skip value={u.id}>{u.name}</option>
+                      <option key={u.id} data-i18n-skip value={u.id}>{formatTaskAssigneeName(u, rolePermissions)}</option>
                     ))}
                   </select>
                   <ChevronDown className="w-3.5 h-3.5 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none opacity-60 text-slate-500" />

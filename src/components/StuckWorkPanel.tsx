@@ -6,7 +6,7 @@ import type { Task } from '../types';
 import type { MessageDescriptor } from '../lib/messages';
 import { useStore, type MutationActionResult } from '../store';
 import { canEditTask } from '../lib/access';
-import { assignableTaskAssignees, getTaskAssignmentUnavailableReason } from '../lib/taskWorkflowAccess';
+import { formatTaskAssigneeName, assignableTaskAssignees, getTaskAssignmentUnavailableReason } from '../lib/taskWorkflowAccess';
 import { getStuckWork } from '../lib/opsSignals';
 import { formatLocalizedDate } from '../lib/i18n';
 import { parseOptionalDate } from '../lib/utils';
@@ -77,7 +77,7 @@ const StuckRow = ({ task, mode }: { task: Task; mode: 'overdue' | 'unassigned' }
         <select value={assignee} onChange={event => setAssignee(event.target.value)} aria-label={t('Assign {title}', { title: label })}
           className="min-h-11 max-w-[14rem] rounded-control border border-line bg-surface px-3 text-sm text-ink">
           <option value="">{t('Choose a person')}</option>
-          {assignees.filter(user => user.id !== task.assignedTo).map(user => <option key={user.id} value={user.id} data-i18n-skip>{user.name}</option>)}
+          {assignees.filter(user => user.id !== task.assignedTo).map(user => <option key={user.id} value={user.id} data-i18n-skip>{formatTaskAssigneeName(user, rolePermissions)}</option>)}
         </select>
         <Button variant="secondary" disabled={!assignee || saving} onClick={() => void run(() => updateTaskAssignee(task.id, assignee))}>{t('Assign')}</Button>
       </>}

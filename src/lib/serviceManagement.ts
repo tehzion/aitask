@@ -36,6 +36,17 @@ export const nextBillingDate = (afterDate: string, billingDay: number) => {
   return candidate;
 };
 
+/**
+ * The billing boundary a draft revision of an active plan can be scheduled
+ * for: the source plan's next cycle start while it is still in the future,
+ * otherwise the next billing day after today. A draft keeps the boundary it
+ * was created with, which goes stale once that cycle has been generated, so
+ * the review screen and the scheduler must both read the date from here.
+ */
+export const nextRevisionBoundary = (source: Pick<ClientServicePlan, 'nextCycleStart' | 'billingDay'>, today: string) => (
+  source.nextCycleStart && source.nextCycleStart > today ? source.nextCycleStart : nextBillingDate(today, source.billingDay)
+);
+
 export const cyclePeriodEnd = (periodStart: string, billingDay: number) => {
   const next = utcDate(nextBillingDate(periodStart, billingDay));
   next.setUTCDate(next.getUTCDate() - 1);

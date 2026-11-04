@@ -210,8 +210,7 @@ export const taskAssignmentStageError = (
 };
 
 /**
- * PMs choose active internal members; department-scoped actors retain
- * their department eligibility.
+ * Only active internal members of the selected department are offered.
  */
 export const assignableTaskAssignees = (
   actor: User | null | undefined,
@@ -220,9 +219,10 @@ export const assignableTaskAssignees = (
   roles: CustomRole[] = [],
   options: { allowDirectStaff?: boolean } = {},
 ): User[] => {
-  if (actor?.role === 'Project Manager') return users.filter(user => user.role !== 'Client' && user.hasLogin !== false);
   if (!department) return [];
-  return users.filter(user => isEligibleTaskAssignee(user, department)
+  return users.filter(user => user.hasLogin !== false
+    && isMemberInDepartment(user, department)
+    && isEligibleTaskAssignee(user, department)
     && !taskAssignmentStageError(actor, { department }, user.id, users, roles, options));
 };
 export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
@@ -304,3 +304,6 @@ export const isReadyForMyCompletion = (
 ) => Boolean(user && !task.isCompleted
   && (task.status === 'Approved' || canCompleteWithoutInternalApproval(task, scope))
   && (isBossKoo(user) || (user.role === 'Project Manager' && canManageTaskReview(user, task, roles, scope))));
+
+export const formatTaskAssigneeName = (user: User, roles: CustomRole[] = []) =>
+  isHodUser(user, roles) ? `${user.name} (HOD)` : user.name;
