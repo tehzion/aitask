@@ -248,6 +248,13 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const handleClose = () => { recovery.clear(); markPristine(); setFormEdited(false); resetForm(); clearCompanySearch(); onClose(); };
   const requestClose = () => { if (!isSubmitting && !deletePending && (!formEdited || window.confirm(t('Discard unsaved changes?')))) handleClose(); };
 
+  // Why this account cannot delete the project yet, from the current project
+  // record as the store's delete uses. Not shown once a delete is pending,
+  // because its unlinked tasks are then already staged.
+  const deleteBlocker = project && !deletePending
+    ? projectDeletionBlocker(currentUser, projects.find(item => item.id === project.id) || project, tasks, isHodUser(currentUser, rolePermissions)) || ''
+    : '';
+
   const handleDelete = async () => {
     if (!project || deleteBusy.current || isSubmitting) return;
     const session = captureWorkspaceSession();
@@ -735,7 +742,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         labelledBy={deleteTitleId}
         title={t('Delete project')}
         description={`${t('Delete “{projectName}”? This cannot be undone. Existing tasks will be kept and unlinked from this project.').replace('{projectName}', project.projectName)}${formEdited ? ` ${t('Unsaved project edits will be discarded.')}` : ''}`}
-        error={deleteError || (deletePending ? '' : projectDeletionBlocker(currentUser, project, tasks, isHodUser(currentUser, rolePermissions)) || '')}
+        error={deleteError || deleteBlocker}
+        confirmDisabled={Boolean(deleteBlocker) && !deleteError}
         confirmLabel={deletePending ? 'Retry deleting project' : 'Delete project'}
         busy={isSubmitting}
         onConfirm={handleDelete}

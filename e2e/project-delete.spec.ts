@@ -57,3 +57,38 @@ test('project deletion cancels safely and retries without restaging or deleting 
   expect(result.task).toBeDefined();
   expect(result.task?.projectId).toBeUndefined();
 });
+
+test('project deletion stays unavailable while the dialog explains why', async ({ page }) => {
+  await page.goto('/login');
+  await expect(page.getByLabel('Password', { exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const boss = state.users.find(user => user.isSuperAdmin)!;
+    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    enablePasswordResetBypass(boss.id);
+    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    const project = { id: 'blocked-project', clientId: 'blocked-client', clientName: 'Blocked company', projectName: 'Blocked example', services: ['Design'], startDate: '2026-11-01', deadline: '', createdBy: boss.id };
+    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, projects: [project], clients: [{ id: 'blocked-client', clientName: 'Blocked company', createdBy: boss.id, createdAt: '2026-11-01', updatedAt: '2026-11-01' }], tasks: [{ ...state.tasks[0], id: 'blocked-task', projectId: undefined, projectName: undefined, clientName: 'Blocked company' }],
+      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+    });
+  });
+  await page.goto('/projects');
+  await page.locator('div.bg-surface.p-5').filter({ has: page.getByText('Blocked company', { exact: true }) }).getByRole('button', { name: 'Details', exact: true }).click();
+  await page.getByRole('button', { name: 'Edit project', exact: true }).click();
+  // Navigation reloads the store; close the project and link a task after opening the editor.
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    useStore.setState({
+      projects: state.projects.map(item => item.id === 'blocked-project' ? { ...item, status: 'Closed' } : item),
+      tasks: [{ ...state.tasks[0], id: 'blocked-task', clientName: 'Blocked company', projectId: 'blocked-project', projectName: 'Blocked example' }],
+    });
+  });
+  const editor = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Edit project', exact: true }) });
+  await editor.getByRole('button', { name: 'Delete project', exact: true }).click();
+  const confirm = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Delete project', exact: true }) });
+  await expect(confirm.getByRole('alert')).toContainText('Reopen this project before deleting it.');
+  await expect(confirm.getByRole('button', { name: 'Delete project', exact: true })).toBeDisabled();
+  await expect(confirm.getByRole('button', { name: 'Cancel', exact: true })).toBeEnabled();
+});

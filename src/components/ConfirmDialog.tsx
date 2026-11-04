@@ -16,6 +16,8 @@ interface ConfirmDialogProps {
   onConfirm: () => void | Promise<void>;
   onClose: () => void;
   busy?: boolean;
+  /** Keeps the confirm action unavailable, for example while `error` explains why it cannot run. */
+  confirmDisabled?: boolean;
 }
 
 const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
@@ -29,6 +31,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
   onConfirm,
   onClose,
   busy = false,
+  confirmDisabled = false,
 }) => {
   const { t } = useI18n();
   return (
@@ -45,7 +48,7 @@ const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
     </div>
     <div className="flex justify-end gap-3 px-5 py-4">
       <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>{t(cancelLabel)}</Button>
-      <Button type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={() => void onConfirm()} disabled={busy} aria-busy={busy}>
+      <Button type="button" variant={tone === 'danger' ? 'danger' : 'primary'} onClick={() => void onConfirm()} disabled={busy || confirmDisabled} aria-busy={busy}>
         {busy ? t('feedback.working') : t(confirmLabel)}
       </Button>
     </div>
