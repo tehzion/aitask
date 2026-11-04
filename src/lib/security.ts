@@ -454,6 +454,7 @@ export const parseTask = (value: unknown): Task | null => {
     assignedAt: safeIsoTimestamp(value.assignedAt),
     startDate: safeIsoDate(value.startDate, today),
     dueDate: cleanText(value.dueDate, 10) ? safeIsoDate(value.dueDate, '') : '',
+    postingDate: cleanText(value.postingDate, 10) ? safeIsoDate(value.postingDate, '') || undefined : undefined,
     priority,
     status,
     completionPercentage: Math.min(100, Math.max(0, Number(value.completionPercentage) || 0)),

@@ -212,6 +212,7 @@ type TaskUpdateInput = Partial<Pick<
   | 'assignedTo'
   | 'startDate'
   | 'dueDate'
+  | 'postingDate'
   | 'priority'
   | 'status'
   | 'completionPercentage'
@@ -3140,6 +3141,7 @@ export const useStore = create<StoreState>()(
         const serviceType = data.serviceType !== undefined ? data.serviceType.trim() : task.serviceType;
         const startDate = data.startDate !== undefined ? normalizeRequiredStartDate(data.startDate) : normalizeRequiredStartDate(task.startDate);
         const dueDate = data.dueDate !== undefined ? normalizeOptionalIsoDate(data.dueDate) : task.dueDate;
+        const postingDate = data.postingDate !== undefined ? normalizeOptionalIsoDate(data.postingDate) || undefined : task.postingDate;
         const status = data.status !== undefined
           ? resolveTaskStatus(data.status, state.taskStatuses)
           : task.status;
@@ -3153,6 +3155,7 @@ export const useStore = create<StoreState>()(
         if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) {
           return { ok: false, error: 'Due date cannot be earlier than the start date.' };
         }
+        if (postingDate && !isValidIsoDate(postingDate)) return { ok: false, error: 'Posting date must be valid when provided.' };
         if (data.status !== undefined && !status) return { ok: false, error: 'Choose a valid task status.' };
         if (data.priority !== undefined && !allowedPriorities.has(data.priority)) {
           return { ok: false, error: 'Choose a valid priority.' };
@@ -3203,6 +3206,7 @@ export const useStore = create<StoreState>()(
           assignedAt: assignmentChanged && !isHodUser(currentUser, state.rolePermissions) ? now : task.assignedAt,
           startDate,
           dueDate,
+          postingDate,
           status,
           isCompleted,
           completedAt: statusChanged
@@ -3255,7 +3259,7 @@ export const useStore = create<StoreState>()(
         if (state.backend.mode === 'local') notifications.push(...localHodReviewNotifications(
           state.users, state.rolePermissions, task, updatedTask, currentUser.id, { clients: state.clients, projects: state.projects },
         ));
-        const datesChanged = task.startDate !== updatedTask.startDate || task.dueDate !== updatedTask.dueDate;
+        const datesChanged = task.startDate !== updatedTask.startDate || task.dueDate !== updatedTask.dueDate || (task.postingDate || '') !== (updatedTask.postingDate || '');
         const instructionsChanged = ['title', 'description', 'notes', 'priority'].some(field => (
           JSON.stringify(task[field as keyof Task] ?? null) !== JSON.stringify(updatedTask[field as keyof Task] ?? null)
         ));

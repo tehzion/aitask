@@ -174,6 +174,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     priority: 'Medium' as Priority,
     startDate: '',
     dueDate: '',
+    postingDate: '',
     notes: '',
   });
 
@@ -244,6 +245,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
         priority: draftTask.priority,
         startDate: draftTask.startDate || getTodayInputDate(),
         dueDate: draftTask.dueDate,
+        postingDate: draftTask.postingDate || '',
         notes: draftTask.notes || '',
       };
       editBaseline.current = initialEdit; setEditForm(initialEdit);
@@ -581,6 +583,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
   const startDateValue = parseOptionalDate(task.startDate);
   const dueDateValue = parseOptionalDate(task.dueDate);
+  const postingDateValue = parseOptionalDate(task.postingDate);
 
   return (
     <ModalShell
@@ -594,7 +597,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
         {recovery.available && !formDirty && <DraftRecoveryNotice onDiscard={recovery.clear} onRestore={() => {
           const recovered = recovery.draft;
           if (!recovered) return;
-          const latest = { title: task.title, description: task.description || '', clientName: task.clientName, serviceType: task.serviceType, department: task.department, assignedTo: task.assignedTo, priority: task.priority, startDate: task.startDate, dueDate: task.dueDate, notes: task.notes || '' };
+          const latest = { title: task.title, description: task.description || '', clientName: task.clientName, serviceType: task.serviceType, department: task.department, assignedTo: task.assignedTo, priority: task.priority, startDate: task.startDate, dueDate: task.dueDate, postingDate: task.postingDate || '', notes: task.notes || '' };
           let restoredDetails: typeof editForm | undefined;
           let restoredAttachment: { link: string; name: string } | undefined;
           let hasConflicts = false;
@@ -879,6 +882,15 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
                     </label>
+                    <label className="block">
+                      <span className={fieldLabel}>{t('Posting Date')}</span>
+                      <input
+                        type="date"
+                        value={editForm.postingDate}
+                        onChange={(e) => setEditForm({ ...editForm, postingDate: e.target.value })}
+                        className={cn(inputBase, 'px-2.5 py-2.5')}
+                      />
+                    </label>
                     <div className="md:col-span-2">
                       <label className="block">
                         <span className={fieldLabel}>{t('Description')}</span>
@@ -1027,6 +1039,13 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     {dueDateValue ? formatLocalizedDate(dueDateValue, locale) : t('common.noDueDate')}
                   </div>
                 </div>
+                {!isClientTaskViewer && <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">{t('Posting Date')}</label>
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    {postingDateValue ? formatLocalizedDate(postingDateValue, locale) : t('No posting date')}
+                  </div>
+                </div>}
               </div>
 
               {task.generatedFromDeliverable && task.startDate && task.dueDate && task.dueDate < (task.workflowGeneratedAt || '').slice(0, 10) && <p className="rounded-control border border-line bg-inset p-3 text-sm text-muted">{t('Generated late; original deadlines are preserved.')}</p>}
