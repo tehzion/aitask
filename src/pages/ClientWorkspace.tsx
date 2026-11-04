@@ -602,7 +602,7 @@ const OperationsClientWorkspace = () => {
           ) : null
         }
       />
-      {detailsPlan && canManagePlans && <ModalShell labelledBy="plan-details-title" onClose={() => setDetailsPlanId(null)} panelClassName="max-w-4xl"><div className="p-4"><h2 id="plan-details-title" className="mb-4 font-semibold">{t('Edit details')}</h2><DraftServicePlanEditor key={detailsPlan.id} plan={detailsPlan} source={store.clientPlans.find(item => item.id === detailsPlan.supersedesPlanId) || detailsPlan} /><Button variant="secondary" className="mt-4" onClick={() => setDetailsPlanId(null)}>{t('Close')}</Button></div></ModalShell>}
+      {detailsPlan && canManagePlans && <ModalShell labelledBy="plan-details-title" onClose={() => setDetailsPlanId(null)} panelClassName="max-w-4xl"><div className="p-4"><h2 id="plan-details-title" className="mb-4 font-semibold">{t('Edit details')}</h2><DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${detailsPlan.id}`} plan={detailsPlan} source={store.clientPlans.find(item => item.id === detailsPlan.supersedesPlanId) || detailsPlan} /><Button variant="secondary" className="mt-4" onClick={() => setDetailsPlanId(null)}>{t('Close')}</Button></div></ModalShell>}
       {canManagePlans && <div className="flex justify-end"><ContextualTutorialLink tutorialId="manage-service-plans" label={t("How do service plans work?")} /></div>}
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
         <SegmentedTabs<Tab> items={tabs} value={tab} onChange={next => {
@@ -775,7 +775,7 @@ const OperationsClientWorkspace = () => {
             )}
           </section>
           {canManagePlans && scheduledRevision && revisionSource && (
-            <DraftServicePlanEditor key={scheduledRevision.id} plan={scheduledRevision} source={revisionSource} />
+            <DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${scheduledRevision.id}`} plan={scheduledRevision} source={revisionSource} />
           )}
         </div>
       )}

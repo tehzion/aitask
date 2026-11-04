@@ -1,3 +1,4 @@
+import { defaultRolePermissions } from '../lib/access';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task, User } from '../types';
 import { useStore } from './index';
@@ -214,4 +215,28 @@ describe('monthly service cycle rollover', () => {
     expect(useStore.getState().serviceCycles).toEqual(history);
   });
 
+});
+
+describe('PM scope-only plan changes', () => {
+  it('preserves prices and discounts when the PM cannot view prices', () => {
+    const id = createPlan();
+    const before = structuredClone(useStore.getState().clientPlans.find(plan => plan.id === id)!);
+    const pricing = structuredClone(useStore.getState().servicePricingSnapshots);
+    useStore.setState({ currentUser: { ...pm, permissions: { ...defaultRolePermissions['Project Manager'], viewServicePrices: false } } });
+    expect(useStore.getState().updateDraftClientPlan(id, {
+      name: 'Scope only', serviceItems: before.serviceItems.map(item => ({ ...item, quantity: 3, unitPriceMinor: 0 })),
+      discountType: 'none', discountValue: 0, taxRateBps: 0,
+    }).ok).toBe(true);
+    const saved = useStore.getState().clientPlans.find(plan => plan.id === id)!;
+    expect(saved.serviceItems[0]).toMatchObject({ quantity: 3, unitPriceMinor: before.serviceItems[0].unitPriceMinor });
+    expect([saved.discountType, saved.discountValue, saved.taxRateBps]).toEqual([before.discountType, before.discountValue, before.taxRateBps]);
+    expect(useStore.getState().servicePricingSnapshots).toEqual(pricing);
+  });
+  it('rejects a PM outside the company portfolio without changing the plan', () => {
+    const id = createPlan();
+    const before = useStore.getState().clientPlans;
+    useStore.setState({ currentUser: { ...pm, id: 'outside-pm' } });
+    expect(useStore.getState().updateDraftClientPlan(id, { name: 'Unauthorized' }).ok).toBe(false);
+    expect(useStore.getState().clientPlans).toBe(before);
+  });
 });

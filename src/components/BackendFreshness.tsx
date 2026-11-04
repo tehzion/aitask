@@ -150,6 +150,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           </Button>
         </div>
       )}
+      {backend.error && <p className="basis-full text-sm text-red-700" role="alert"><SystemMessage message={backend.error} /></p>}
       {actionError && actionError !== backend.error && <p className="basis-full text-sm text-red-700" role="alert"><SystemMessage message={actionError} /></p>}
       {needsResolution && !canRetrySave(backend) && <p className="basis-full text-sm text-muted">{t('Restore saved data, correct the rejected change or check your access, then save again.')}</p>}
       {!compact && backend.conflict && (

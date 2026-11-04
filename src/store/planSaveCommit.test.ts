@@ -105,7 +105,8 @@ describe('plan wizard degraded-sync recovery', () => {
     });
   });
 
-  it('blocks a new draft while degraded until the pending state is resolved', async () => {
+  it.each([true, false])('blocks a new draft while degraded until the pending state is resolved (super admin: %s)', async isSuperAdmin => {
+    useStore.setState({ currentUser: { ...boss, isSuperAdmin } });
     useStore.setState(state => ({
       backend: { ...state.backend, status: 'retry_required', hasLocalChanges: false, pendingMutations: 0 },
     }));
@@ -115,7 +116,8 @@ describe('plan wizard degraded-sync recovery', () => {
     expect(isPendingMutationResolution(useStore.getState().backend)).toBe(true);
   });
 
-  it('blocks plan creation while a retained command awaits retry and reports the guard', () => {
+  it.each([true, false])('blocks plan creation while a retained command awaits retry and reports the guard (super admin: %s)', isSuperAdmin => {
+    useStore.setState({ currentUser: { ...boss, isSuperAdmin } });
     useStore.setState(state => ({
       backend: { ...state.backend, status: 'retry_required', pendingMutations: 1 },
     }));
@@ -171,7 +173,8 @@ describe('retryPendingSave', () => {
     });
   });
 
-  it('syncs the local diff directly when no command is retained', async () => {
+  it.each([true, false])('syncs the local diff directly when no command is retained (super admin: %s)', async isSuperAdmin => {
+    useStore.setState({ currentUser: { ...boss, isSuperAdmin } });
     const created = useStore.getState().createClientWithPlan(planInput);
     expect(created.ok).toBe(true);
     useStore.setState(state => ({
@@ -193,7 +196,8 @@ describe('retryPendingSave', () => {
     }));
   });
 
-  it('retries the retained command when one exists', async () => {
+  it.each([true, false])('retries the retained command when one exists (super admin: %s)', async isSuperAdmin => {
+    useStore.setState({ currentUser: { ...boss, isSuperAdmin } });
     useStore.getState().createClientWithPlan(planInput);
     useStore.setState(state => ({
       backend: { ...state.backend, status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 },
@@ -415,7 +419,8 @@ describe('retryPendingSave', () => {
     expect(useStore.getState().users.find(user => user.id === staff.id)?.departments).toEqual(['Video Editor']);
   });
 
-  it('rebuilds the same typed save instead of replacing a rejected error with no retained change', async () => {
+  it.each([true, false])('rebuilds the same typed save instead of replacing a rejected error with no retained change (super admin: %s)', async isSuperAdmin => {
+    useStore.setState({ currentUser: { ...boss, isSuperAdmin } });
     const created = useStore.getState().createClientWithPlan(planInput);
     expect(created.ok).toBe(true);
     useStore.setState(state => ({
@@ -444,7 +449,8 @@ describe('retryPendingSave', () => {
     }));
   });
 
-  it('waits for an in-flight synchronization instead of failing the retry', async () => {
+  it.each([true, false])('waits for an in-flight synchronization instead of failing the retry (super admin: %s)', async isSuperAdmin => {
+    useStore.setState({ currentUser: { ...boss, isSuperAdmin } });
     const created = useStore.getState().createClientWithPlan(planInput);
     expect(created.ok).toBe(true);
     useStore.setState(state => ({ backend: { ...state.backend, status: 'retry_required', hasLocalChanges: true, isPulling: true } }));
@@ -464,7 +470,8 @@ describe('retryPendingSave', () => {
     expect(useStore.getState().backend.status).toBe('live');
   });
 
-  it('sends a monthly draft and its pricing through the service RPC after a background refresh', async () => {
+  it.each([true, false])('sends a monthly draft and its pricing through the service RPC after a background refresh (super admin: %s)', async isSuperAdmin => {
+    useStore.setState({ currentUser: { ...boss, isSuperAdmin } });
     const created = useStore.getState().createClientWithPlan(planInput);
     expect(created.ok).toBe(true);
     expect(useStore.getState().updateDraftClientPlan(created.planId!, {
@@ -489,7 +496,8 @@ describe('retryPendingSave', () => {
     expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false, pendingMutations: 0 });
   });
 
-  it('skips a background pull while a local change is pending', async () => {
+  it.each([true, false])('skips a background pull while a local change is pending (super admin: %s)', async isSuperAdmin => {
+    useStore.setState({ currentUser: { ...boss, isSuperAdmin } });
     useStore.setState(state => ({ backend: { ...state.backend, hasLocalChanges: true } }));
 
     await useStore.getState().pullBackendNow({ silent: true });

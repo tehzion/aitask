@@ -3978,7 +3978,6 @@ export const useStore = create<StoreState>()(
             : task
           ),
         }));
-        useToastStore.getState().addToast(msg('project.deleted', { name: project.projectName }), 'success');
         return { ok: true };
       },
 
@@ -4625,13 +4624,15 @@ export const useStore = create<StoreState>()(
         const itemError = validateRevisionItems(data.serviceItems || plan.serviceItems);
         if (itemError) return { ok: false, error: itemError };
         if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
+        const mayEditPrices = canViewServicePrices(state.currentUser, state.rolePermissions);
         const serviceItems = (data.serviceItems || plan.serviceItems).map(item => ({
           ...item,
           name: item.name.trim().slice(0, 160),
           platforms: item.platforms.map(value => value.trim()).filter(Boolean).slice(0, 20),
           unit: item.unit.trim().slice(0, 80) || 'item',
           quantity: Math.max(1, Math.trunc(item.quantity)),
-          unitPriceMinor: Math.max(0, Math.trunc(item.unitPriceMinor)),
+          unitPriceMinor: mayEditPrices ? Math.max(0, Math.trunc(item.unitPriceMinor))
+            : plan.serviceItems.find(saved => saved.id === item.id)?.unitPriceMinor ?? 0,
           workflow: item.workflow ? { ...item.workflow, steps: item.workflow.steps.map(step => ({ ...step })) } : undefined,
         })).filter(item => item.name);
         if (!serviceItems.length || serviceItems.reduce((sum, item) => sum + item.quantity, 0) > 400) return { ok: false, error: 'Draft plans need 1–400 deliverable slots.' };
@@ -4656,8 +4657,9 @@ export const useStore = create<StoreState>()(
           serviceItems,
           startDate: nextStartDate,
           billingDay: nextBillingDay,
-          discountValue: Math.max(0, Math.trunc(data.discountValue ?? plan.discountValue)),
-          taxRateBps: Math.min(10_000, Math.max(0, Math.trunc(data.taxRateBps ?? plan.taxRateBps))),
+          discountType: mayEditPrices ? data.discountType ?? plan.discountType : plan.discountType,
+          discountValue: mayEditPrices ? Math.max(0, Math.trunc(data.discountValue ?? plan.discountValue)) : plan.discountValue,
+          taxRateBps: mayEditPrices ? Math.min(10_000, Math.max(0, Math.trunc(data.taxRateBps ?? plan.taxRateBps))) : plan.taxRateBps,
           contractEndDate: nextContractEnd,
           updatedAt: now,
         };
