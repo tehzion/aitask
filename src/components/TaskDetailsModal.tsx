@@ -657,8 +657,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
         {(mutationError || pendingResolution || isDeletingTask) && (
           <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
-            <p><SystemMessage message={mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
-            {pendingResolution && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('The change was not saved. Task details may show the attempted change until you restore saved data.')}</p>}
+            <p><SystemMessage message={mutationError === 'You do not have permission to make this change.' && backend.errorCode === 'FORBIDDEN' ? t('This change could not be saved because access was denied.') : mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
+            {pendingResolution && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('The task shown may include your unsaved change.')}</p>}
             {(pendingResolution || isDeletingTask) && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {canRetrySave(backend) && <button
@@ -681,7 +681,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </button>
               </div>
             )}
-            {(pendingResolution || isDeletingTask) && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('Restore saved data, correct the rejected change or check your access, then save again.')}</p>}
+            {(pendingResolution || isDeletingTask) && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('To continue, select Restore saved data. This discards pending changes and reloads the latest saved data. Try again; if it still fails, contact your project manager.')}</p>}
           </div>
         )}
 

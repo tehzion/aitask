@@ -70,7 +70,7 @@ test('rejected delegation explains the attempted assignment and restores the sav
   });
   await dialog.getByRole('combobox', { name: 'Choose a team member' }).selectOption('audit-editor');
   await dialog.getByRole('button', { name: 'Assign Task', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('The change was not saved. Task details may show the attempted change until you restore saved data.');
+  await expect(dialog.getByRole('alert')).toContainText('The task shown may include your unsaved change.');
   await dialog.getByRole('button', { name: 'Restore saved data' }).click();
   await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(item => item.id === 'hod-assigned')?.assignedTo)).toBe('audit-hod');
 });

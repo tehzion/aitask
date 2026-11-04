@@ -422,8 +422,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         )}
         {(error || pendingResolution) && (
           <div role="alert" aria-live="assertive" className="rounded-control bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">
-            <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
-            {pendingSave?.rejected && <p className="mt-2">{t('The change was not saved. Task details may show the attempted change until you restore saved data.')}</p>}
+            <p><SystemMessage message={error === 'You do not have permission to make this change.' && backend.errorCode === 'FORBIDDEN' ? t('This change could not be saved because access was denied.') : error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
+            {pendingSave?.rejected && <p className="mt-2">{t('The task shown may include your unsaved change.')}</p>}
             {pendingResolution && <BackendFreshness compact hideBackendError={Boolean(error && error === backend.error)} className="mt-3" onRetry={async () => { const submitted = pendingSaveRef.current; if (submitted && !isSaving) await performSave(submitted, true); else await useStore.getState().retryPendingSave(); }} onDiscard={pendingSave ? () => requestExit(() => undefined) : undefined} />}
             {pendingSave?.failed && !pendingSave.rejected && !pendingResolution && <Button variant="secondary" className="mt-3" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button>}
           </div>

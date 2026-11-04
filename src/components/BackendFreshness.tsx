@@ -153,7 +153,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
       )}
       {backend.error && !hideBackendError && <p className="basis-full text-sm text-red-700" role="alert"><SystemMessage message={backend.error} /></p>}
       {actionError && actionError !== backend.error && <p className="basis-full text-sm text-red-700" role="alert"><SystemMessage message={actionError} /></p>}
-      {needsResolution && !canRetrySave(backend) && <p className="basis-full text-sm text-muted">{t('Restore saved data, correct the rejected change or check your access, then save again.')}</p>}
+      {needsResolution && !canRetrySave(backend) && <p className="basis-full text-sm text-muted">{t('To continue, select Restore saved data. This discards pending changes and reloads the latest saved data. Try again; if it still fails, contact your project manager.')}</p>}
       {!compact && backend.conflict && (
         <span className="basis-full text-xs text-amber-700">
           {t('The saved record changed elsewhere. Review it before retrying.')}

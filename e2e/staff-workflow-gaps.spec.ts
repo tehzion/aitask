@@ -32,7 +32,8 @@ test('a rejected work action shows one error and does not claim it is awaiting c
   });
   const sheet = page.getByRole('dialog', { name: title });
   await sheet.getByRole('button', { name: 'Accept assignment' }).click();
-  await expect(sheet.getByText('You do not have permission to make this change.', { exact: true })).toHaveCount(1);
+  await expect(sheet.getByText('This change could not be saved because access was denied.', { exact: true })).toHaveCount(1);
+  await expect(sheet.getByText('To continue, select Restore saved data. This discards pending changes and reloads the latest saved data. Try again; if it still fails, contact your project manager.', { exact: true })).toBeVisible();
   await expect(sheet.getByText('Awaiting save confirmation', { exact: true })).toHaveCount(0);
   await expect(sheet.getByRole('button', { name: 'Restore saved data' })).toBeVisible();
 });

@@ -7,6 +7,8 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'This change could not be saved because access was denied.': '由于访问被拒绝，此更改未能保存。',
+  'The task shown may include your unsaved change.': '当前显示的任务可能包含您尚未保存的更改。',
   'The change was not saved. Task details may show the attempted change until you restore saved data.': '更改未保存。在恢复已保存数据之前，任务详情可能显示您尝试提交的更改。',
   'Save needs attention': '保存需要处理',
   'Saving the plan change. Please wait for confirmation.': '正在保存方案更改，请等待确认。',
