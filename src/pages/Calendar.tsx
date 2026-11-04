@@ -49,7 +49,7 @@ import {
 import { canCreateTasks, canEditTask as canEditTaskByRole, getVisibleTasks } from '../lib/access';
 import { getHolidaysForDate, HOLIDAY_COLORS, type MalaysiaHoliday } from '../lib/malaysiaHolidays';
 import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
-import { DAYS_IN_WORK_WEEK, getWorkWeekRange } from '../lib/workWeek';
+import { getWorkWeekRange } from '../lib/workWeek';
 import { formatLocalizedDate, formatLocalizedMonth, formatLocalizedWeekdayDate } from '../lib/i18n';
 import {
   filterCalendarTasks,
@@ -65,7 +65,7 @@ import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from '../lib/workspaceSession';
 
-const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 type DragMode = 'move' | 'start' | 'due';
@@ -271,11 +271,11 @@ const Calendar: React.FC = () => {
   const monthStart = startOfMonth(currentDate);
   const monthEnd = endOfMonth(monthStart);
   const firstWeekStart = getWorkWeekRange(viewMode === 'month' ? monthStart : currentDate).start;
-  const lastWeekEnd = getWorkWeekRange(viewMode === 'month' ? monthEnd : currentDate).end;
+  const lastWeekEnd = addDays(getWorkWeekRange(viewMode === 'month' ? monthEnd : currentDate).start, 6);
   const maxVisibleLanes = viewMode === 'month' ? 3 : 6;
   const weeks = [];
   for (let weekStart = firstWeekStart; !isAfter(weekStart, lastWeekEnd); weekStart = addDays(weekStart, 7)) {
-    const weekDays = Array.from({ length: DAYS_IN_WORK_WEEK }, (_, index) => addDays(weekStart, index));
+    const weekDays = Array.from({ length: WEEKDAYS.length }, (_, index) => addDays(weekStart, index));
     weeks.push({
       days: weekDays,
       layout: buildCalendarWeekLayout(tasks, weekStart, maxVisibleLanes),
@@ -290,26 +290,18 @@ const Calendar: React.FC = () => {
   const getPeriodLabel = () => viewMode === 'month'
     ? formatLocalizedMonth(currentDate, locale)
     : `${formatLocalizedDate(firstWeekStart, locale)} – ${formatLocalizedDate(lastWeekEnd, locale)}`;
-  const shiftWorkday = (day: Date, offset: number) => {
-    if (Math.abs(offset) === DAYS_IN_WORK_WEEK) {
-      return addDays(day, offset + (offset > 0 ? 1 : -1));
-    }
-    const candidate = addDays(day, offset);
-    if (candidate.getDay() === 0) return addDays(candidate, offset < 0 ? -1 : 1);
-    return candidate;
-  };
   const focusDateButton = (day: Date) => {
     const nextDateKey = format(day, 'yyyy-MM-dd');
     window.requestAnimationFrame(() => dateButtonRefs.current[nextDateKey]?.focus());
   };
   const handleDateKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>, day: Date) => {
     let nextDate: Date | null = null;
-    if (event.key === 'ArrowLeft') nextDate = shiftWorkday(day, -1);
-    if (event.key === 'ArrowRight') nextDate = shiftWorkday(day, 1);
-    if (event.key === 'ArrowUp') nextDate = shiftWorkday(day, -DAYS_IN_WORK_WEEK);
-    if (event.key === 'ArrowDown') nextDate = shiftWorkday(day, DAYS_IN_WORK_WEEK);
+    if (event.key === 'ArrowLeft') nextDate = addDays(day, -1);
+    if (event.key === 'ArrowRight') nextDate = addDays(day, 1);
+    if (event.key === 'ArrowUp') nextDate = addDays(day, -7);
+    if (event.key === 'ArrowDown') nextDate = addDays(day, 7);
     if (event.key === 'Home') nextDate = getWorkWeekRange(day).start;
-    if (event.key === 'End') nextDate = getWorkWeekRange(day).end;
+    if (event.key === 'End') nextDate = addDays(getWorkWeekRange(day).start, 6);
     if (!nextDate) return;
     event.preventDefault();
     setSelectedDate(nextDate);
@@ -884,10 +876,10 @@ const Calendar: React.FC = () => {
               </div>
             )}
           </div>
-          <div className="grid grid-cols-6 border-b border-line bg-inset">
+          <div className="grid grid-cols-7 border-b border-line bg-inset">
             {WEEKDAYS.map(day => (
               <div key={day} className="py-2.5 text-center text-xs font-semibold text-muted">
-                <span className="sm:hidden">{t(day).slice(0, 1)}</span>
+                <span className="sm:hidden">{locale === 'zh' ? t(day).slice(-1) : t(day).slice(0, 1)}</span>
                 <span className="hidden sm:inline">{t(day)}</span>
               </div>
             ))}
@@ -905,7 +897,7 @@ const Calendar: React.FC = () => {
                   viewMode === 'month' ? 'h-24 md:h-[154px]' : 'h-28 md:h-[230px]',
                 )}
               >
-                <div className="absolute inset-0 grid grid-cols-6 divide-x divide-line">
+                <div className="absolute inset-0 grid grid-cols-7 divide-x divide-line">
                   {week.days.map(day => {
                     const dayTasks = getTasksForDay(day);
                     const dayHolidays = getHolidaysForDay(day);
@@ -1030,7 +1022,7 @@ const Calendar: React.FC = () => {
                 </div>
 
                 <div
-                  className="pointer-events-none absolute inset-x-0 top-14 hidden grid-cols-6 md:grid"
+                  className="pointer-events-none absolute inset-x-0 top-14 hidden grid-cols-7 md:grid"
                   style={{ gridAutoRows: '24px', rowGap: '3px' }}
                 >
                   {week.layout.segments.filter(segment => !segment.hidden).map(segment => {

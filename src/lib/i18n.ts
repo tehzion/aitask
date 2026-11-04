@@ -7,6 +7,7 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'Mon': '周一', 'Tue': '周二', 'Wed': '周三', 'Thu': '周四', 'Fri': '周五', 'Sat': '周六', 'Sun': '周日',
   'The submitted plan change is no longer available. Your draft has been kept. Review and save again.': '之前提交的方案更改已不存在。您的草稿已保留，请检查后重新保存。',
   'Synchronization restored. Review and save your draft.': '同步已恢复。请检查并保存您的草稿。',
   'An earlier change is still waiting to sync. Retry it below, then save this draft. Restore saved data discards the pending changes.': '之前的更改仍在等待同步。请先在下方重试，再保存此草稿。“恢复已保存数据”会放弃待同步的更改。',

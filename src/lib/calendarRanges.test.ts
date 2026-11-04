@@ -85,9 +85,9 @@ describe('calendar task ranges', () => {
 
     expect(firstWeek.segments[0]).toMatchObject({
       startDate: '2026-07-10',
-      endDate: '2026-07-11',
+      endDate: '2026-07-12',
       startColumn: 5,
-      spanDays: 2,
+      spanDays: 3,
       isActualStart: true,
       isActualEnd: false,
       continuesAfter: true,
@@ -103,14 +103,15 @@ describe('calendar task ranges', () => {
     });
   });
 
-  it('excludes Sunday-only ranges and clips full weeks to Saturday', () => {
+  it('includes Sunday-only ranges and full seven-day weeks', () => {
     const layout = buildCalendarWeekLayout([
       { id: 'sunday', startDate: '2026-10-11', dueDate: '2026-10-11' },
       { id: 'full', startDate: '2026-10-05', dueDate: '2026-10-11' },
     ], parseISO('2026-10-05'), 3);
-    expect(layout.weekEnd).toBe('2026-10-10');
-    expect(layout.segments).toHaveLength(1);
-    expect(layout.segments[0]).toMatchObject({ taskId: 'full', startColumn: 1, spanDays: 6, continuesAfter: true, isActualEnd: false });
+    expect(layout.weekEnd).toBe('2026-10-11');
+    expect(layout.segments).toHaveLength(2);
+    expect(layout.segments[0]).toMatchObject({ taskId: 'full', startColumn: 1, spanDays: 7, continuesAfter: false, isActualEnd: true });
+    expect(layout.segments[1]).toMatchObject({ taskId: 'sunday', startColumn: 7, spanDays: 1 });
   });
 
   it('assigns stable non-overlapping lanes and reports hidden ranges by day', () => {
