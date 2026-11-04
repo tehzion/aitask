@@ -9,7 +9,7 @@ import ModalShell from './ModalShell';
 import { Button } from './ui';
 import { inputBase } from './uiTokens';
 import type { ServiceCycle } from '../types';
-import { cyclePaymentSummary } from '../lib/cyclePayments';
+import { cyclePaymentSummary, halfPaymentMinor } from '../lib/cyclePayments';
 import { getBillingToday } from '../lib/monthlyRecords';
 import { formatMoney } from '../lib/serviceManagement';
 
@@ -33,7 +33,7 @@ export default function CyclePaymentControl({ cycle }: { cycle: ServiceCycle }) 
   const money = (value: number) => formatMoney(value, 'MYR', locale);
   if (!canSee) return null;
   const choose = (half: boolean) => {
-    setAmount(((half ? Math.round(summary.total / 2) : summary.remaining) / 100).toFixed(2));
+    setAmount(((half ? halfPaymentMinor(summary) : summary.remaining) / 100).toFixed(2));
     setDate(getBillingToday()); setVoidId(''); setReason(''); setError(''); setOpen(true);
   };
   const save = async (retry = false) => {

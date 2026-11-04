@@ -2,6 +2,7 @@ import ConfirmDialog from './ConfirmDialog';
 import { Button } from './ui';
 import { useToastStore } from '../store/useToastStore';
 import { msg } from '../lib/messages';
+import { projectDeletionBlocker } from '../lib/projectManagement';
 import SystemMessage from './SystemMessage';
 import { getTodayInputDate } from '../lib/utils';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
@@ -265,7 +266,14 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         ? await useStore.getState().retryPendingSave('project.delete')
         : await useStore.getState().commitPendingMutation('project.delete');
       if (!isCurrent()) return;
-      if (!saved.ok) { setDeleteError(saved.error || 'Unable to delete this project.'); return; }
+      if (!saved.ok) {
+        // The server rejects the delete when the project still links tasks this
+        // account cannot see, so their unlink never reached the save.
+        setDeleteError(saved.code === 'VALIDATION'
+          ? 'This project still has tasks you cannot see. Ask its Project Manager or Boss Koo to delete it.'
+          : saved.error || 'Unable to delete this project.');
+        return;
+      }
       if (useStore.getState().projects.some(item => item.id === project.id)) {
         setDeletePending(false);
         setDeleteError('The project was not deleted. Review it before trying again.');
@@ -727,7 +735,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         labelledBy={deleteTitleId}
         title={t('Delete project')}
         description={`${t('Delete “{projectName}”? This cannot be undone. Existing tasks will be kept and unlinked from this project.').replace('{projectName}', project.projectName)}${formEdited ? ` ${t('Unsaved project edits will be discarded.')}` : ''}`}
-        error={deleteError}
+        error={deleteError || (deletePending ? '' : projectDeletionBlocker(currentUser, project, tasks, isHodUser(currentUser, rolePermissions)) || '')}
         confirmLabel={deletePending ? 'Retry deleting project' : 'Delete project'}
         busy={isSubmitting}
         onConfirm={handleDelete}

@@ -15,3 +15,8 @@ export const cyclePaymentSummary = (cycle: ServiceCycle, snapshots: ServicePrici
   const received = active.reduce((sum, item) => sum + item.amountMinor, 0);
   return { receipts, total, received, remaining: Math.max(0, total - received), status: !active.length ? 'Not recorded' : received >= total ? 'Full payment' : 'Half payment' };
 };
+// Half of the monthly total, but never more than is still owed, so a cycle that
+// already has a partial receipt does not prefill an amount the server rejects.
+export const halfPaymentMinor = (summary: { total: number; remaining: number }) => (
+  Math.min(Math.round(summary.total / 2), summary.remaining)
+);

@@ -55,7 +55,7 @@ import {
 } from '../mock/localServiceDemo';
 import { canLoginWithSeedAccount, classifyLoginFailure, DEFAULT_USER_PASSWORD, loginFailure, shouldShowDemoLogin } from '../lib/auth';
 import { msg, type MessageDescriptor } from '../lib/messages';
-import { canManageProjectLifecycle, getEffectiveTaskApprovalMode, getProjectClosureWarnings, hasProjectClosureWarnings, isClosedProject, makeMilestoneId } from '../lib/projectManagement';
+import { canManageProjectLifecycle, getEffectiveTaskApprovalMode, getProjectClosureWarnings, hasProjectClosureWarnings, isClosedProject, makeMilestoneId, projectDeletionBlocker } from '../lib/projectManagement';
 import { clearLocalUserPassword, getLocalUserPassword, setLocalUserPassword, verifyLocalUserPassword } from '../lib/localCredentials';
 import { getBackendStatus, shouldUseSupabase } from '../lib/backend';
 import type { PersistedWorkspaceState, SnapshotResult } from '../lib/supabaseSnapshot';
@@ -3965,16 +3965,8 @@ export const useStore = create<StoreState>()(
         if (!currentUser || !project || !canDeleteProject(currentUser, project, state.rolePermissions)) {
           return { ok: false, error: 'You do not have permission to delete this project.' };
         }
-        const linkedTasks = state.tasks.filter(task => task.projectId === projectId);
-        const canDetachLinkedTasks = isBossKoo(currentUser)
-          || currentUser.role === 'Project Manager'
-          || linkedTasks.every(task => task.assignedTo === currentUser.id);
-        if (!canDetachLinkedTasks) {
-          return {
-            ok: false,
-            error: 'Only a Project Manager or Boss Koo can delete this project while it contains tasks assigned to other staff.',
-          };
-        }
+        const blocker = projectDeletionBlocker(currentUser, project, state.tasks, isHodUser(currentUser, state.rolePermissions));
+        if (blocker) return { ok: false, error: blocker };
 
         set(current => ({
           projects: current.projects.filter(item => item.id !== projectId),
