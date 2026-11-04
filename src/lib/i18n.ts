@@ -7,6 +7,12 @@ export const APP_LOCALE_STORAGE_KEY = 'aitask:locale';
  * and other user-authored content are deliberately never translated.
  */
 const zhCopy: Record<string, string> = {
+  'Save needs attention': '保存需要处理',
+  'Saving the plan change. Please wait for confirmation.': '正在保存方案更改，请等待确认。',
+  'The save needs attention. Use the recovery options below before reviewing or scheduling.': '保存需要处理。请先使用下方恢复选项，再检查或安排。',
+  'This plan is scheduled to apply on the date shown above. Editing it returns it to draft; review and schedule it again to apply the changes.': '此方案已安排在上述日期生效。编辑后会返回草稿；请再次检查并安排，修改才会生效。',
+  'You have unsaved edits. Save the draft, then select Review changes and Schedule for the date shown above.': '您有未保存的修改。请先保存草稿，再选择“检查更改”，然后安排在上述日期生效。',
+  'Saved as a draft, but not scheduled. Select Review changes, then Schedule for the date shown above. Until then, these changes will not apply.': '已保存为草稿，但尚未安排生效。请选择“检查更改”，然后安排在上述日期生效。在此之前，这些更改不会生效。',
   'Mon': '周一', 'Tue': '周二', 'Wed': '周三', 'Thu': '周四', 'Fri': '周五', 'Sat': '周六', 'Sun': '周日',
   'The submitted plan change is no longer available. Your draft has been kept. Review and save again.': '之前提交的方案更改已不存在。您的草稿已保留，请检查后重新保存。',
   'Synchronization restored. Review and save your draft.': '同步已恢复。请检查并保存您的草稿。',

@@ -222,9 +222,9 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
 
   return <section id="next-month-plan" aria-label={t('Next month’s plan')} className={cn(cardBase, 'overflow-hidden')}>
     <header className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-inset px-5 py-4">
-      <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-ink">{t('Next month’s plan')}</h2><Badge tone={scheduled ? 'emerald' : 'amber'}>{t(scheduled ? 'Scheduled' : 'Draft')}</Badge></div>
+      <div><div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold text-ink">{t('Next month’s plan')}</h2><Badge tone={scheduled ? 'emerald' : 'amber'}>{t(busy ? 'Saving…' : hasPending ? 'Save needs attention' : scheduled ? 'Scheduled' : 'Draft')}</Badge></div>
         <p className="mt-2 text-sm leading-6 text-muted">{t(scheduled ? 'Scheduled for' : 'Proposed start')}: {dateLabel(scheduled ? plan.effectiveFromCycleStart! : effectiveDate)} · {t('Revision')} {plan.revision}</p>
-        <p className="mt-1 max-w-prose text-sm leading-6 text-muted">{t(scheduled ? 'This saved plan will apply at the next billing boundary. Editing returns it to draft until you schedule it again.' : 'Save a draft, review the changes, then schedule it. Existing monthly records keep their scope and prices.')}</p>
+        <p className="mt-1 max-w-prose text-sm leading-6 text-muted">{t(busy ? 'Saving the plan change. Please wait for confirmation.' : hasPending ? 'The save needs attention. Use the recovery options below before reviewing or scheduling.' : scheduled ? 'This plan is scheduled to apply on the date shown above. Editing it returns it to draft; review and schedule it again to apply the changes.' : dirty ? 'You have unsaved edits. Save the draft, then select Review changes and Schedule for the date shown above.' : 'Saved as a draft, but not scheduled. Select Review changes, then Schedule for the date shown above. Until then, these changes will not apply.')}</p>
       </div>
       {scheduled && <Button variant="secondary" disabled={busy || blocked || hasPending} onClick={() => void commit('draft', () => store.returnClientPlanRevisionToDraft(plan.id, plan.version))}>{t(busy ? 'Saving…' : 'Edit scheduled plan')}</Button>}
     </header>
