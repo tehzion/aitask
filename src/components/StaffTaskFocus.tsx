@@ -155,7 +155,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(liveTask, visibleTasks);
   const guidedAction = getStaffGuidedAction(liveTask, taskStatuses, currentUser, rolePermissions, { users, clients, projects });
   const statusOptions = getTaskStatusControls(currentUser, liveTask, taskStatuses, rolePermissions, { users, clients, projects }, { tasks, cycles: serviceCycles, deliverables });
-  const guidedActionError = statusOptions.find(option => option.status === guidedAction.targetStatus)?.disabledReason;
+  const guidedActionError = statusOptions.find(option => option.status === guidedAction.targetStatus)?.disabledReason
+    || (guidedAction.targetStatus === 'In Progress' && !liveTask.assignedTo?.trim() ? 'Assign a responsible person before starting work.' : undefined);
   const taskProgress = getTaskProgress(liveTask, users);
   const workflowKind = getWorkflowStepKind(liveTask, serviceCycles, deliverables);
   const transitionError = (status: TaskStatus) => workflowTransitionError(liveTask, { ...liveTask, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, serviceCycles, deliverables, rolePermissions, { users, clients, projects });

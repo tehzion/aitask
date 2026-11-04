@@ -135,6 +135,9 @@ export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[], act
   if (task.status === 'Waiting Approval') {
     return { kind: 'waiting', label: 'Waiting for review', disabled: true };
   }
+  if (['Pending', 'Revision'].includes(task.status) && !task.assignedTo?.trim() && taskStatuses.includes('In Progress')) {
+    return { kind: 'advance', label: task.status === 'Revision' || task.revisionCount > 0 ? 'Start revision' : 'Start work', targetStatus: 'In Progress', disabled: true };
+  }
   if (['Pending', 'Revision'].includes(task.status) && options.includes('In Progress')) {
     return {
       kind: 'advance',
