@@ -5,7 +5,7 @@ import type { ClientServicePlan, ServiceItem } from '../types';
 import { mergeDraft, type DraftConflict } from '../lib/draftMerge';
 import { readRecoveredDraft, writeRecoveredDraft, removeRecoveredDraft } from '../lib/draftRecovery';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { calculatePlanTotalMinor, formatMoney, getPlanContractStartDate, nextBillingDate, snapshotWorkflow } from '../lib/serviceManagement';
+import { calculatePlanTotalMinor, formatMoney, getPlanContractStartDate, nextBillingDate, nextRevisionBoundary, snapshotWorkflow } from '../lib/serviceManagement';
 import { getBillingToday, validateRevisionItems } from '../lib/monthlyRecords';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { canViewServicePrices } from '../lib/access';
@@ -54,7 +54,12 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   const canRetry = !store.backend.upgradeRequired && store.backend.status !== 'upgrade_required'
     && !store.backend.isRestoring && canRetrySave(store.backend);
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);
-  const effectiveDate = plan.effectiveFromCycleStart || source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay);
+  // An ended plan is reactivated from the draft's own boundary; any other
+  // revision is scheduled for the source plan's upcoming boundary, which moves
+  // on after each generated cycle while the draft's saved date does not.
+  const effectiveDate = source.status === 'Ended'
+    ? plan.effectiveFromCycleStart || source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay)
+    : nextRevisionBoundary(source, getBillingToday());
   const contractStartDate = getPlanContractStartDate(plan, store.clientPlans);
   const dateLabel = (value: string) => formatLocalizedDate(parseOptionalDate(value)!, locale);
   const totals = calculatePlanTotalMinor(draft.serviceItems, draft.discountType, draft.discountValue, draft.taxRateBps);

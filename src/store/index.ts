@@ -161,6 +161,7 @@ import {
   makeCycleRecords,
   makePricingSnapshot,
   nextBillingDate,
+  nextRevisionBoundary,
   resolveDeliverableStatus,
   canSetDeliverableStatus,
   getPlanContractStartDate,
@@ -4599,8 +4600,8 @@ export const useStore = create<StoreState>()(
         if (expectedVersion !== undefined && plan.version !== expectedVersion) return { ok: false, error: 'This revision changed elsewhere. Review the saved revision before saving.' };
         const source = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
         if (!source || source.status !== 'Active') return { ok: false, error: 'Resume the active plan before scheduling a revision.' };
-        const next = source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay);
-        if (next <= getBillingToday() || next !== effectiveDate) return { ok: false, error: 'The billing date changed. Refresh and review the next cycle before scheduling.' };
+        const next = nextRevisionBoundary(source, getBillingToday());
+        if (next !== effectiveDate) return { ok: false, error: 'The billing date changed. Refresh and review the next cycle before scheduling.' };
         const error = validateRevisionItems(plan.serviceItems);
         if (error) return { ok: false, error };
         set({ clientPlans: state.clientPlans.map(item => item.id === plan.id ? { ...item, revisionScheduleStatus: 'scheduled', startDate: next, effectiveFromCycleStart: next, updatedAt: new Date().toISOString() } : item) });

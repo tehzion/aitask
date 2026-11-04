@@ -2,6 +2,7 @@ import { defaultRolePermissions } from '../lib/access';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task, User } from '../types';
 import { useStore } from './index';
+import { nextRevisionBoundary } from '../lib/serviceManagement';
 
 const initial = useStore.getState();
 const pm: User = { id: 'monthly-pm', name: 'Monthly PM', role: 'Project Manager', department: 'Management', departments: ['Management'] };
@@ -73,6 +74,21 @@ describe('monthly service cycle rollover', () => {
     expect(useStore.getState().serviceCycles[0]).toEqual(oldCycle);
     expect(useStore.getState().serviceCycles.slice(1).map(item => item.planId)).toEqual([revision.planId, revision.planId]);
     expect(useStore.getState().deliverables).toHaveLength(8);
+  });
+
+  it('schedules a draft created before a cycle rolled over for the next upcoming boundary', () => {
+    const id = createPlan();
+    useStore.getState().activateClientPlan(id);
+    const revision = useStore.getState().createClientPlanRevision(id);
+    expect(useStore.getState().clientPlans.find(item => item.id === revision.planId)?.effectiveFromCycleStart).toBe('2026-10-09');
+    setDay(2026, 11, 4);
+    useStore.getState().generateDueLocalServiceCycles();
+    const source = useStore.getState().clientPlans.find(item => item.id === id)!;
+    expect(source.nextCycleStart).toBe('2026-11-09');
+    expect(nextRevisionBoundary(source, '2026-11-04')).toBe('2026-11-09');
+    expect(useStore.getState().scheduleClientPlanRevision(revision.planId!, '2026-10-09').ok).toBe(false);
+    expect(useStore.getState().scheduleClientPlanRevision(revision.planId!, '2026-11-09').ok).toBe(true);
+    expect(useStore.getState().clientPlans.find(item => item.id === revision.planId)).toMatchObject({ revisionScheduleStatus: 'scheduled', effectiveFromCycleStart: '2026-11-09' });
   });
 
   it.each(['Draft', 'Paused', 'Ended'] as const)('does not renew a %s plan', status => {

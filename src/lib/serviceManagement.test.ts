@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClientServicePlan, Deliverable, ServiceItem, Task } from '../types';
-import { applyPricingSnapshot, calculatePlanTotalMinor, clampBillingDate, cyclePeriodEnd, getCycleServiceProgress, makeCycleRecords, makePricingSnapshot, nextBillingDate, resolveDeliverableStatus, SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow, stripServiceItemPrices } from './serviceManagement';
+import { applyPricingSnapshot, calculatePlanTotalMinor, clampBillingDate, cyclePeriodEnd, getCycleServiceProgress, makeCycleRecords, makePricingSnapshot, nextBillingDate, nextRevisionBoundary, resolveDeliverableStatus, SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow, stripServiceItemPrices } from './serviceManagement';
 
 const items: ServiceItem[] = [{ id: 'item-1', name: 'Video', platforms: ['TikTok'], unit: 'video', quantity: 3, unitPriceMinor: 12500 }];
 
@@ -105,5 +105,14 @@ describe('billing-day transition boundaries', () => {
     expect(nextBillingDate(start, Number(day))).toBe(following);
     expect(cyclePeriodEnd(start, Number(day))).toBe(end);
     expect(end >= start).toBe(true);
+  });
+});
+
+describe('nextRevisionBoundary', () => {
+  it('uses the upcoming cycle start, or the next billing day once that start has passed', () => {
+    expect(nextRevisionBoundary({ nextCycleStart: '2026-11-16', billingDay: 16 }, '2026-11-04')).toBe('2026-11-16');
+    expect(nextRevisionBoundary({ nextCycleStart: '2026-10-16', billingDay: 16 }, '2026-11-04')).toBe('2026-11-16');
+    expect(nextRevisionBoundary({ nextCycleStart: '2026-11-04', billingDay: 4 }, '2026-11-04')).toBe('2026-12-04');
+    expect(nextRevisionBoundary({ billingDay: 31 }, '2026-11-04')).toBe('2026-11-30');
   });
 });
