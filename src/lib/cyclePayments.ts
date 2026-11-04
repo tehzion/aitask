@@ -13,7 +13,7 @@ export const cyclePaymentSummary = (cycle: ServiceCycle, snapshots: ServicePrici
   const total = cycleChargeMinor(cycle, snapshots);
   const active = receipts.filter(item => !item.voidedAt);
   const received = active.reduce((sum, item) => sum + item.amountMinor, 0);
-  return { receipts, total, received, remaining: Math.max(0, total - received), status: !active.length ? 'Not recorded' : received >= total ? 'Full payment' : 'Half payment' };
+  return { receipts, total, received, remaining: Math.max(0, total - received), status: !active.length ? 'Not recorded' : received >= total ? 'Full payment' : 'Partly paid' };
 };
 // Half of the monthly total, but never more than is still owed, so a cycle that
 // already has a partial receipt does not prefill an amount the server rejects.

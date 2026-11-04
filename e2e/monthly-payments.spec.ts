@@ -14,7 +14,7 @@ for (const locale of ['en', 'zh']) test(`monthly payment records and revision de
     const created = useStore.getState().createClientWithPlan({ clientName: 'Receipt Co', planName: 'Monthly Design', origin: 'custom', serviceItems: [{ id: 'fee', name: 'Design', platforms: [], unit: 'month', quantity: 1, unitPriceMinor: 10000 }], startDate: '2026-09-01', billingDay: 1, discountType: 'percent', discountValue: 1000, taxRateBps: 600 });
     useStore.getState().activateClientPlan(created.planId!);
     useStore.getState().generateDueLocalServiceCycles();
-    return { clientId: created.clientId!, planId: created.planId! };
+    return { clientId: created.clientId!, planId: created.planId!, bossId: boss.id, bossName: boss.name };
   });
   await page.goto(`/clients/${seed.clientId}`);
   const zh = locale === 'zh';
@@ -30,6 +30,12 @@ for (const locale of ['en', 'zh']) test(`monthly payment records and revision de
   await dialog.getByLabel(zh ? '金额（马币）' : 'Amount (MYR)').fill('20.00');
   await dialog.getByRole('button', { name: zh ? '记录付款' : 'Record payment', exact: true }).click();
   await expect(dialog).toContainText('20.00');
+  await expect(dialog).toContainText(`${zh ? '记录人' : 'Recorded by'} ${seed.bossName}`);
+  await expect(dialog).toContainText(zh ? '2026年10月15日' : '15 Oct 2026');
+  await expect(dialog).not.toContainText(seed.bossId);
+  await dialog.getByRole('button', { name: zh ? '关闭' : 'Close', exact: true }).click();
+  await expect(row).toContainText(zh ? '部分已付' : 'Partly paid');
+  await row.getByRole('button', { name: zh ? '付款记录' : 'Payment records', exact: true }).click();
   await dialog.getByRole('button', { name: zh ? '全额付款' : 'Full payment', exact: true }).click();
   await expect(dialog.getByLabel(zh ? '金额（马币）' : 'Amount (MYR)')).toHaveValue('75.40');
   await dialog.getByRole('button', { name: zh ? '记录付款' : 'Record payment', exact: true }).click();

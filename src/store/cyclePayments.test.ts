@@ -20,7 +20,7 @@ describe('monthly receipts', () => {
   it.each([[4770, 4770], [2000, 7540]])('preserves instalments %s + %s', (first, second) => {
     const store = useStore.getState();
     expect(store.recordServiceCyclePayment('cycle', first, '2026-01-10').ok).toBe(true);
-    expect(summary().status).toBe('Half payment');
+    expect(summary().status).toBe('Partly paid');
     expect(store.recordServiceCyclePayment('cycle', second, '2026-01-15').ok).toBe(true);
     expect(summary()).toMatchObject({ status: 'Full payment', received: 9540 });
     expect(summary().receipts.map(item => item.amountMinor)).toEqual([first, second]);

@@ -12,6 +12,7 @@ import type { ServiceCycle } from '../types';
 import { cyclePaymentSummary, halfPaymentMinor } from '../lib/cyclePayments';
 import { getBillingToday } from '../lib/monthlyRecords';
 import { formatMoney } from '../lib/serviceManagement';
+import { formatLocalizedDate, formatLocalizedDateTime } from '../lib/i18n';
 
 export default function CyclePaymentControl({ cycle }: { cycle: ServiceCycle }) {
   const store = useStore();
@@ -31,6 +32,12 @@ export default function CyclePaymentControl({ cycle }: { cycle: ServiceCycle }) 
   const summary = cyclePaymentSummary(cycle, store.servicePricingSnapshots, store.serviceCyclePayments);
   const blocked = isPendingMutationResolution(store.backend);
   const money = (value: number) => formatMoney(value, 'MYR', locale);
+  const day = (value: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    return match ? formatLocalizedDate(new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3])), locale) : value;
+  };
+  const stamp = (value?: string) => (value ? formatLocalizedDateTime(new Date(value), locale) || value : '');
+  const memberName = (id?: string) => store.users.find(user => user.id === id)?.name || t('Team member');
   if (!canSee) return null;
   const choose = (half: boolean) => {
     setAmount(((half ? halfPaymentMinor(summary) : summary.remaining) / 100).toFixed(2));
@@ -63,14 +70,14 @@ export default function CyclePaymentControl({ cycle }: { cycle: ServiceCycle }) 
   };
   return <div className="min-w-48 space-y-1 text-xs">
     <p className="font-medium text-ink">{t(summary.status)}</p>
-    {summary.receipts.filter(item => !item.voidedAt).map(item => <p key={item.id} data-i18n-skip>{money(item.amountMinor)} · {item.paymentDate}</p>)}
+    {summary.receipts.filter(item => !item.voidedAt).map(item => <p key={item.id} data-i18n-skip>{money(item.amountMinor)} · {day(item.paymentDate)}</p>)}
     <p>{t('Total received')}: {money(summary.received)}</p><p>{t('Remaining balance')}: {money(summary.remaining)}</p>
     {canManage && <div className="flex flex-wrap gap-2 pt-1"><Button variant="secondary" disabled={blocked || busy || summary.remaining <= 0} onClick={() => choose(true)}>{t('Half payment')}</Button><Button variant="secondary" disabled={blocked || busy || summary.remaining <= 0} onClick={() => choose(false)}>{t('Full payment')}</Button></div>}
     {(canManage || summary.receipts.length > 0) && <button type="button" className="min-h-9 text-accent underline" onClick={() => setOpen(true)}>{t('Payment records')}</button>}
     {open && <ModalShell labelledBy={titleId} onClose={() => { if (!busy) setOpen(false); }} panelClassName="max-w-lg">
       <div className="p-5"><h2 id={titleId} className="text-lg font-semibold">{t('Payment records')}</h2><p className="mt-2 text-sm" data-i18n-skip>{cycle.periodStart} – {cycle.periodEnd}</p>
         <p className="mt-2 text-sm">{t('Monthly total')}: {money(summary.total)} · {t('Total received')}: {money(summary.received)} · {t('Remaining balance')}: {money(summary.remaining)}</p>
-        <ul className="my-4 divide-y divide-line">{summary.receipts.map(item => <li key={item.id} className="py-3 text-sm"><p data-i18n-skip>{money(item.amountMinor)} · {item.paymentDate}</p><p className="text-xs text-muted" data-i18n-skip>{item.createdBy} · {item.createdAt}</p>{item.voidedAt ? <><p>{t('Voided')}</p><p className="text-xs text-muted" data-i18n-skip>{item.voidReason} · {item.voidedBy} · {item.voidedAt}</p></> : canManage && <Button variant="secondary" disabled={busy || blocked || Boolean(pending.current)} onClick={() => { setVoidId(item.id); setReason(''); }}>{t('Void receipt')}</Button>}</li>)}</ul>
+        <ul className="my-4 divide-y divide-line">{summary.receipts.map(item => <li key={item.id} className="py-3 text-sm"><p data-i18n-skip>{money(item.amountMinor)} · {day(item.paymentDate)}</p><p className="text-xs text-muted">{t('Recorded by')} <span data-i18n-skip>{memberName(item.createdBy)} · {stamp(item.createdAt)}</span></p>{item.voidedAt ? <><p>{t('Voided')}</p><p className="text-xs text-muted">{t('Voided by')} <span data-i18n-skip>{memberName(item.voidedBy)} · {stamp(item.voidedAt)}</span></p>{item.voidReason && <p className="text-xs text-muted" data-i18n-skip>{item.voidReason}</p>}</> : canManage && <Button variant="secondary" disabled={busy || blocked || Boolean(pending.current)} onClick={() => { setVoidId(item.id); setReason(''); }}>{t('Void receipt')}</Button>}</li>)}</ul>
         {canManage && <form onSubmit={event => { event.preventDefault(); void save(); }}><fieldset disabled={busy || blocked || Boolean(pending.current)} className="space-y-3">
           {voidId ? <label className="block text-sm">{t('Reason for voiding')}<input required maxLength={1000} className={inputBase} value={reason} onChange={event => setReason(event.target.value)} /></label> : <><div className="flex gap-2"><Button variant="secondary" disabled={summary.remaining <= 0} onClick={() => choose(true)}>{t('Half payment')}</Button><Button variant="secondary" disabled={summary.remaining <= 0} onClick={() => choose(false)}>{t('Full payment')}</Button></div><label className="block text-sm">{t('Amount (MYR)')}<input required type="number" min="0.01" max={summary.remaining / 100} step="0.01" inputMode="decimal" className={inputBase} value={amount} onChange={event => setAmount(event.target.value)} /></label><label className="block text-sm">{t('Payment date')}<input required type="date" max={getBillingToday()} className={inputBase} value={date} onChange={event => setDate(event.target.value)} /></label></>}
           <Button type="submit" disabled={!voidId && summary.remaining <= 0}>{t(voidId ? 'Void receipt' : 'Record payment')}</Button>{voidId && <Button variant="secondary" onClick={() => setVoidId('')}>{t('Cancel')}</Button>}
