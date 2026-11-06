@@ -27,6 +27,16 @@ const seed = async (page: Page, locale: 'en' | 'zh') => {
   return dialog;
 };
 
+test('HOD accepts assigned work and sends it to review', async ({ page }) => {
+  const dialog = await seed(page, 'en');
+  await dialog.getByRole('button', { name: 'Accept assignment', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === 'hod-status-task')?.workState?.acceptedBy)).toBe('status-hod');
+  await dialog.getByRole('button', { name: 'Send for review', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === 'hod-status-task')?.status)).toBe('Waiting Approval');
+  await page.reload();
+  await expect(page.getByRole('dialog', { name: title }).getByText('Waiting for review', { exact: true }).first()).toBeVisible();
+});
+
 for (const locale of ['en', 'zh'] as const) {
   for (const code of ['FORBIDDEN', 'VALIDATION', 'NOT_FOUND'] as const) {
     test(`HOD ${locale} ${code} status rejection requires restore before a fresh save`, async ({ page }) => {

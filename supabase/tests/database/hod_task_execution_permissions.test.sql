@@ -14,6 +14,11 @@ values
 insert into public.aitask_workspaces(id, name)
 values ('pgtap-hod-execution', 'HOD execution permissions');
 
+insert into auth.users(instance_id, id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at)
+values ('00000000-0000-0000-0000-000000000000', '00000000-0000-0000-0000-000000001307', 'authenticated', 'authenticated', 'pgtap-hod-boss@aitask.local', '', now(), '{}', '{}', now(), now());
+insert into public.aitask_members(id, workspace_id, auth_user_id, name, email, role, department, departments, is_super_admin)
+values ('boss-execution', 'pgtap-hod-execution', '00000000-0000-0000-0000-000000001307', 'Boss', 'pgtap-hod-boss@aitask.local', 'Project Manager', 'Management', array['Management'], true);
+
 insert into public.aitask_members(id, workspace_id, auth_user_id, name, email, role, department, departments, permissions)
 values
   ('hod-execution', 'pgtap-hod-execution', '00000000-0000-0000-0000-000000001301', 'Execution HOD', 'pgtap-hod-execution@aitask.local', 'HOD', 'Video Editor', array['Video Editor'], '{"manageCreatedTasks":true}'),
@@ -60,6 +65,16 @@ values
     'dueDate', '2026-10-30', 'description', 'Other project brief'
   ));
 
+insert into public.aitask_entities(workspace_id, entity_type, entity_id, data) values
+  ('pgtap-hod-execution', 'task', 'hod-accept-task', jsonb_build_object(
+    'id', 'hod-accept-task', 'title', 'HOD acceptance', 'projectId', 'hod-execution-project',
+    'projectName', 'Execution Project', 'clientId', 'execution-client', 'clientName', 'Execution Co',
+    'serviceType', 'Video editing', 'department', 'Video Editor', 'assignedTo', 'hod-execution',
+    'responsibleHodId', 'hod-execution', 'assignmentState', 'pending_hod',
+    'assignedBy', 'pm-execution', 'createdBy', 'pm-execution', 'status', 'In Progress',
+    'isCompleted', false, 'priority', 'Medium', 'workState', '{}'::jsonb,
+    'workHistory', '[]'::jsonb, 'visibility', 'client-visible', 'completionPercentage', 30
+  ));
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001301', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -96,6 +111,36 @@ select ok(not private.aitask_task_assignment_is_valid(
 ), 'HOD cannot route a task from a project outside the HOD project scope');
 
 set local role authenticated;
+select is((public.aitask_execute_command(
+  'pgtap-hod-execution', gen_random_uuid(), 'task.update',
+  jsonb_build_array(
+    jsonb_build_object(
+      'kind', 'entity', 'action', 'update', 'entityType', 'task', 'entityId', 'hod-accept-task',
+      'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_id = 'hod-accept-task'),
+      'data', (select data || jsonb_build_object(
+        'workState', jsonb_build_object('acceptedBy', 'hod-execution', 'acceptedAt', now()),
+        'updatedAt', now(), 'completionPercentage', 40,
+        'workHistory', jsonb_build_array(jsonb_build_object('id', gen_random_uuid(), 'userId', 'hod-execution', 'createdAt', now(), 'fields', jsonb_build_array('acceptedBy')))
+      ) from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_id = 'hod-accept-task')
+    ),
+    jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'notification',
+      'entityId', 'hod-accept-notice', 'expectedVersion', 0,
+      'data', jsonb_build_object('id', 'hod-accept-notice', 'targetUserId', 'pm-execution',
+        'title', 'Task Status Updated', 'message', 'accepted',
+        'route', jsonb_build_object('page', 'tasks', 'entityId', 'hod-accept-task'),
+        'iconType', 'success', 'category', 'status', 'importance', 'informational')
+    ),
+    jsonb_build_object(
+      'kind', 'entity', 'action', 'insert', 'entityType', 'notification',
+      'entityId', 'hod-accept-boss-notice', 'expectedVersion', 0,
+      'data', jsonb_build_object('id', 'hod-accept-boss-notice', 'targetUserId', 'boss-execution',
+        'title', 'Task Status Updated', 'message', 'accepted',
+        'route', jsonb_build_object('page', 'tasks', 'entityId', 'hod-accept-task'),
+        'iconType', 'success', 'category', 'status', 'importance', 'informational')
+    )
+  )
+)->>'ok')::boolean, true, 'HOD accepts own in-progress assignment with PM notification');
 
 select is((public.aitask_execute_command(
   'pgtap-hod-execution', gen_random_uuid(), 'task.update',
