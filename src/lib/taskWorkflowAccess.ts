@@ -325,8 +325,17 @@ export const isAwaitingHodAssignment = (task: Pick<Task, 'assignmentState' | 'as
   task.assignmentState === 'pending_hod' && !task.isCompleted && !['Completed', 'Cancelled'].includes(task.status) && !isHandledByHod(task)
 );
 
-export const getAssignmentStateLabel = (task: Pick<Task, 'assignmentState' | 'assignedTo' | 'responsibleHodId' | 'status' | 'isCompleted'>) => {
+/** A project with no HOD members: the PM assigns its tasks directly. */
+export const projectHasNoHod = (project: Pick<Project, 'hodMemberIds'> | undefined) => (
+  Boolean(project) && (project?.hodMemberIds?.length ?? 0) === 0
+);
+
+export const getAssignmentStateLabel = (
+  task: Pick<Task, 'assignmentState' | 'assignedTo' | 'responsibleHodId' | 'status' | 'isCompleted'>,
+  project?: Pick<Project, 'hodMemberIds'>,
+) => {
   if (task.assignmentState === 'assigned_staff') return 'Assigned to Staff';
+  if (!task.responsibleHodId && projectHasNoHod(project)) return 'PM assigns directly';
   if (task.assignmentState === 'pending_hod') return isHandledByHod(task) ? 'Handled by HOD' : 'Pending HOD Assignment';
   return 'Awaiting HOD';
 };

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Deliverable, ServiceCycle, Task } from '../types';
-import { getCurrentPublishedCycle, getLinkableDeliverables, getUnlinkedOpenTasks, suggestDeliverableForTask } from './deliveryLinks';
-import { getAssignmentStateLabel, isAwaitingHodAssignment, isHandledByHod } from './taskWorkflowAccess';
+import { getCurrentPublishedCycle, getLinkableDeliverables, getTaskDeliverable, getUnlinkedOpenTasks, suggestDeliverableForTask } from './deliveryLinks';
+import { getAssignmentStateLabel, isAwaitingHodAssignment, isHandledByHod, projectHasNoHod } from './taskWorkflowAccess';
 
 const cycle = (id: string, status: ServiceCycle['status'], periodStart: string, periodEnd: string, clientId = 'c1') => (
   { id, clientId, status, periodStart, periodEnd } as ServiceCycle
@@ -90,5 +90,25 @@ describe('team feedback F4: HOD assignment state', () => {
   it('labels the other states as before', () => {
     expect(getAssignmentStateLabel(task('t', { assignmentState: 'assigned_staff' }))).toBe('Assigned to Staff');
     expect(getAssignmentStateLabel(task('t', { assignmentState: 'needs_hod' }))).toBe('Awaiting HOD');
+  });
+});
+
+describe('team feedback F2/F4 leftovers', () => {
+  it('finds the deliverable a task counts toward from either side of the link', () => {
+    const items = [deliverable('d1', 'Posts 1', { taskIds: ['by-list'] }), deliverable('d2', 'Posts 2')];
+    expect(getTaskDeliverable(task('by-field', { deliverableId: 'd2' }), items)?.id).toBe('d2');
+    expect(getTaskDeliverable(task('by-list'), items)?.id).toBe('d1');
+    expect(getTaskDeliverable(task('loose'), items)).toBeUndefined();
+  });
+
+  it('says the PM assigns directly on a project with no HOD', () => {
+    const open = task('t', { assignmentState: 'needs_hod' });
+    expect(projectHasNoHod({ hodMemberIds: [] })).toBe(true);
+    expect(projectHasNoHod({ hodMemberIds: undefined })).toBe(true);
+    expect(projectHasNoHod({ hodMemberIds: ['mabel'] })).toBe(false);
+    expect(projectHasNoHod(undefined)).toBe(false);
+    expect(getAssignmentStateLabel(open, { hodMemberIds: [] })).toBe('PM assigns directly');
+    expect(getAssignmentStateLabel(open, { hodMemberIds: ['mabel'] })).toBe('Awaiting HOD');
+    expect(getAssignmentStateLabel(task('t', { assignmentState: 'assigned_staff' }), { hodMemberIds: [] })).toBe('Assigned to Staff');
   });
 });

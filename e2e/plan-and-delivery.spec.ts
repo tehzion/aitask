@@ -133,6 +133,8 @@ test('a task added from a project counts toward the matching deliverable this mo
     return { deliverable: state.deliverables.find(item => item.id === task.deliverableId)?.title, cycle: state.serviceCycles.find(item => item.id === task.serviceCycleId)?.status };
   });
   expect(linked).toEqual({ deliverable: 'Social Posts 1', cycle: 'Published' });
+  const countsTowardField = page.locator('div', { has: page.getByText('Counts toward', { exact: true }) }).last();
+  await expect(countsTowardField).toContainText('Social Posts 1');
 });
 
 test('an unlinked task can be linked to a deliverable from the month block', async ({ page }) => {

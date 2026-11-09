@@ -534,10 +534,11 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                   ))}
                   {!users.some(user => isHodUser(user, rolePermissions)) && <p className="px-2 py-1 text-xs text-slate-500">{t('No HOD accounts available.')}</p>}
                 </div>
+                {hodMemberIds.length === 0 && <p className="mt-2 text-xs leading-5 text-slate-500">{t('No HOD on this project: the PM assigns tasks directly.')}</p>}
               </fieldset>
             ) : (
               <p className="-mt-2 text-xs leading-5 text-slate-500">
-                {t('Department leads (HOD)')}: {hodMemberIds.map(id => users.find(user => user.id === id)?.name).filter(Boolean).join(', ') || t('Unassigned')}.
+                {t('Department leads (HOD)')}: {hodMemberIds.map(id => users.find(user => user.id === id)?.name).filter(Boolean).join(', ') || t('None, the PM assigns tasks directly')}.
               </p>
             )}
 

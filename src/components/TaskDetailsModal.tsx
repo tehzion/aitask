@@ -35,7 +35,8 @@ import ClientDeliveryFocus from './ClientDeliveryFocus';
 import ModalShell from './ModalShell';
 import ConfirmDialog from './ConfirmDialog';
 import { useI18n } from './I18nProvider';
-import { formatLocalizedDate } from '../lib/i18n';
+import { formatLocalizedDate, formatLocalizedMonth } from '../lib/i18n';
+import { getTaskDeliverable } from '../lib/deliveryLinks';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { Button, ProgressBar } from './ui';
 import { TaskWorkflowSteps } from './TaskCard';
@@ -320,6 +321,10 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) : undefined;
   const delegationOptions = eligibleTaskStaff(task.department, taskProject, users, rolePermissions)
     .filter(user => user.id !== currentUser?.id);
+
+  const linkedDeliverable = getTaskDeliverable(task, workflow.deliverables);
+  const linkedCycleStart = linkedDeliverable ? parseOptionalDate(workflow.cycles.find(cycle => cycle.id === linkedDeliverable.cycleId)?.periodStart) : null;
+  const countsToward = linkedDeliverable ? { deliverable: linkedDeliverable, month: linkedCycleStart ? formatLocalizedMonth(linkedCycleStart, locale) : '' } : undefined;
 
   const delegationWorkloads = getTeamWorkloadSummaries(visibleTasks, delegationOptions, 'overall');
 
@@ -1016,7 +1021,15 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </div>}
                 {!isClientTaskViewer && task.assignmentState && <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t('Assignment state')}</label>
-                  <span className="text-sm font-medium text-slate-800">{t(getAssignmentStateLabel(task))}</span>
+                  <span className="text-sm font-medium text-slate-800">{t(getAssignmentStateLabel(task, taskProject))}</span>
+                </div>}
+                {!isClientTaskViewer && task.clientId && <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Counts toward')}</label>
+                  {countsToward ? (
+                    <span className="text-sm font-medium text-slate-800"><span data-i18n-skip>{countsToward.deliverable.title}</span>{countsToward.month && <span className="text-slate-500"> · {countsToward.month}</span>}</span>
+                  ) : (
+                    <span className="text-sm text-slate-500">{t("Not part of a month's plan")}</span>
+                  )}
                 </div>}
                 {!isClientTaskViewer && <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">{t('Created By')}</label>

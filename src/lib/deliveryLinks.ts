@@ -77,3 +77,9 @@ export const getUnlinkedOpenTasks = (tasks: readonly Task[], deliverables: reado
   .filter(task => task.clientId === clientId && !task.isCompleted && task.status !== 'Cancelled'
     && !task.generatedFromDeliverable && !isTaskLinkedToDeliverable(task, deliverables))
   .sort((left, right) => (left.dueDate || '9999').localeCompare(right.dueDate || '9999'));
+
+/** The deliverable a task counts toward, from either side of the link. */
+export const getTaskDeliverable = (task: Pick<Task, 'id' | 'deliverableId'>, deliverables: readonly Deliverable[]) => (
+  (task.deliverableId ? deliverables.find(item => item.id === task.deliverableId) : undefined)
+  || deliverables.find(item => item.taskIds?.includes(task.id))
+);
