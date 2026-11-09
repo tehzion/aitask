@@ -5,7 +5,7 @@ import { acknowledgeActionFeedback, canRetrySave, dismissActionFeedback } from '
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
-import { formatTaskAssigneeName, assignableTaskAssignees, canRequestTaskRevision, eligibleTaskStaff, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { formatTaskAssigneeName, assignableTaskAssignees, canRequestTaskRevision, eligibleTaskStaff, getAssignmentStateLabel, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
 import { getStaffGuidedAction } from '../lib/staffWorkspace';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
@@ -1016,7 +1016,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </div>}
                 {!isClientTaskViewer && task.assignmentState && <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t('Assignment state')}</label>
-                  <span className="text-sm font-medium text-slate-800">{t(task.assignmentState === 'pending_hod' ? 'Pending HOD Assignment' : task.assignmentState === 'assigned_staff' ? 'Assigned to Staff' : 'Awaiting HOD')}</span>
+                  <span className="text-sm font-medium text-slate-800">{t(getAssignmentStateLabel(task))}</span>
                 </div>}
                 {!isClientTaskViewer && <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">{t('Created By')}</label>
@@ -1086,7 +1086,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       </button>
                     </div>
                   ) : (
-                    <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No eligible team members in this department.')}</p>
+                    <p role="status" className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No Staff in {department} yet. You can do this task yourself, or ask your project manager to add Staff to this department.', { department: t(task.department) })}</p>
                   )}
                   <ContextualTutorialLink tutorialId="delegate-task-to-staff" label={t('Need help assigning this task?')} />
                 </form>

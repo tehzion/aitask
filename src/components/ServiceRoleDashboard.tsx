@@ -1,3 +1,4 @@
+import { getAssignmentStateLabel, isAwaitingHodAssignment } from '../lib/taskWorkflowAccess';
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRound, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
@@ -71,7 +72,7 @@ const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: Works
     <div className="divide-y divide-line/60">
       {tasks.slice(0, 6).map(task => {
         const dueDate = parseOptionalDate(task.dueDate);
-        const assignmentOverdue = task.assignmentState === 'pending_hod' && Boolean(dueDate && isBefore(dueDate, new Date()) && isTaskOpen(task));
+        const assignmentOverdue = isAwaitingHodAssignment(task) && Boolean(dueDate && isBefore(dueDate, new Date()));
         return <DataRow
           key={task.id}
           titleI18nSkip={false}
@@ -79,7 +80,7 @@ const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: Works
           title={<Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="hover:text-accent"><span data-i18n-skip>{task.title}</span></Link>}
           description={<><span data-i18n-skip>{task.clientName}</span> · {dueDate ? formatLocalizedDate(dueDate, locale) : t('No deadline')}</>}
           meta={task.responsibleHodId
-            ? `${t('Responsible HOD')}: ${users.find(user => user.id === task.responsibleHodId)?.name || t('Unavailable member')} · ${t(task.assignmentState === 'assigned_staff' ? 'Assigned to Staff' : task.assignmentState === 'pending_hod' ? 'Pending HOD Assignment' : 'Awaiting HOD')}${assignmentOverdue ? ` · ${t('Overdue assignment')}` : ''}`
+            ? `${t('Responsible HOD')}: ${users.find(user => user.id === task.responsibleHodId)?.name || t('Unavailable member')} · ${t(getAssignmentStateLabel(task))}${assignmentOverdue ? ` · ${t('Overdue assignment')}` : ''}`
             : task.assignedTo ? t('Assigned') : t('Unassigned')}
           action={<StatusChip tone={task.isCompleted ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(task.status)}</StatusChip>}
         />;
@@ -163,7 +164,7 @@ const ServiceRoleDashboard = () => {
   const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
   const waitingInternal = portfolioReviews.internal;
   const waitingClient = portfolioReviews.client;
-  const awaitingStaffAssignment = scopeTasks.filter(task => isTaskOpen(task) && task.assignmentState === 'pending_hod');
+  const awaitingStaffAssignment = scopeTasks.filter(isAwaitingHodAssignment);
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && isTaskOpen(task));
   const completed = scopeTasks.filter(isTaskCompleted);
   const renewalPlans = activePlans.filter(plan => plan.contractEndDate).sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || ''));

@@ -12,9 +12,10 @@ import { Department, Priority, ServiceType, TaskApprovalMode, TaskVisibility } f
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getServiceOptions, hasChoice } from '../lib/choiceOptions';
-import { canAssignTasksToOthers, canCreateManualTasks, canManageProjects, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { canAssignTasksToOthers, canCreateManualTasks, canManageProjects, canManageServiceCycles, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
+import { getCurrentPublishedCycle, getLinkableDeliverables, suggestDeliverableForTask } from '../lib/deliveryLinks';
 import { assignableDepartments, getMemberDepartments } from '../lib/departments';
 import { formatTaskAssigneeName, assignableTaskAssignees } from '../lib/taskWorkflowAccess';
 import ModalShell from './ModalShell';
@@ -34,7 +35,7 @@ const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { t } = useI18n();
-  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, createTaskInitialProjectId, rolePermissions, retryPendingSave, discardMutation, backend } = useStore(useShallow(state => ({
+  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, createTaskInitialProjectId, rolePermissions, retryPendingSave, discardMutation, backend, serviceCycles, deliverables } = useStore(useShallow(state => ({
     users: state.users,
     clients: state.clients,
     currentUser: state.currentUser,
@@ -53,6 +54,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     retryPendingSave: state.retryPendingSave,
     discardMutation: state.discardMutation,
     backend: state.backend,
+    serviceCycles: state.serviceCycles,
+    deliverables: state.deliverables,
   })));
   const navigate = useNavigate();
   const titleId = React.useId();
@@ -75,6 +78,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [isProjectModalOpen, setIsProjectModalOpen] = useState(false);
   const [projectId, setProjectId] = useState('');
   const [milestoneId, setMilestoneId] = useState('');
+  // Team feedback F2: '' = suggest automatically, 'none' = not linked.
+  const [deliverableChoice, setDeliverableChoice] = useState('');
   const [approvalMode, setApprovalMode] = useState<TaskApprovalMode>('inherit');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -123,6 +128,16 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     [clients, currentUser, projects, rolePermissions, tasks],
   );
   const selectedProject = projectId ? assignableProjects.find(project => project.id === projectId) : undefined;
+  // Team feedback F2: a task added from a project counts toward that client's
+  // current published month, so delivery progress moves when it is done.
+  const currentCycle = !createTaskInitialDeliverableId && selectedProject?.clientId && canManageServiceCycles(currentUser, rolePermissions)
+    ? getCurrentPublishedCycle(serviceCycles, selectedProject.clientId, getTodayInputDate())
+    : undefined;
+  const linkableDeliverables = getLinkableDeliverables(deliverables, currentCycle?.id);
+  const suggestedDeliverable = suggestDeliverableForTask(title, linkableDeliverables);
+  const countsTowardId = deliverableChoice === 'none'
+    ? ''
+    : (linkableDeliverables.some(item => item.id === deliverableChoice) ? deliverableChoice : suggestedDeliverable?.id || '');
   const filteredUsers = department
     ? assignableTaskAssignees(currentUser, department, users, rolePermissions)
         .filter(user => canAssignOthers || user.id === currentUser?.id)
@@ -157,6 +172,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const resetForm = React.useCallback(() => {
     setProjectId('');
     setMilestoneId('');
+    setDeliverableChoice('');
     setApprovalMode('inherit');
     setTitle('');
     setDescription('');
@@ -404,8 +420,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       // Decision D1 (9 Nov 2026): the PM approves every task; HOD only assigns.
       approvalMode: 'pm',
       clientId: createTaskInitialClientId || selectedProject?.clientId || selectedClient?.id,
-      serviceCycleId: createTaskInitialCycleId,
-      deliverableId: createTaskInitialDeliverableId,
+      serviceCycleId: createTaskInitialCycleId || (countsTowardId ? currentCycle?.id : undefined),
+      deliverableId: createTaskInitialDeliverableId || countsTowardId || undefined,
       clientName: trimmedClientName,
       projectName: projectId ? assignableProjects.find(p => p.id === projectId)?.projectName : undefined,
       customerDetails: customerDetails.trim(),
@@ -525,6 +541,22 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       {(selectedProject.milestones || []).map(milestone => <option key={milestone.id} value={milestone.id} data-i18n-skip>{milestone.name}</option>)}
                     </select>
                   </label>
+                </div>
+              )}
+
+              {currentCycle && linkableDeliverables.length > 0 && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700">{t('Counts toward')} {t('(Optional)')}
+                    <select
+                      value={countsTowardId || 'none'}
+                      onChange={event => setDeliverableChoice(event.target.value)}
+                      className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm"
+                    >
+                      <option value="none">{t("Not part of this month's plan")}</option>
+                      {linkableDeliverables.map(item => <option key={item.id} value={item.id} data-i18n-skip>{item.title}</option>)}
+                    </select>
+                  </label>
+                  <p className="mt-1 text-xs text-slate-500">{t("Finishing this task moves this month's delivery progress.")}</p>
                 </div>
               )}
 

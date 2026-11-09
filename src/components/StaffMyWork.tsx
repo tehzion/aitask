@@ -1,3 +1,4 @@
+import { isAwaitingHodAssignment } from '../lib/taskWorkflowAccess';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
@@ -59,9 +60,8 @@ const StaffMyWork: React.FC = () => {
   const tasks = React.useMemo(() => isHod ? getHodScopeTasks(visibleTasks, currentUser?.id, scope) : visibleTasks, [currentUser?.id, isHod, scope, visibleTasks]);
   const awaitingStaffAssignment = React.useMemo(
     () => isHod && currentUser
-      ? visibleTasks.filter(task => task.assignmentState === 'pending_hod'
-        && (task.responsibleHodId === currentUser.id || task.assignedTo === currentUser.id)
-        && isTaskOpen(task))
+      ? visibleTasks.filter(task => isAwaitingHodAssignment(task)
+        && (task.responsibleHodId === currentUser.id || task.assignedTo === currentUser.id))
       : [],
     [currentUser, isHod, visibleTasks],
   );

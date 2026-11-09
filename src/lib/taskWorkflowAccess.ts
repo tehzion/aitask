@@ -307,3 +307,26 @@ export const isReadyForMyCompletion = (
 
 export const formatTaskAssigneeName = (user: User, roles: CustomRole[] = []) =>
   isHodUser(user, roles) ? `${user.name} (HOD)` : user.name;
+
+/**
+ * Team feedback F4 (9 Nov 2026). A task can sit in `pending_hod` while the
+ * HOD works on it themself (for example, no Staff exist in the department).
+ * Such a task is not waiting to be assigned: it is handled by the HOD.
+ */
+export const isHandledByHod = (task: Pick<Task, 'assignmentState' | 'assignedTo' | 'responsibleHodId' | 'status' | 'isCompleted'>) => (
+  task.assignmentState === 'pending_hod'
+  && Boolean(task.assignedTo)
+  && (!task.responsibleHodId || task.assignedTo === task.responsibleHodId)
+  && (task.isCompleted || task.status !== 'Pending')
+);
+
+/** Open work an HOD still has to hand to Staff (or start themself). */
+export const isAwaitingHodAssignment = (task: Pick<Task, 'assignmentState' | 'assignedTo' | 'responsibleHodId' | 'status' | 'isCompleted'>) => (
+  task.assignmentState === 'pending_hod' && !task.isCompleted && !['Completed', 'Cancelled'].includes(task.status) && !isHandledByHod(task)
+);
+
+export const getAssignmentStateLabel = (task: Pick<Task, 'assignmentState' | 'assignedTo' | 'responsibleHodId' | 'status' | 'isCompleted'>) => {
+  if (task.assignmentState === 'assigned_staff') return 'Assigned to Staff';
+  if (task.assignmentState === 'pending_hod') return isHandledByHod(task) ? 'Handled by HOD' : 'Pending HOD Assignment';
+  return 'Awaiting HOD';
+};

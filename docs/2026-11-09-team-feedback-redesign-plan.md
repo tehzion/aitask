@@ -547,3 +547,18 @@ Plus the in-app Feedback page: one question after each release ("Was today's wor
 | U5 | S6/F6 corrections, search for all roles, Help flow page | S6 yes |
 
 Before each phase ships: a 15-minute walkthrough with one person per role on the preview build, then the weekly queries above as the before/after record.
+
+## 8. F2 and F4 status (2026-11-09, same branch)
+
+Front end only; no migration.
+
+| Item | Status |
+|---|---|
+| F2 link on create | Done: when a PM or Boss adds a task from a project and the client has a Published month covering today, the form shows **Counts toward** (optional). It suggests the first deliverable with no tasks whose name shares a word with the title; "Not part of this month's plan" leaves it unlinked. Delivered and workflow-generated deliverables are not offered. Store and server link rules are unchanged (`deliverableLinkError`). |
+| F2 link existing | Done: each open, non-workflow deliverable in the month block has a **Link a task** picker listing the client's open, unlinked, hand-made tasks the user may link (earliest due first). Uses `linkTaskToDeliverable` and saves as `task.update`. "Generate tasks" for workflow services was already there. |
+| F2 task drawer "Counts toward" | Not done yet (next pass). |
+| F4 HOD wording | Done: a `pending_hod` task that the HOD has started (or finished) is labelled **Handled by HOD** instead of "Pending HOD Assignment", and no longer counts in the HOD "to assign" queue or as an overdue assignment. Shared helpers in `taskWorkflowAccess.ts`: `isHandledByHod`, `isAwaitingHodAssignment`, `getAssignmentStateLabel`. |
+| F4 no Staff | Done: the delegation box now says "No Staff in {department} yet. You can do this task yourself, or ask your project manager to add Staff to this department." A separate "Keep it myself" action is not needed: a `pending_hod` task assigned to the HOD already lets the HOD work it, and the new label shows that. |
+| F4 HOD patch fields | Checked, no change: the HOD validator compares old and new restricted fields, and the assignment path does not change them. |
+| F4 projects without HOD | Not done yet ("PM assigns directly" wording). |
+| Tests | `src/lib/teamFeedbackLinking.test.ts` (8 unit tests). `e2e/plan-and-delivery.spec.ts` adds: task from project counts toward the matching deliverable; an unlinked task is linked from the month block. |

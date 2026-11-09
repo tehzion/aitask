@@ -55,10 +55,12 @@ import {
   isDeliverableWorkDone,
 } from "../lib/serviceManagement";
 import { getMonthlyCycleCloseout } from "../lib/monthlyCloseout";
+import { getUnlinkedOpenTasks } from "../lib/deliveryLinks";
 import { isTaskOpen } from "../lib/taskReporting";
 import {
   canCreateManualTasks,
   canEditTask,
+  canLinkTaskDelivery,
   canManageClientPlans,
   canManageServiceCycles,
   canOpenServiceClient,
@@ -234,6 +236,13 @@ const OperationsClientWorkspace = () => {
     store.rolePermissions,
   );
   const isClient = store.currentUser?.role === "Client";
+  // Team feedback F2: open tasks of this client that are not counted toward
+  // any month yet, offered on each deliverable so progress can move.
+  const linkCandidates = isClient ? [] : getUnlinkedOpenTasks(
+    getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }),
+    store.deliverables,
+    client.id,
+  ).filter(task => canLinkTaskDelivery(store.currentUser, task, store.rolePermissions, { users: store.users, clients: store.clients, projects: store.projects }));
   if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients, store.projects)) {
     if (store.currentUser?.role === "Client") return <Navigate to="/projects" replace />;
     const departmentLead = isDepartmentScopedUser(store.currentUser, store.rolePermissions);
@@ -513,6 +522,11 @@ const OperationsClientWorkspace = () => {
     if (!saved) return;
     setPlanSavePending(!saved.ok && isPendingMutationResolution(useStore.getState().backend));
     setMessage(saved.ok ? msg('feedback.changesSaved') : saved.error || 'The change is waiting to be saved.', saved.ok ? 'success' : 'error');
+  };
+  const linkExistingTask = async (taskId: string, cycleId: string, deliverableId: string) => {
+    if (addonSaving || !taskId) return;
+    const saved = await saveAndCommit(store.linkTaskToDeliverable(taskId, cycleId, deliverableId), "task.update");
+    if (saved) setMessage(msg('feedback.changesSaved'), 'success');
   };
   const generateTaskChain = async (deliverableId: string) => {
     if (addonSaving) return;
@@ -876,6 +890,18 @@ const OperationsClientWorkspace = () => {
                                   }{" "}{t("tasks")}
                                 </Button>
                               )}
+                            {deliverable.status !== "Delivered" && !serviceItem?.workflow && linkCandidates.length > 0 && (
+                              <select
+                                aria-label={`${t("Link a task")}: ${deliverable.title}`}
+                                value=""
+                                disabled={addonSaving}
+                                onChange={event => void linkExistingTask(event.target.value, cycle.id, deliverable.id)}
+                                className="min-h-10 max-w-full rounded-control border border-line bg-surface px-3 text-sm text-ink"
+                              >
+                                <option value="">{t("Link a task")}…</option>
+                                {linkCandidates.map(task => <option key={task.id} value={task.id} data-i18n-skip>{task.title}{task.dueDate ? ` · ${task.dueDate}` : ''}</option>)}
+                              </select>
+                            )}
                             {canLinkTasks && <Button variant="secondary" onClick={() => document.getElementById('delivery-review')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{t('Review task links')}</Button>}
                             {canAddManualTask && <Button
                               variant="secondary"

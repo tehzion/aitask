@@ -90,7 +90,7 @@ test('revoked delegation permissions and empty recipient lists have usable mobil
   await seedHod(page, { recipients: false });
   await page.evaluate(() => localStorage.setItem('aitask-color-theme', 'dark'));
   const dialog = await openDetails(page, 'hod-assigned', 'Assigned delegation work');
-  await expect(dialog.getByText('No eligible team members in this department.')).toBeVisible();
+  await expect(dialog.getByText(/^No Staff in .+ yet. You can do this task yourself/)).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Assign Task', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await seedHod(page);
