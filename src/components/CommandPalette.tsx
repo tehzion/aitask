@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Bell, CheckSquare, Languages, Moon, Search, Sun, UserPlus, Keyboard, X } from 'lucide-react';

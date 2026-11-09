@@ -16,6 +16,7 @@ import './staffWorkflowCopy';
 import './actionFeedbackCopy';
 import './hodReviewCopy';
 import './taskStageCopy';
+import './pageCopy';
 
 describe('Chinese UI translations', () => {
   it('keeps English as the default and translates shared interface copy to Simplified Chinese', () => {

@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { ArrowRight, CalendarDays, CheckCircle2, Filter, Search, TimerReset, X } from 'lucide-react';
 import { Link, useSearchParams } from 'react-router-dom';

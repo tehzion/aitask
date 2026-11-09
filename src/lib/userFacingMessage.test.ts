@@ -1,3 +1,4 @@
+import './pageCopy';
 import { describe, expect, it } from 'vitest';
 import { formatMessage, msg } from './messages';
 import { translateUiText } from './i18n';

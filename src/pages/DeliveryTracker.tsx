@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { useLocalToday } from '../hooks/useLocalToday';
 import React from 'react';
 import {

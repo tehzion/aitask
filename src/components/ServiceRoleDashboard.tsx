@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { getAssignmentStateLabel, isAwaitingHodAssignment } from '../lib/taskWorkflowAccess';
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRound, WalletCards } from 'lucide-react';

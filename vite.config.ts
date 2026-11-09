@@ -113,6 +113,9 @@ export default defineConfig(({ mode }) => {
           // State, localization, and class merging load at startup. Share one chunk to
           // reduce request and compression overhead in the eager graph.
           workspaceRuntime: ['./src/store/index.ts', './src/lib/i18n.ts', 'tailwind-merge', 'clsx'],
+          // Page-only Chinese copy: shared by many lazy pages, so give it its own
+          // chunk instead of letting it fall into the startup entry.
+          pageCopy: ['./src/lib/pageCopy.ts'],
         },
       },
     },

@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';

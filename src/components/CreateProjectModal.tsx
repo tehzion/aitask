@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import ConfirmDialog from './ConfirmDialog';
 import { Button } from './ui';
 import { useToastStore } from '../store/useToastStore';

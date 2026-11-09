@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { acknowledgeActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
 import { useSaveAction } from '../hooks/useSaveAction';

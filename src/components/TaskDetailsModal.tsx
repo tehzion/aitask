@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import TaskOutputFiles, { type OutputUploadState } from './TaskOutputFiles';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';

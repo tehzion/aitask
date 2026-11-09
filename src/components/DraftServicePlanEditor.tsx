@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { canRetrySave } from '../lib/actionFeedback';
 import React from 'react';
 import { useStore, isPendingMutationResolution, isWorkspaceMutationLocked } from '../store';

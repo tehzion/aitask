@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import CyclePaymentControl from './CyclePaymentControl';
 import { CalendarClock, Eye, History, Plus } from 'lucide-react';
 import type { ClientServicePlan, Deliverable, ServiceCycle } from '../types';

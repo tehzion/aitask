@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';

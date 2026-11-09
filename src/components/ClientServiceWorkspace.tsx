@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from './SystemMessage';
 import { isDeliverableWorkDone } from '../lib/serviceManagement';
 import { DeliveryProgress } from './DeliveryProgress';

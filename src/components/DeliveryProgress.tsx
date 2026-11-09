@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { ProgressBar, StatusChip } from './ui';
 import { useI18n } from './I18nProvider';
 

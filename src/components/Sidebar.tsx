@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';

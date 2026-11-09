@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';

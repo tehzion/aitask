@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { useSyncExternalStore } from 'react';
 import { getDiagnostics, subscribeDiagnostics } from '../lib/diagnostics';
 import { useI18n } from './I18nProvider';

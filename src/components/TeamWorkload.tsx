@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React, { useMemo, useState } from 'react';
 import {
   ArrowRight,

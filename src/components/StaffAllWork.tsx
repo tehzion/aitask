@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { getLocalizedDepartment, getLocalizedTaskStatus } from '../lib/localeLabels';
 import UnavailableWork from './UnavailableWork';
 import '../lib/staffWorkflowCopy';

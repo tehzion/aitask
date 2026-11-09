@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from './SystemMessage';
 import { notificationIconType } from '../modules/notifications/services/notificationCenter';
 import React, { useState, useRef, useEffect, useMemo } from 'react';

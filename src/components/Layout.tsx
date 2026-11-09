@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { acknowledgeActionFeedback, canRetrySave } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';

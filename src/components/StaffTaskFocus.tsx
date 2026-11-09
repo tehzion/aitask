@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import TaskOutputFiles, { ReviewSettingsDisclosure, type OutputUploadState } from './TaskOutputFiles';
 import { formatLocalizedDateRange } from '../lib/i18n';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';

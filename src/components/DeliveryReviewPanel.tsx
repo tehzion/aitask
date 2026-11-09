@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from './SystemMessage';
 import React from 'react';
 import { Link } from 'react-router-dom';

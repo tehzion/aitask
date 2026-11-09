@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { useStore } from '../store';
 import { canManageServiceCycles, canViewServicePrices } from '../lib/access';

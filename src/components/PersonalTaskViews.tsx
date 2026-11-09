@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import '../lib/uxEnhancementCopy';
 import React from 'react';
 import { useSearchParams } from 'react-router-dom';

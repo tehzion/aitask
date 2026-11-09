@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { StickyNote } from 'lucide-react';

@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { PencilLine } from 'lucide-react';
 import type { Deliverable } from '../types';

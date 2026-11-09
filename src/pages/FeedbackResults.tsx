@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from '../components/SystemMessage';
 import { createCsvBlob } from '../lib/csv';
 import React from 'react';

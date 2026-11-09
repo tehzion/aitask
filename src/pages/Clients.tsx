@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from '../components/SystemMessage';
 import { isDeliverableWorkDone } from '../lib/serviceManagement';
 import React from 'react';

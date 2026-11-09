@@ -1,4 +1,4 @@
-import { isToday } from 'date-fns';
+import { isSameDay } from 'date-fns';
 import type { Task } from '../types';
 import { getPortfolioReviewQueues } from './pmDashboard';
 import { isTaskCompleted, isTaskOpen } from './taskCompletion';
@@ -27,7 +27,7 @@ export const getRoleWorkSummary = (tasks: readonly Task[], now = new Date()): Ro
     overdue: open.filter(task => isTaskOverdue(task, now)),
     dueToday: open.filter(task => {
       const due = parseOptionalDate(task.dueDate);
-      return Boolean(due && isToday(due));
+      return Boolean(due && isSameDay(due, now));
     }),
     waitingReviewCount: getPortfolioReviewQueues(tasks).waitingCount,
     done: tasks.filter(isTaskCompleted),

@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import '../lib/hodReviewCopy';
 import React from 'react';
 import { useShallow } from 'zustand/react/shallow';

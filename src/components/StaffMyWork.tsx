@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { isAwaitingHodAssignment } from '../lib/taskWorkflowAccess';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import '../lib/staffWorkflowCopy';

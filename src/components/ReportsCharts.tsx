@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { Bar, BarChart, CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { ChartCard, ChartEmptyState } from './ui';

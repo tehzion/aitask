@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { Download, FileBarChart2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';

@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import '../lib/actionFeedbackCopy';
 import '../lib/taskStageCopy';
 import SystemMessage from '../components/SystemMessage';

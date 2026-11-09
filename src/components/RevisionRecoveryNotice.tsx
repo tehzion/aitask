@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { readRecoveredDraft, removeRecoveredDraft, revisionDraftOf, writeRecoveredDraft } from '../lib/draftRecovery';
 import type { ClientServicePlan } from '../types';

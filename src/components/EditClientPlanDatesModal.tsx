@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from './SystemMessage';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import { cyclePeriodEnd, getPlanContractStartDate, nextBillingDate } from '../lib/serviceManagement';

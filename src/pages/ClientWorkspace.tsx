@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import ModalShell from '../components/ModalShell';
 import '../lib/actionFeedbackCopy';
 import { formatLocalizedDateRange } from '../lib/i18n';

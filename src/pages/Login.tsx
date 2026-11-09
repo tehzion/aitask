@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from '../components/SystemMessage';
 import React, { useState, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
