@@ -120,9 +120,15 @@ test('creates a client profile first, then a named project', async ({ page }) =>
   });
   expect(project).toMatchObject({ clientName: 'Flow Test Company', projectName: 'Q4 Launch' });
 
-  await page.getByRole('button', { name: 'New task' }).click();
+  // Tasks are opened from inside the project; company and project are fixed.
+  await expect(page.getByRole('button', { name: 'New task', exact: true })).toHaveCount(0);
+  await page.getByRole('heading', { name: 'Flow Test Company', level: 2 })
+    .locator('xpath=ancestor::*[.//button[normalize-space()="Details"]][1]')
+    .getByRole('button', { name: 'Details' }).click();
+  await page.getByRole('button', { name: 'Add task to Q4 Launch' }).click();
   const taskDialog = page.getByRole('dialog', { name: 'Create task' });
-  await taskDialog.getByLabel(/Link to Company \/ Brand/).selectOption(project!.id);
+  await expect(taskDialog.getByText('Flow Test Company · Q4 Launch')).toBeVisible();
+  await expect(taskDialog.getByLabel(/Link to Company \/ Brand/)).toHaveCount(0);
   await taskDialog.getByLabel('Task Title').fill('Launch creative brief');
   await taskDialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
   await taskDialog.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption('u-hod-demo-local');

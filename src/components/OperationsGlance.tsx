@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronRight, CircleDot, Clock3 } from 'lucide-react';
 import { Link } from 'react-router-dom';

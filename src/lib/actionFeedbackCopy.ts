@@ -34,7 +34,7 @@ registerUiTranslations({
   "The upload could not be confirmed. The file has been kept for another check.": "尚未确认上传结果。文件已保留，以便再次检查。",
   "Needs confirmation": "待确认",
   "Profile not saved. Use Retry save to try again.": "个人资料尚未保存。请使用“重试保存”再次尝试。",
-  "Restore saved data, correct the rejected change or check your access, then save again.": "请恢复已保存数据，修正被拒绝的更改或检查您的权限，然后再次保存。",
+  "To continue, select Restore saved data. This discards pending changes and reloads the latest saved data. Try again; if it still fails, contact your project manager.": "请选择“恢复已保存数据”以继续。此操作会放弃待处理的更改，并重新读取最新保存的数据。然后再试一次；如果仍然失败，请联系您的项目经理。",
   "This work changed elsewhere. Review the saved data before retrying.": "此工作已在其他位置更改。请查看已保存数据后再重试。",
   "The download was cancelled because the workspace changed.": "由于工作区已更改，下载已取消。",
   "The pending update was not saved. Review your draft before sending it again.": "待保存更新尚未保存。请检查草稿后再发送。",

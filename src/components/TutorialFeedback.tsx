@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { CheckCircle2, MessageSquareText, ThumbsDown, ThumbsUp } from 'lucide-react';
 import { useI18n } from './I18nProvider';

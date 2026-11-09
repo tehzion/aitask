@@ -36,9 +36,9 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   const selectors = panel.getByRole('combobox');
   await selectors.nth(0).selectOption('review-deliverable');
   await selectors.nth(1).selectOption('review-deliverable');
-  await page.getByRole('tab', { name: locale === 'en' ? 'Cycles' : '周期', exact: true }).click();
+  await page.getByRole('tab', { name: locale === 'en' ? 'Activity / Files' : '动态 / 文件', exact: true }).click();
   await expect(panel).toBeHidden();
-  await page.getByRole('tab', { name: locale === 'en' ? 'Overview' : '概览', exact: true }).click();
+  await page.getByRole('tab', { name: locale === 'en' ? 'Plan & delivery' : '方案与交付', exact: true }).click();
   await expect(selectors.nth(0)).toHaveValue('review-deliverable');
   await expect(selectors.nth(1)).toHaveValue('review-deliverable');
   await page.evaluate(async () => {
@@ -48,8 +48,8 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   await panel.getByRole('button', { name: locale === 'en' ? 'Link task' : '关联任务', exact: true }).nth(0).click();
   const retry = panel.getByRole('button', { name: locale === 'en' ? 'Retry pending save' : '重试待保存更改' });
   await expect(retry).toBeVisible();
-  await page.getByRole('tab', { name: locale === 'en' ? 'Cycles' : '周期', exact: true }).click();
-  await page.getByRole('tab', { name: locale === 'en' ? 'Overview' : '概览', exact: true }).click();
+  await page.getByRole('tab', { name: locale === 'en' ? 'Activity / Files' : '动态 / 文件', exact: true }).click();
+  await page.getByRole('tab', { name: locale === 'en' ? 'Plan & delivery' : '方案与交付', exact: true }).click();
   await expect(retry).toBeVisible();
   await retry.click();
   await expect(retry).toHaveCount(0);

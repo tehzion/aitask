@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { AlertTriangle, ArrowRight, CheckCircle2, CircleDot, Flag, FolderKanban, Settings2, Users, X } from 'lucide-react';
 import { Link } from 'react-router-dom';

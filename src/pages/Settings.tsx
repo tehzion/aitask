@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import '../lib/actionFeedbackCopy';
 import { msg } from '../lib/messages';
 import type { UiFeedback } from '../lib/actionFeedback';

@@ -210,8 +210,7 @@ export const taskAssignmentStageError = (
 };
 
 /**
- * PMs choose active internal members; department-scoped actors retain
- * their department eligibility.
+ * Only active internal members of the selected department are offered.
  */
 export const assignableTaskAssignees = (
   actor: User | null | undefined,
@@ -220,9 +219,10 @@ export const assignableTaskAssignees = (
   roles: CustomRole[] = [],
   options: { allowDirectStaff?: boolean } = {},
 ): User[] => {
-  if (actor?.role === 'Project Manager') return users.filter(user => user.role !== 'Client' && user.hasLogin !== false);
   if (!department) return [];
-  return users.filter(user => isEligibleTaskAssignee(user, department)
+  return users.filter(user => user.hasLogin !== false
+    && isMemberInDepartment(user, department)
+    && isEligibleTaskAssignee(user, department)
     && !taskAssignmentStageError(actor, { department }, user.id, users, roles, options));
 };
 export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 'department'> & Partial<Task>, roles: CustomRole[] = [], scope: VisibilityScope = {}) => {
@@ -304,3 +304,38 @@ export const isReadyForMyCompletion = (
 ) => Boolean(user && !task.isCompleted
   && (task.status === 'Approved' || canCompleteWithoutInternalApproval(task, scope))
   && (isBossKoo(user) || (user.role === 'Project Manager' && canManageTaskReview(user, task, roles, scope))));
+
+export const formatTaskAssigneeName = (user: User, roles: CustomRole[] = []) =>
+  isHodUser(user, roles) ? `${user.name} (HOD)` : user.name;
+
+/**
+ * Team feedback F4 (9 Nov 2026). A task can sit in `pending_hod` while the
+ * HOD works on it themself (for example, no Staff exist in the department).
+ * Such a task is not waiting to be assigned: it is handled by the HOD.
+ */
+export const isHandledByHod = (task: Pick<Task, 'assignmentState' | 'assignedTo' | 'responsibleHodId' | 'status' | 'isCompleted'>) => (
+  task.assignmentState === 'pending_hod'
+  && Boolean(task.assignedTo)
+  && (!task.responsibleHodId || task.assignedTo === task.responsibleHodId)
+  && (task.isCompleted || task.status !== 'Pending')
+);
+
+/** Open work an HOD still has to hand to Staff (or start themself). */
+export const isAwaitingHodAssignment = (task: Pick<Task, 'assignmentState' | 'assignedTo' | 'responsibleHodId' | 'status' | 'isCompleted'>) => (
+  task.assignmentState === 'pending_hod' && !task.isCompleted && !['Completed', 'Cancelled'].includes(task.status) && !isHandledByHod(task)
+);
+
+/** A project with no HOD members: the PM assigns its tasks directly. */
+export const projectHasNoHod = (project: Pick<Project, 'hodMemberIds'> | undefined) => (
+  Boolean(project) && (project?.hodMemberIds?.length ?? 0) === 0
+);
+
+export const getAssignmentStateLabel = (
+  task: Pick<Task, 'assignmentState' | 'assignedTo' | 'responsibleHodId' | 'status' | 'isCompleted'>,
+  project?: Pick<Project, 'hodMemberIds'>,
+) => {
+  if (task.assignmentState === 'assigned_staff') return 'Assigned to Staff';
+  if (!task.responsibleHodId && projectHasNoHod(project)) return 'PM assigns directly';
+  if (task.assignmentState === 'pending_hod') return isHandledByHod(task) ? 'Handled by HOD' : 'Pending HOD Assignment';
+  return 'Awaiting HOD';
+};

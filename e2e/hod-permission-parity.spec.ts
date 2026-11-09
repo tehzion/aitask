@@ -53,6 +53,28 @@ test('HOD delegates assigned work only to an eligible staff member and preserves
   await expect(dialog.getByRole('heading', { name: 'Task Delegation' })).toHaveCount(0);
 });
 
+test('rejected delegation explains the attempted assignment and restores the saved assignee', async ({ page }) => {
+  await seedHod(page);
+  const dialog = await openDetails(page, 'hod-assigned', 'Assigned delegation work');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const canonical = structuredClone(useStore.getState().tasks);
+    useStore.setState({
+      commitPendingMutation: async () => {
+        const error = 'You do not have permission to make this change.';
+        useStore.setState(state => ({ backend: { ...state.backend, mode: 'supabase', status: 'retry_required', errorCode: 'FORBIDDEN', error, hasLocalChanges: true, pendingMutations: 1 } }));
+        return { ok: false, code: 'FORBIDDEN', error };
+      },
+      discardMutation: async () => { useStore.setState(state => ({ tasks: canonical, backend: { ...state.backend, mode: 'supabase', status: 'live', error: undefined, errorCode: undefined, hasLocalChanges: false, pendingMutations: 0 } })); },
+    });
+  });
+  await dialog.getByRole('combobox', { name: 'Choose a team member' }).selectOption('audit-editor');
+  await dialog.getByRole('button', { name: 'Assign Task', exact: true }).click();
+  await expect(dialog.getByRole('alert')).toContainText('The task shown may include your unsaved change.');
+  await dialog.getByRole('button', { name: 'Restore saved data' }).click();
+  await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(item => item.id === 'hod-assigned')?.assignedTo)).toBe('audit-hod');
+});
+
 test('department oversight permits edits but does not grant reassignment or foreign task access', async ({ page }) => {
   await seedHod(page);
   const dialog = await openDetails(page, 'hod-oversight', 'Legacy Editor oversight');
@@ -68,7 +90,7 @@ test('revoked delegation permissions and empty recipient lists have usable mobil
   await seedHod(page, { recipients: false });
   await page.evaluate(() => localStorage.setItem('aitask-color-theme', 'dark'));
   const dialog = await openDetails(page, 'hod-assigned', 'Assigned delegation work');
-  await expect(dialog.getByText('No eligible team members in this department.')).toBeVisible();
+  await expect(dialog.getByText(/^No Staff in .+ yet. You can do this task yourself/)).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Assign Task', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await seedHod(page);
@@ -92,7 +114,9 @@ test('HOD task creation includes populated Boss-curated projects while excluding
     useStore.setState({ users: [...state.users, boss], projects: [{ ...base, id: 'curated-project', createdBy: boss.id }, { ...base, id: 'foreign-project', clientName: 'Foreign Co', projectName: 'Foreign Project', createdBy: 'audit-pm' }], tasks: [...state.tasks, { ...state.tasks.find(task => task.id === 'hod-foreign')!, id: 'curated-foreign-task', projectId: 'curated-project', clientName: 'Curated Co' }, { ...state.tasks.find(task => task.id === 'hod-foreign')!, id: 'pm-foreign-task', projectId: 'foreign-project', clientName: 'Foreign Co' }] });
   });
   await page.goto('/tasks');
-  await page.locator('#main-content').getByRole('button', { name: 'New task', exact: true }).click();
+  // HODs have no global New task button; this test covers the form's project choices.
+  await expect(page.locator('#main-content').getByRole('button', { name: 'New task', exact: true })).toHaveCount(0);
+  await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.getState().setCreateTaskModalOpen(true); });
   const dialog = page.getByRole('dialog', { name: 'Create task', exact: true });
   const choices = dialog.getByRole('combobox', { name: /Link to Company/ });
   await expect(choices.locator('option[value="curated-project"]')).toHaveCount(1);

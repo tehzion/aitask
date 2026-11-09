@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { msg } from '../lib/messages';
 import { acknowledgeActionFeedback, queueActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';

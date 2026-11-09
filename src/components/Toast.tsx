@@ -30,7 +30,9 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       aria-live={toast.type === 'error' ? 'assertive' : 'polite'}
       aria-atomic="true"
       className={cn(
-        'flex w-full min-w-0 items-center gap-3 rounded-lg p-4 shadow-[0_10px_24px_rgba(15,23,42,0.12)] pointer-events-auto transition-all duration-300 md:w-auto md:min-w-[300px] md:max-w-sm',
+        // Clicks pass through the message to the page below (a toast often sits over
+        // a dialog's action buttons); only its close button takes the pointer.
+        'flex w-full min-w-0 items-center gap-3 rounded-lg p-4 shadow-[0_10px_24px_rgba(15,23,42,0.12)] pointer-events-none transition-all duration-300 md:w-auto md:min-w-[300px] md:max-w-sm',
         '',
         bgClasses[toast.type]
       )}
@@ -40,7 +42,7 @@ const ToastItem: React.FC<{ toast: ToastType }> = ({ toast }) => {
       <button
         onClick={() => removeToast(toast.id)}
         data-draft-navigation
-        className="flex h-11 w-11 shrink-0 items-center justify-center text-slate-400 hover:text-slate-600 p-0.5 rounded-lg hover:bg-slate-100 transition-colors"
+        className="pointer-events-auto flex h-11 w-11 shrink-0 items-center justify-center text-slate-400 hover:text-slate-600 p-0.5 rounded-lg hover:bg-slate-100 transition-colors"
         aria-label={t('common.closeNotification')}
       >
         <X className="w-4 h-4" aria-hidden="true" />

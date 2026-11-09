@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import TaskOutputFiles, { type OutputUploadState } from './TaskOutputFiles';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
@@ -5,7 +6,7 @@ import { acknowledgeActionFeedback, canRetrySave, dismissActionFeedback } from '
 import SystemMessage from './SystemMessage';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
-import { assignableTaskAssignees, canRequestTaskRevision, eligibleTaskStaff, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { formatTaskAssigneeName, assignableTaskAssignees, canRequestTaskRevision, eligibleTaskStaff, getAssignmentStateLabel, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
 import { getStaffGuidedAction } from '../lib/staffWorkspace';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
@@ -35,7 +36,8 @@ import ClientDeliveryFocus from './ClientDeliveryFocus';
 import ModalShell from './ModalShell';
 import ConfirmDialog from './ConfirmDialog';
 import { useI18n } from './I18nProvider';
-import { formatLocalizedDate } from '../lib/i18n';
+import { formatLocalizedDate, formatLocalizedMonth } from '../lib/i18n';
+import { getTaskDeliverable } from '../lib/deliveryLinks';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { Button, ProgressBar } from './ui';
 import { TaskWorkflowSteps } from './TaskCard';
@@ -174,6 +176,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     priority: 'Medium' as Priority,
     startDate: '',
     dueDate: '',
+    postingDate: '',
     notes: '',
   });
 
@@ -244,6 +247,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
         priority: draftTask.priority,
         startDate: draftTask.startDate || getTodayInputDate(),
         dueDate: draftTask.dueDate,
+        postingDate: draftTask.postingDate || '',
         notes: draftTask.notes || '',
       };
       editBaseline.current = initialEdit; setEditForm(initialEdit);
@@ -318,6 +322,10 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) : undefined;
   const delegationOptions = eligibleTaskStaff(task.department, taskProject, users, rolePermissions)
     .filter(user => user.id !== currentUser?.id);
+
+  const linkedDeliverable = getTaskDeliverable(task, workflow.deliverables);
+  const linkedCycleStart = linkedDeliverable ? parseOptionalDate(workflow.cycles.find(cycle => cycle.id === linkedDeliverable.cycleId)?.periodStart) : null;
+  const countsToward = linkedDeliverable ? { deliverable: linkedDeliverable, month: linkedCycleStart ? formatLocalizedMonth(linkedCycleStart, locale) : '' } : undefined;
 
   const delegationWorkloads = getTeamWorkloadSummaries(visibleTasks, delegationOptions, 'overall');
 
@@ -581,6 +589,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const getUserName = (id: string) => users.find(u => u.id === id)?.name || 'Unknown';
   const startDateValue = parseOptionalDate(task.startDate);
   const dueDateValue = parseOptionalDate(task.dueDate);
+  const postingDateValue = parseOptionalDate(task.postingDate);
 
   return (
     <ModalShell
@@ -594,7 +603,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
         {recovery.available && !formDirty && <DraftRecoveryNotice onDiscard={recovery.clear} onRestore={() => {
           const recovered = recovery.draft;
           if (!recovered) return;
-          const latest = { title: task.title, description: task.description || '', clientName: task.clientName, serviceType: task.serviceType, department: task.department, assignedTo: task.assignedTo, priority: task.priority, startDate: task.startDate, dueDate: task.dueDate, notes: task.notes || '' };
+          const latest = { title: task.title, description: task.description || '', clientName: task.clientName, serviceType: task.serviceType, department: task.department, assignedTo: task.assignedTo, priority: task.priority, startDate: task.startDate, dueDate: task.dueDate, postingDate: task.postingDate || '', notes: task.notes || '' };
           let restoredDetails: typeof editForm | undefined;
           let restoredAttachment: { link: string; name: string } | undefined;
           let hasConflicts = false;
@@ -654,7 +663,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
 
         {(mutationError || pendingResolution || isDeletingTask) && (
           <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
-            <p><SystemMessage message={mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
+            <p><SystemMessage message={mutationError === 'You do not have permission to make this change.' && backend.errorCode === 'FORBIDDEN' ? t('This change could not be saved because access was denied.') : mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
+            {pendingResolution && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('The task shown may include your unsaved change.')}</p>}
             {(pendingResolution || isDeletingTask) && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {canRetrySave(backend) && <button
@@ -677,7 +687,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </button>
               </div>
             )}
-            {(pendingResolution || isDeletingTask) && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('Restore saved data, correct the rejected change or check your access, then save again.')}</p>}
+            {(pendingResolution || isDeletingTask) && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('To continue, select Restore saved data. This discards pending changes and reloads the latest saved data. Try again; if it still fails, contact your project manager.')}</p>}
           </div>
         )}
 
@@ -842,7 +852,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                           className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
                           {canAssignOthers && <option value="">{t('Unassigned')}</option>}
-                          {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{user.name}</option>)}
+                          {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{formatTaskAssigneeName(user, rolePermissions)}</option>)}
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
                       </span>
@@ -876,6 +886,15 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         type="date"
                         value={editForm.dueDate}
                         onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
+                        className={cn(inputBase, 'px-2.5 py-2.5')}
+                      />
+                    </label>
+                    <label className="block">
+                      <span className={fieldLabel}>{t('Posting Date')}</span>
+                      <input
+                        type="date"
+                        value={editForm.postingDate}
+                        onChange={(e) => setEditForm({ ...editForm, postingDate: e.target.value })}
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
                     </label>
@@ -1003,7 +1022,15 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </div>}
                 {!isClientTaskViewer && task.assignmentState && <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t('Assignment state')}</label>
-                  <span className="text-sm font-medium text-slate-800">{t(task.assignmentState === 'pending_hod' ? 'Pending HOD Assignment' : task.assignmentState === 'assigned_staff' ? 'Assigned to Staff' : 'Awaiting HOD')}</span>
+                  <span className="text-sm font-medium text-slate-800">{t(getAssignmentStateLabel(task, taskProject))}</span>
+                </div>}
+                {!isClientTaskViewer && task.clientId && <div>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{t('Counts toward')}</label>
+                  {countsToward ? (
+                    <span className="text-sm font-medium text-slate-800"><span data-i18n-skip>{countsToward.deliverable.title}</span>{countsToward.month && <span className="text-slate-500"> · {countsToward.month}</span>}</span>
+                  ) : (
+                    <span className="text-sm text-slate-500">{t("Not part of a month's plan")}</span>
+                  )}
                 </div>}
                 {!isClientTaskViewer && <div>
                     <label className="block text-xs font-medium text-slate-500 mb-1">{t('Created By')}</label>
@@ -1027,6 +1054,13 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     {dueDateValue ? formatLocalizedDate(dueDateValue, locale) : t('common.noDueDate')}
                   </div>
                 </div>
+                {!isClientTaskViewer && <div>
+                    <label className="block text-xs font-medium text-slate-500 mb-1">{t('Posting Date')}</label>
+                  <div className="flex items-center gap-1.5 text-sm font-medium text-slate-800">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                    {postingDateValue ? formatLocalizedDate(postingDateValue, locale) : t('No posting date')}
+                  </div>
+                </div>}
               </div>
 
               {task.generatedFromDeliverable && task.startDate && task.dueDate && task.dueDate < (task.workflowGeneratedAt || '').slice(0, 10) && <p className="rounded-control border border-line bg-inset p-3 text-sm text-muted">{t('Generated late; original deadlines are preserved.')}</p>}
@@ -1066,7 +1100,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       </button>
                     </div>
                   ) : (
-                    <p className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No eligible team members in this department.')}</p>
+                    <p role="status" className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No Staff in {department} yet. You can do this task yourself, or ask your project manager to add Staff to this department.', { department: t(task.department) })}</p>
                   )}
                   <ContextualTutorialLink tutorialId="delegate-task-to-staff" label={t('Need help assigning this task?')} />
                 </form>

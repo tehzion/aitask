@@ -437,6 +437,24 @@ export const canDeleteUser = (actor: User | null | undefined, target: User | nul
   return Boolean(actor && target && isBossKoo(actor) && actor.id !== target.id && !isBossKoo(target));
 };
 export const canCreateTasks = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'createTasks', customRoles);
+
+/**
+ * Global "New task" entry points (header buttons, sidebar, command palette,
+ * the N shortcut, calendar day clicks). Everyone else opens tasks from inside a
+ * project or deliverable so company and project never need picking from a long
+ * list (team feedback, 9 Nov 2026). Boss Koo keeps the global entry.
+ */
+export const canCreateTasksFromAnywhere = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
+  isBossKoo(user) && canCreateTasks(user, customRoles)
+);
+/**
+ * Hand-written tasks (the Create task form). Staff never create tasks, even
+ * with the createTasks permission (decision C1, 9 Nov 2026); they still run
+ * service workflows, which generate their own tasks.
+ */
+export const canCreateManualTasks = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
+  Boolean(user) && user!.role !== 'Staff' && canCreateTasks(user, customRoles)
+);
 export const canViewAllTasks = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   hasPermission(user, 'viewAllTasks', customRoles) || hasPermission(user, 'editTasks', customRoles)
 );
@@ -809,10 +827,20 @@ export const getVisibleNavigation = (user: User | null | undefined, customRoles:
 // "Go to workspace" target for every authenticated account). Falling back to
 // it — instead of '/' — prevents a zero-permission role from being bounced
 // between AccessDenied and a RoleRoute-denied dashboard indefinitely.
+/**
+ * A Project Manager's home is the Portfolio list (`/tasks`); the separate PM
+ * dashboard is hidden because it repeated the same tasks. Boss Koo keeps the
+ * agency operations dashboard.
+ */
+export const isPortfolioHomeUser = (user: User | null | undefined) => (
+  user?.role === 'Project Manager' && !isBossKoo(user)
+);
+
 export const getDefaultAccessiblePath = (
   user: User | null | undefined,
   customRoles: CustomRole[] = []
 ): AppPath | '/notifications' => {
+  if (isPortfolioHomeUser(user) && canAccessPath(user, '/tasks', customRoles)) return '/tasks';
   const firstPage = getVisibleNavigation(user, customRoles)[0];
   if (firstPage) return firstPage.path;
   return canAccessPath(user, '/settings', customRoles) ? '/settings' : '/notifications';

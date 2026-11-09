@@ -30,24 +30,24 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
     return useStore.getState().clientPlans.find(plan => plan.id === created.planId)!.clientId;
   }, monthStart);
   await page.goto(`/clients/${clientId}`);
-  await page.getByRole('tab', { name: locale === 'zh' ? '周期' : 'Cycles', exact: true }).click();
+  await page.getByRole('tab', { name: locale === 'zh' ? '方案与交付' : 'Plan & delivery', exact: true }).click();
   await expect(page.getByText(locale === 'zh' ? '0 个关联任务' : '0 linked task(s)', { exact: true })).toBeVisible();
   const cycle = page.locator('section').filter({ hasText: 'ADS Management Fee 1' });
   const status = cycle.getByRole('combobox');
   await expect(status).toHaveValue('Planned');
   await status.selectOption('In Progress');
   await expect(status).toHaveValue('In Progress');
-  await expect(cycle.getByText(locale === 'zh' ? '已交付 0/1' : 'Delivered 0/1', { exact: true })).toBeVisible();
+  await expect(page.getByText(locale === 'zh' ? '已完成 0/1' : 'Done 0/1', { exact: true })).toBeVisible();
   await expect(page.getByText('Deliverable status must match the progress of its required tasks.', { exact: true })).toHaveCount(0);
 
   await page.reload();
-  await page.getByRole('tab', { name: locale === 'zh' ? '周期' : 'Cycles', exact: true }).click();
+  await page.getByRole('tab', { name: locale === 'zh' ? '方案与交付' : 'Plan & delivery', exact: true }).click();
   await expect(status).toHaveValue('In Progress');
   await status.selectOption('Ready');
   await expect(status).toHaveValue('Ready');
   await status.selectOption('Delivered');
   await expect(status).toHaveValue('Delivered');
-  await expect(cycle.getByText(locale === 'zh' ? '已交付 1/1' : 'Delivered 1/1', { exact: true })).toBeVisible();
+  await expect(page.getByText(locale === 'zh' ? '已完成 1/1' : 'Done 1/1', { exact: true })).toBeVisible();
 });
 
 test('a frozen workflow exposes only statuses allowed by its required task progress', async ({ page }) => {

@@ -1,3 +1,5 @@
+import '../lib/pageCopy';
+import { isAwaitingHodAssignment } from '../lib/taskWorkflowAccess';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
@@ -6,7 +8,7 @@ import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChec
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
-import { canCreateTasks, getDashboardPersona, getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
+import { getDashboardPersona, getVisibleTasks, isDepartmentScopedUser, isHodUser, canCreateTasksFromAnywhere } from '../lib/access';
 import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, getUnavailableTaskDependencyCount, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, isStaffGuidedActionEnabled, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getMemberDepartments, isMemberInDepartment } from '../lib/departments';
 import { getTeamWorkloadSummaries, isTaskOpen } from '../lib/taskReporting';
@@ -41,7 +43,7 @@ const StaffMyWork: React.FC = () => {
     deliverables: state.deliverables,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
-  const canCreateTask = canCreateTasks(currentUser, rolePermissions);
+  const canCreateTask = canCreateTasksFromAnywhere(currentUser, rolePermissions);
   const todayDate = useLocalToday();
   const today = getTodayInputDate(todayDate);
   const isHod = isHodUser(currentUser, rolePermissions);
@@ -59,9 +61,8 @@ const StaffMyWork: React.FC = () => {
   const tasks = React.useMemo(() => isHod ? getHodScopeTasks(visibleTasks, currentUser?.id, scope) : visibleTasks, [currentUser?.id, isHod, scope, visibleTasks]);
   const awaitingStaffAssignment = React.useMemo(
     () => isHod && currentUser
-      ? visibleTasks.filter(task => task.assignmentState === 'pending_hod'
-        && (task.responsibleHodId === currentUser.id || task.assignedTo === currentUser.id)
-        && isTaskOpen(task))
+      ? visibleTasks.filter(task => isAwaitingHodAssignment(task)
+        && (task.responsibleHodId === currentUser.id || task.assignedTo === currentUser.id))
       : [],
     [currentUser, isHod, visibleTasks],
   );

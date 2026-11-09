@@ -52,7 +52,7 @@ test('user-authored task content stays exactly as typed in Chinese mode', async 
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.waitForURL(/\/(?:settings)?$/);
+  await page.waitForURL(/\/(?:settings|tasks)?$/);
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   if (/\/settings$/.test(page.url())) {
     await expect(continueButton).toBeVisible();
@@ -94,7 +94,7 @@ test('user-authored task content stays exactly as typed in Chinese mode', async 
   await expect(page.locator('html')).toHaveAttribute('lang', 'zh-CN');
 
   // UI chrome translates, user content does not.
-  await expect(page.getByRole('heading', { name: '项目组合工作' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '项目组合', level: 1 })).toBeVisible();
   await expect(page.locator('main').getByText('Dashboard', { exact: true }).filter({ visible: true }).first()).toBeVisible();
   await expect(page.locator('main article').filter({ hasText: 'Dashboard' }).filter({ hasText: 'Settings' }).first()).toBeVisible();
 
@@ -183,7 +183,7 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
 
   await page.goto(`/clients/${seeded.clientId}`);
   await expect(page.getByRole('heading', { name: 'Settings', exact: true })).toBeVisible();
-  await expect(page.getByText('已交付 0/1').first()).toBeVisible();
+  await expect(page.getByText('已完成 0/1').first()).toBeVisible();
   await page.getByRole('tab', { name: '交付内容', exact: true }).click();
   await expect(page.locator('main').getByText('Dashboard', { exact: true }).first()).toBeVisible();
   await expect(page.locator('main').getByText(/关联任务/)).toHaveCount(0);

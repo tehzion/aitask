@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from './SystemMessage';
 import TaskOutputFiles from './TaskOutputFiles';
 import { getTaskProgress } from '../lib/taskProgress';

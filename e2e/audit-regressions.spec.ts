@@ -18,7 +18,7 @@ const seedPlan = async (page: Page) => {
     return { clientId: created.clientId!, draftId: revision.planId! };
   });
   await page.goto(`/clients/${result.clientId}`);
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Save draft' })).toBeVisible();
   return result;
 };
@@ -168,13 +168,13 @@ test('a dirty revision requires confirmation before changing tabs', async ({ pag
   await seedPlan(page);
   await page.getByLabel('Plan name', { exact: true }).fill('Unsaved draft');
   const dismissNavigationPrompt = page.waitForEvent('dialog').then(dialog => dialog.dismiss());
-  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await page.getByRole('tab', { name: 'Activity / Files', exact: true }).click();
   await dismissNavigationPrompt;
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Unsaved draft');
   const acceptNavigationPrompt = page.waitForEvent('dialog').then(dialog => dialog.accept());
-  await page.getByRole('tab', { name: 'Overview', exact: true }).click();
+  await page.getByRole('tab', { name: 'Activity / Files', exact: true }).click();
   await acceptNavigationPrompt;
-  await expect(page.getByRole('tab', { name: 'Overview', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tab', { name: 'Activity / Files', exact: true })).toHaveAttribute('aria-selected', 'true');
 });
 
 test('a failed save does not mistake its own optimistic draft for a remote conflict', async ({ page }) => {
@@ -233,13 +233,13 @@ test('browser back and programmatic palette navigation preserve a declined draft
   // document that React Router's navigation blocker cannot intercept.
   await page.getByRole('link', { name: 'Companies', exact: true }).click();
   await page.locator(`main a[href="/clients/${clientId}"]:visible`).first().click();
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await page.getByLabel('Plan name', { exact: true }).fill('Protected draft');
   let prompts = 0;
   page.on('dialog', async dialog => { prompts += 1; await dialog.dismiss(); });
   await page.evaluate(() => history.back());
   await expect.poll(() => prompts).toBe(1);
-  await expect(page).toHaveURL(new RegExp(`/clients/${clientId}(?:\\?tab=plan)?$`));
+  await expect(page).toHaveURL(new RegExp(`/clients/${clientId}(?:\\?tab=(?:plan|delivery))?$`));
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Protected draft');
   await page.keyboard.press('Escape');
   await page.getByLabel('Plan name', { exact: true }).blur();
@@ -249,7 +249,7 @@ test('browser back and programmatic palette navigation preserve a declined draft
   await palette.getByRole('textbox').fill('Notifications');
   await page.keyboard.press('Enter');
   await expect.poll(() => prompts).toBe(2);
-  await expect(page).toHaveURL(new RegExp(`/clients/${clientId}(?:\\?tab=plan)?$`));
+  await expect(page).toHaveURL(new RegExp(`/clients/${clientId}(?:\\?tab=(?:plan|delivery))?$`));
 });
 
 test('recoverable drafts survive reload and reconcile against the latest baseline', async ({ page }) => {
@@ -258,7 +258,7 @@ test('recoverable drafts survive reload and reconcile against the latest baselin
   await expect.poll(() => page.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('aitask:draft-recovery:v1:')).length)).toBe(1);
   page.on('dialog', dialog => dialog.accept());
   await page.reload();
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await page.getByRole('button', { name: 'Restore recovered draft' }).click();
   await expect(page.getByLabel('Plan name', { exact: true })).toHaveValue('Recovered draft');
   await expect(page.getByRole('button', { name: 'Save draft' })).toBeEnabled();
@@ -288,7 +288,7 @@ test('two tabs retain independent recovery copies and account changes clear owne
   await second.goto('/login');
   await second.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); const { enablePasswordResetBypass } = await import('/src/lib/auth.ts'); const actor = useStore.getState().currentUser; if (actor) enablePasswordResetBypass(actor.id); });
   await second.goto(`/clients/${clientId}`);
-  await second.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await second.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await second.getByLabel('Plan name', { exact: true }).fill('Tab B');
   const values = await second.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith('aitask:draft-recovery:v1:')).map(key => JSON.parse(localStorage.getItem(key)!).value.name).sort());
   expect(values).toEqual(['Tab A', 'Tab B']);

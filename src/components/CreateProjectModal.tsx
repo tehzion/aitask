@@ -1,3 +1,9 @@
+import '../lib/pageCopy';
+import ConfirmDialog from './ConfirmDialog';
+import { Button } from './ui';
+import { useToastStore } from '../store/useToastStore';
+import { msg } from '../lib/messages';
+import { projectDeletionBlocker } from '../lib/projectManagement';
 import SystemMessage from './SystemMessage';
 import { getTodayInputDate } from '../lib/utils';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
@@ -13,10 +19,14 @@ import { getServiceOptions, hasChoice, PRESET_SERVICES } from '../lib/choiceOpti
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { fieldLabel, modalFooter } from './uiTokens';
-import { canCreateClientProfiles, canViewAllClients, getVisibleClientNames, isBossKoo, isHodUser } from '../lib/access';
+import { canCreateClientProfiles, canDeleteProject, canViewAllClients, getVisibleClientNames, isBossKoo, isHodUser } from '../lib/access';
 import CreateClientProfileModal from './CreateClientProfileModal';
 import { useI18n } from './I18nProvider';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+
+// Decision D1 (9 Nov 2026): the PM approves every task; the HOD only assigns.
+// Saving a project (new or edited) applies this, so its tasks follow it.
+const FIXED_APPROVAL_MODE: ProjectApprovalMode = 'pm';
 
 interface Props {
   isOpen: boolean;
@@ -70,16 +80,21 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const [hodMemberIds, setHodMemberIds] = useState<string[]>([]);
   const [staffMemberIds, setStaffMemberIds] = useState<string[]>([]);
   const [memberResponsibilities, setMemberResponsibilities] = useState<Record<string, string>>({});
-  const [defaultApprovalMode, setDefaultApprovalMode] = useState<ProjectApprovalMode>('none');
+  const [defaultApprovalMode, setDefaultApprovalMode] = useState<ProjectApprovalMode>(FIXED_APPROVAL_MODE);
   const [requireClearClosureChecklist, setRequireClearClosureChecklist] = useState(false);
   const [customServices, setCustomServices] = useState<string[]>([]);
   const [customInput, setCustomInput]       = useState('');
   const [customError, setCustomError]       = useState('');
   const [formError, setFormError]           = useState('');
   const [isSubmitting, setIsSubmitting]     = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deletePending, setDeletePending] = useState(false);
+  const deleteBusy = useRef(false);
+  const deleteTitleId = React.useId();
+  const [deleteError, setDeleteError] = useState('');
   const [formEdited, setFormEdited] = React.useState(false);
   React.useEffect(() => { if (!isOpen) setFormEdited(false); }, [isOpen]);
-  const markPristine = useUnsavedChanges(isOpen && (formEdited || isSubmitting));
+  const markPristine = useUnsavedChanges(isOpen && (formEdited || isSubmitting || deletePending));
   const [pendingProjectId, setPendingProjectId] = useState('');
   const pendingProjectSnapshot = useRef<Project | null>(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
@@ -126,6 +141,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     if (initializedFormKeyRef.current === formKey) return;
     initializedFormKeyRef.current = formKey;
     setFormError('');
+    setConfirmDelete(false); setDeletePending(false); setDeleteError(''); deleteBusy.current = false;
     setIsSubmitting(false);
     setPendingProjectId('');
     pendingProjectSnapshot.current = null;
@@ -146,7 +162,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       setHodMemberIds(project.hodMemberIds || []);
       setStaffMemberIds(project.staffMemberIds || []);
       setMemberResponsibilities(project.memberResponsibilities || {});
-      setDefaultApprovalMode(project.defaultApprovalMode || 'none');
+      setDefaultApprovalMode(FIXED_APPROVAL_MODE);
       setRequireClearClosureChecklist(Boolean(project.requireClearClosureChecklist));
     } else {
       setClientId(initialClientId || '');
@@ -158,7 +174,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       setHodMemberIds([]);
       setStaffMemberIds([]);
       setMemberResponsibilities({});
-      setDefaultApprovalMode('none');
+      setDefaultApprovalMode(FIXED_APPROVAL_MODE);
       setRequireClearClosureChecklist(false);
     }
   }, [clientOptions, currentUser, initialClientId, isOpen, project, users]);
@@ -171,7 +187,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setHodMemberIds(Array.isArray(value.hodMemberIds) ? value.hodMemberIds : []);
     setStaffMemberIds(Array.isArray(value.staffMemberIds) ? value.staffMemberIds : []);
     setMemberResponsibilities(value.memberResponsibilities && typeof value.memberResponsibilities === 'object' ? value.memberResponsibilities : {});
-    setDefaultApprovalMode(['none', 'hod', 'pm'].includes(value.defaultApprovalMode) ? value.defaultApprovalMode : 'none');
+    setDefaultApprovalMode(FIXED_APPROVAL_MODE);
     setRequireClearClosureChecklist(Boolean(value.requireClearClosureChecklist));
   };
   if (!isOpen) return null;
@@ -226,7 +242,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setProjectManagerIds([]);
     setHodMemberIds([]);
     setStaffMemberIds([]);
-    setDefaultApprovalMode('none');
+    setDefaultApprovalMode(FIXED_APPROVAL_MODE);
     setRequireClearClosureChecklist(false);
     setCustomServices([]);
     setCustomInput('');
@@ -235,7 +251,54 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   };
 
   const handleClose = () => { recovery.clear(); markPristine(); setFormEdited(false); resetForm(); clearCompanySearch(); onClose(); };
-  const requestClose = () => { if (!isSubmitting && (!formEdited || window.confirm(t('Discard unsaved changes?')))) handleClose(); };
+  const requestClose = () => { if (!isSubmitting && !deletePending && (!formEdited || window.confirm(t('Discard unsaved changes?')))) handleClose(); };
+
+  // Why this account cannot delete the project yet, from the current project
+  // record as the store's delete uses. Not shown once a delete is pending,
+  // because its unlinked tasks are then already staged.
+  const deleteBlocker = project && !deletePending
+    ? projectDeletionBlocker(currentUser, projects.find(item => item.id === project.id) || project, tasks, isHodUser(currentUser, rolePermissions)) || ''
+    : '';
+
+  const handleDelete = async () => {
+    if (!project || deleteBusy.current || isSubmitting) return;
+    const session = captureWorkspaceSession();
+    const actorId = useStore.getState().currentUser?.id;
+    const formKey = initializedFormKeyRef.current;
+    const isCurrent = () => mounted.current && isWorkspaceSessionCurrent(session)
+      && useStore.getState().currentUser?.id === actorId && initializedFormKeyRef.current === formKey;
+    deleteBusy.current = true; setIsSubmitting(true); setDeleteError('');
+    try {
+      if (!deletePending) {
+        const staged = useStore.getState().deleteProject(project.id);
+        if (!staged.ok) { setDeleteError(staged.error || 'Unable to delete this project.'); return; }
+        setDeletePending(true);
+      }
+      const saved = deletePending
+        ? await useStore.getState().retryPendingSave('project.delete')
+        : await useStore.getState().commitPendingMutation('project.delete');
+      if (!isCurrent()) return;
+      if (!saved.ok) {
+        // The server rejects the delete when the project still links tasks this
+        // account cannot see, so their unlink never reached the save.
+        setDeleteError(saved.code === 'VALIDATION'
+          ? 'This project still has tasks you cannot see. Ask its Project Manager or Boss Koo to delete it.'
+          : saved.error || 'Unable to delete this project.');
+        return;
+      }
+      if (useStore.getState().projects.some(item => item.id === project.id)) {
+        setDeletePending(false);
+        setDeleteError('The project was not deleted. Review it before trying again.');
+        return;
+      }
+      useToastStore.getState().addToast(msg('project.deleted', { name: project.projectName }), 'success');
+      setDeletePending(false); setConfirmDelete(false); handleClose();
+    } catch (error) {
+      if (isCurrent()) setDeleteError(error instanceof Error ? error.message : 'Unable to delete this project.');
+    } finally {
+      if (isCurrent()) { deleteBusy.current = false; setIsSubmitting(false); }
+    }
+  };
 
   const confirmProjectSave = async (id: string) => {
     const session = captureWorkspaceSession();
@@ -269,7 +332,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (isSubmitting) return;
+    if (isSubmitting || deletePending) return;
     setFormError('');
     setCustomError('');
 
@@ -403,7 +466,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         {/* Body */}
         <div className="p-6 overflow-y-auto flex-1">
           <form id="create-project-form" onSubmit={handleSubmit} className="space-y-5">
-            <fieldset disabled={isSubmitting || Boolean(pendingProjectId)} className="contents">
+            <fieldset disabled={isSubmitting || Boolean(pendingProjectId) || deletePending} className="contents">
             <div>
               <div className="mb-1 flex items-center justify-between gap-3">
                 <label htmlFor={clientSelectId} className={fieldLabel}>
@@ -472,10 +535,11 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                   ))}
                   {!users.some(user => isHodUser(user, rolePermissions)) && <p className="px-2 py-1 text-xs text-slate-500">{t('No HOD accounts available.')}</p>}
                 </div>
+                {hodMemberIds.length === 0 && <p className="mt-2 text-xs leading-5 text-slate-500">{t('No HOD on this project: the PM assigns tasks directly.')}</p>}
               </fieldset>
             ) : (
               <p className="-mt-2 text-xs leading-5 text-slate-500">
-                {t('Department leads (HOD)')}: {hodMemberIds.map(id => users.find(user => user.id === id)?.name).filter(Boolean).join(', ') || t('Unassigned')}.
+                {t('Department leads (HOD)')}: {hodMemberIds.map(id => users.find(user => user.id === id)?.name).filter(Boolean).join(', ') || t('None, the PM assigns tasks directly')}.
               </p>
             )}
 
@@ -515,15 +579,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
             )}
 
             <fieldset className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-              <legend className="px-1 text-sm font-semibold text-slate-700">{t('Approval and closure defaults')}</legend>
-              <label className="block text-sm text-slate-700">{t('Default task approval')}
-                <select value={defaultApprovalMode} onChange={event => setDefaultApprovalMode(event.target.value as ProjectApprovalMode)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
-                  <option value="none">{t('No approval')}</option>
-                  <option value="hod">{t('HOD approval')}</option>
-                  <option value="pm">{t('PM approval')}</option>
-                </select>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">{t('Only tasks set to Follow project default use this setting.')}</span>
-              </label>
+              <legend className="px-1 text-sm font-semibold text-slate-700">{t('Closure defaults')}</legend>
               <label className="flex items-start gap-3 text-sm text-slate-700">
                 <input type="checkbox" checked={requireClearClosureChecklist} onChange={event => setRequireClearClosureChecklist(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                 <span>{t('Require all closure checklist warnings to be resolved before closing')}</span>
@@ -660,6 +716,11 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
 
         {/* Footer */}
         <div className={modalFooter}>
+          {project && canDeleteProject(currentUser, project, rolePermissions) && <Button
+            type="button" variant="danger" className="mr-auto"
+            disabled={isSubmitting || Boolean(pendingProjectId) || (pendingResolution && !deletePending)}
+            onClick={() => { if (!deletePending) setDeleteError(''); setConfirmDelete(true); }}
+          >{t(deletePending ? 'Retry deleting project' : 'Delete project')}</Button>}
           <button
             type="button" onClick={requestClose}
             className="px-5 py-2.5 text-sm font-medium text-slate-700 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors shadow-sm"
@@ -668,13 +729,24 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
           </button>
           <button
             type="submit" form="create-project-form"
-            disabled={isSubmitting || pendingResolution}
+            disabled={isSubmitting || pendingResolution || deletePending}
             className="px-5 py-2.5 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
           >
         {isSubmitting ? t('Saving...') : pendingProjectId ? t('Retry saving') : isEditing ? t('Save changes') : t('Create project')}
           </button>
         </div>
       </ModalShell>
+      {confirmDelete && project && <ConfirmDialog
+        labelledBy={deleteTitleId}
+        title={t('Delete project')}
+        description={`${t('Delete “{projectName}”? This cannot be undone. Existing tasks will be kept and unlinked from this project.').replace('{projectName}', project.projectName)}${formEdited ? ` ${t('Unsaved project edits will be discarded.')}` : ''}`}
+        error={deleteError || deleteBlocker}
+        confirmDisabled={Boolean(deleteBlocker) && !deleteError}
+        confirmLabel={deletePending ? 'Retry deleting project' : 'Delete project'}
+        busy={isSubmitting}
+        onConfirm={handleDelete}
+        onClose={() => setConfirmDelete(false)}
+      />}
       {isClientModalOpen && <CreateClientProfileModal
         onClose={() => setIsClientModalOpen(false)}
         onCreated={(newClientId) => {

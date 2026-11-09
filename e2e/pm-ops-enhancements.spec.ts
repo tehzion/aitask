@@ -102,7 +102,7 @@ test('Boss Koo assigns a Project Manager to a project that has none, and new pro
   await expect(dialog.getByText('Choose at least one Project Manager for this project.')).toBeVisible();
 });
 
-test('a month of service work: bulk task chains, extras logged at no charge, and plan pace', async ({ page }) => {
+test('a month of service work: bulk task chains, a one-off add-on, and plan pace', async ({ page }) => {
   test.setTimeout(120_000);
   await startApp(page);
   await signInAs(page, 'boss');
@@ -134,13 +134,19 @@ test('a month of service work: bulk task chains, extras logged at no charge, and
   expect(chains.length).toBe(3);
   expect(chains.every(count => count > 0)).toBe(true);
 
+  // Old ?tab=addons links land on the merged Plan & delivery tab. The
+  // "Extra requests this month" block is gone (team feedback B1); extra work
+  // is added as a one-off add-on for the month.
   await page.goto(`/clients/${encodeURIComponent(clientId)}?tab=addons`);
-  const extras = page.getByRole('region', { name: 'Extra requests this month' });
-  await expect(extras).toBeVisible();
-  await page.getByRole('button', { name: 'Log extra request' }).click();
+  await expect(page.getByRole('tab', { name: 'Plan & delivery', exact: true })).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('region', { name: 'Extra requests this month' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Log extra request' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Add service add-on' }).click();
   await page.getByLabel('Add-on name').fill('Extra story post');
+  const cycleSelect = page.getByLabel('Service cycle');
+  await cycleSelect.selectOption({ index: 1 });
   await page.locator('button[type="submit"][form="add-addon-form"]').click();
-  await expect(extras.getByText('At no charge', { exact: true }).locator('..').locator('dd')).toHaveText('1');
+  await expect.poll(() => page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().addons.find(item => item.clientId === id)?.name, clientId)).toBe('Extra story post');
   const addon = await page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().addons.find(item => item.clientId === id), clientId);
   expect(addon).toMatchObject({ name: 'Extra story post', billingMode: 'one_off', unitPriceMinor: 0 });
 });

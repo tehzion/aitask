@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { acknowledgeActionFeedback, canRetrySave } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
@@ -8,7 +9,7 @@ import Sidebar from './Sidebar';
 import Navbar from './Navbar';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useNotificationReadActions } from '../modules/notifications/hooks/useNotificationReadActions';
-import { canAccessPath, canCreateTasks, getUnreadNotifications } from '../lib/access';
+import { canAccessPath, getUnreadNotifications, canCreateTasksFromAnywhere } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
 import { X, AlertCircle, RefreshCw, RotateCcw, Menu } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -93,7 +94,7 @@ const Layout: React.FC = () => {
     });
   };
 
-  const userCanCreateTasks = canCreateTasks(currentUser, rolePermissions);
+  const userCanCreateTasks = canCreateTasksFromAnywhere(currentUser, rolePermissions);
 
   const openMobileMenu = React.useCallback(() => {
     mobileMenuTriggerRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
@@ -237,7 +238,12 @@ const Layout: React.FC = () => {
   const missingSupabaseConfig = backendStatus.mode === 'supabase' && !backendStatus.ready;
   const upgradeRequired = backend.upgradeRequired === true;
   const pendingResolution = isPendingMutationResolution(backend);
-  const syncNeedsAttention = Boolean(syncActionError) || hostedLocalBuild || missingSupabaseConfig || upgradeRequired || Boolean(backend.error) || backend.hasRemoteUpdate || pendingResolution;
+  // A remote update that arrives while the user's own save is still in flight
+  // is re-pulled automatically once the save finishes, so it is not something
+  // to act on. Only surface it when nothing local is pending.
+  const localSaveInFlight = backend.isSaving || backend.pendingMutations > 0 || backend.hasLocalChanges;
+  const remoteUpdateNeedsAttention = backend.hasRemoteUpdate && !localSaveInFlight;
+  const syncNeedsAttention = Boolean(syncActionError) || hostedLocalBuild || missingSupabaseConfig || upgradeRequired || Boolean(backend.error) || remoteUpdateNeedsAttention || pendingResolution;
   const syncBannerTitle = hostedLocalBuild
     ? t('Shared workspace is unavailable')
     : missingSupabaseConfig

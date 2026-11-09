@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { reportAssigneeName, createCsvBlob } from '../lib/csv';
 import React, { useMemo } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Download, Users } from 'lucide-react';

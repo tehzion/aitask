@@ -19,6 +19,30 @@ export const isClosedProject = (project: Project | null | undefined) => (
   Boolean(project && projectStatus(project) === 'Closed')
 );
 
+/**
+ * Why a project cannot be deleted yet, or undefined when it can. Deleting a
+ * project unlinks its tasks in the same save. The server refuses task changes
+ * inside a closed project, does not let an HOD change a task's project, and
+ * lets Staff unlink only tasks assigned to them, so any of these would reject
+ * the whole deletion.
+ */
+export const projectDeletionBlocker = (
+  actor: Pick<User, 'id' | 'role' | 'isSuperAdmin'> | null | undefined,
+  project: Project,
+  tasks: readonly Pick<Task, 'projectId' | 'assignedTo'>[],
+  actorIsHod = false,
+) => {
+  const linked = tasks.filter(task => task.projectId === project.id);
+  if (linked.length === 0) return undefined;
+  if (isClosedProject(project)) return 'Reopen this project before deleting it. Tasks in a closed project cannot be changed.';
+  if (actor?.isSuperAdmin || actor?.role === 'Project Manager') return undefined;
+  if (actorIsHod) return 'Only a Project Manager or Boss Koo can delete a project that still has tasks.';
+  if (!actor || linked.some(task => task.assignedTo !== actor.id)) {
+    return 'Only a Project Manager or Boss Koo can delete this project while it contains tasks assigned to other staff.';
+  }
+  return undefined;
+};
+
 export const getProjectMemberIds = (project: Project) => new Set([
   ...(project.projectManagerIds || []),
   ...(project.hodMemberIds || []),

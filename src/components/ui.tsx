@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { ArrowUpRight, LucideIcon } from 'lucide-react';
 import { Link } from 'react-router-dom';

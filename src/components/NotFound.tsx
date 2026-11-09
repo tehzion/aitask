@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useI18n } from './I18nProvider';

@@ -1,3 +1,4 @@
+import '../../../lib/pageCopy';
 import { notificationCategoryLabel, presentNotification } from '../services/notificationPresentation';
 import SystemMessage from '../../../components/SystemMessage';
 import '../../../lib/staffWorkflowCopy';

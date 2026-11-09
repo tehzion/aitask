@@ -1,10 +1,11 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { ChevronDown, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, X } from 'lucide-react';
 import { clearWorkspaceSession, useStore } from '../store';
 import clsx from 'clsx';
-import { canCreateTasks } from '../lib/access';
+import { canCreateTasksFromAnywhere } from '../lib/access';
 import { clearPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
 import { getRetainedSecureCommand } from '../lib/secureWorkspace';
@@ -274,7 +275,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                 <p className="calm-eyebrow">{t('More destinations')}</p>
               </div>
               <div id="staff-more-menu" hidden={isDesktop && !staffMoreOpen} className={clsx('mt-1 space-y-1', !isCollapsed && 'ml-4 border-l border-line pl-2', 'md:mt-2')}>
-                {isStaff && canCreateTasks(currentUser, rolePermissions) && (
+                {isStaff && canCreateTasksFromAnywhere(currentUser, rolePermissions) && (
                   <div className="group/nav-item relative" {...collapsedLabelHandlers('New task')}>
                     <button
                       type="button"

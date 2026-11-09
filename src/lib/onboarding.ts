@@ -173,7 +173,7 @@ export const getOnboardingPersona = (user: User | null | undefined, customRoles:
 
 const onboardingPaths: Record<OnboardingPersona, Record<string, string>> = {
   admin: { dashboard: '/', companies: '/projects', tasks: '/', approvals: '/approvals', reports: '/reports' },
-  projectManager: { dashboard: '/', company: '/projects', task: '/', monitor: '/tasks', reports: '/reports', workflow: '/help' },
+  projectManager: { dashboard: '/tasks', company: '/projects', task: '/clients', monitor: '/tasks', reports: '/reports', workflow: '/help' },
   hod: { dashboard: '/', tasks: '/tasks', assign: '/tasks', review: '/tasks', workflow: '/help' },
   staff: { dashboard: '/', tasks: '/tasks', updates: '/tasks', revision: '/tasks', workflow: '/help' },
   client: { dashboard: '/', deliveries: '/clients', feedback: '/clients', visibility: '/help' },
@@ -200,9 +200,9 @@ const stepsByPersona: Record<OnboardingPersona, Array<[string, string, string, s
     ['reports', 'reports-overview', 'Use reports to spot risk early', '用报表尽早发现风险', 'Reports and service plans help you understand delivery progress and the work that needs attention.', '报表和服务方案帮助您了解交付进度以及需要关注的工作。'],
   ],
   projectManager: [
-    ['dashboard', 'dashboard-overview', 'Read your portfolio at a glance', '快速了解您的项目组合', 'The dashboard brings together deadlines, active companies, review risk, and commercial records in your portfolio.', '仪表板集中显示项目组合中的截止日期、活跃公司、审核风险和商业记录。'],
+    ['dashboard', 'dashboard-overview', 'Read your portfolio at a glance', '快速了解您的项目组合', 'Portfolio brings together deadlines, active companies, review risk, and commercial records in one place.', '项目组合页面集中显示截止日期、活跃公司、审核风险和商业记录。'],
     ['company', 'projects-overview', 'Create the company and project', '创建公司和项目', 'Start with the client company, then add a project with a named owner, service scope, and deadline.', '先创建客户公司，再添加项目并填写负责人、服务范围和截止日期。'],
-    ['task', 'create-task', 'Assign a task to the right person', '将任务指派给合适的成员', 'Write the requirement, set the deadline and department, then choose any active internal team member.', '填写任务要求和截止日期，选择部门，然后指派任何活跃的内部成员。'],
+    ['task', 'create-task', 'Add tasks under the client project', '在客户项目下添加任务', 'Open the company, then use Add task on its project. Write the requirement, set the deadline and department, then choose the person.', '打开公司，在项目上点击添加任务。填写要求、截止日期和部门，然后选择负责人。'],
     ['monitor', 'tasks-overview', 'Monitor delivery and review work', '监控交付和审核工作', 'Use Tasks to follow progress, open requirements, submitted work, and permitted revision requests without changing the underlying workflow.', '在任务页面跟进进度、要求、已提交成果，并在权限允许时请求修订，不改变既定工作流程。'],
     ['reports', 'reports-overview', 'Check reports and service plans', '查看报表和服务方案', 'Reports show delivery patterns; service plans and cycles keep recurring client work visible and scheduled.', '报表显示交付情况；服务方案和周期让持续性的客户工作保持清晰并按计划进行。'],
     ['workflow', 'help-overview', 'Keep the handoff sequence in mind', '记住交接顺序', 'The usual path is Project Manager → HOD → Staff → HOD review → Client review. Open Help any time for the status rules.', '通常的流程是项目经理 → 部门主管 → 员工 → 部门主管审核 → 客户审核。随时打开帮助中心查看状态规则。'],

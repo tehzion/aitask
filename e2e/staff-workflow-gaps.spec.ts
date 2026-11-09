@@ -20,6 +20,24 @@ const seed = async (page: Page, linked = false) => {
 };
 const saved = (page: Page) => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks[0]);
 
+test('a rejected work action shows one error and does not claim it is awaiting confirmation', async ({ page }) => {
+  await seed(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ commitPendingMutation: async () => {
+      const error = 'You do not have permission to make this change.';
+      useStore.setState(state => ({ backend: { ...state.backend, mode: 'supabase', status: 'retry_required', errorCode: 'FORBIDDEN', error, hasLocalChanges: true, pendingMutations: 1 } }));
+      return { ok: false, code: 'FORBIDDEN', error };
+    } });
+  });
+  const sheet = page.getByRole('dialog', { name: title });
+  await sheet.getByRole('button', { name: 'Accept assignment' }).click();
+  await expect(sheet.getByText('This change could not be saved because access was denied.', { exact: true })).toHaveCount(1);
+  await expect(sheet.getByText('To continue, select Restore saved data. This discards pending changes and reloads the latest saved data. Try again; if it still fails, contact your project manager.', { exact: true })).toBeVisible();
+  await expect(sheet.getByText('Awaiting save confirmation', { exact: true })).toHaveCount(0);
+  await expect(sheet.getByRole('button', { name: 'Restore saved data' })).toBeVisible();
+});
+
 test('staff drafts survive reload and a successful send removes their recovery copy', async ({ page }) => {
   await seed(page);
   const note = page.getByPlaceholder('Add a work update…');

@@ -41,10 +41,10 @@ test('local service demo makes plans, delivery, files, roles, and price isolatio
   await expect(page.getByRole('heading', { name: 'Explore the service demo' })).toBeVisible();
   await page.getByRole('link', { name: 'Open UrbanEats' }).click();
   await expect(page.getByRole('heading', { name: 'UrbanEats' })).toBeVisible();
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(page.getByText('Internal monthly total')).toBeVisible();
   await expect(page.getByText('Short Video Production · rev 1 · 10 tasks')).toBeVisible();
-  await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(page.getByText('10 linked task(s) · Short Video Production', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Activity / Files' }).click();
   const download = page.waitForEvent('download');
@@ -59,7 +59,7 @@ test('local service demo makes plans, delivery, files, roles, and price isolatio
   await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Operation context' })).toBeVisible();
   await page.goto(urbanWorkspace);
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(page.getByText('Internal monthly total')).toHaveCount(0);
 
   await setDemoUser(page, 'u-account-demo-local');

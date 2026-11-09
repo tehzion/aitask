@@ -44,4 +44,14 @@ describe('monthly cycle closeout', () => {
     );
     expect(result.isReadyToClose).toBe(true);
   });
+
+  it('counts completed-but-unconfirmed (Ready) work in progress, but not as ready to close', () => {
+    const result = getMonthlyCycleCloseout(
+      cycle,
+      [deliverable('confirmed', 'Delivered'), deliverable('finished', 'Ready'), deliverable('planned', 'Planned'), deliverable('later', 'Planned')],
+      [],
+      new Date('2026-10-21T12:00:00.000Z'),
+    );
+    expect(result).toMatchObject({ delivered: 1, completionPercent: 50, isReadyToClose: false });
+  });
 });

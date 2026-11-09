@@ -132,7 +132,8 @@ test.describe('review queues show only decisions the user can take', () => {
     await page.setViewportSize({ width: 1440, height: 1200 });
     await seed(page, 'pm');
     await page.goto('/');
-    await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
+    // Project Managers land on Portfolio, which carries their review queues.
+    await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
     await expect(queue(page, 'Awaiting your review').getByRole('link', { name: 'RV PM-approval submission' })).toBeVisible();
     await expect(queue(page, 'Awaiting your review').getByRole('link', { name: 'RV department submission' })).toHaveCount(0);
     await expect(queue(page, 'With department review').getByRole('link', { name: 'RV department submission' })).toBeVisible();
@@ -154,7 +155,7 @@ test.describe('review queues show only decisions the user can take', () => {
     await expect(page.getByRole('heading', { name: 'Your projects' }).locator('../../..').getByText('2/6 tasks complete')).toBeVisible();
 
     await page.goto('/tasks');
-    await expect(page.getByRole('heading', { name: 'Portfolio work', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Portfolio', exact: true })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^Active work \d+$/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(visibleText(page, 'RV approved poster')).toHaveCount(0);
     await page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^Completed \d+$/ }).click();
@@ -230,8 +231,8 @@ test('every role lands on pages whose headings match their navigation', async ({
   await page.setViewportSize({ width: 1440, height: 900 });
   const expected: Array<[Actor, string, string]> = [
     ['boss', '/tasks', 'Tasks'],
-    ['pm', '/', 'Dashboard'],
-    ['pm', '/tasks', 'Portfolio work'],
+    ['pm', '/', 'Portfolio'],
+    ['pm', '/tasks', 'Portfolio'],
     ['hod', '/', 'Department work'],
     ['hod', '/tasks', 'Department tasks'],
     ['staff', '/', 'My work'],

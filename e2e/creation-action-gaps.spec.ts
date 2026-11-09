@@ -76,7 +76,7 @@ test('discarded task creation keeps its draft and avoids opening an absent task'
 test('add-on creation exception locks its submitted draft and retries one record', async ({ page }) => {
   const fixture = await seed(page);
   await page.goto(`/clients/${fixture.clientId}`);
-  await page.getByRole('tab', { name: 'Add-ons', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await page.getByRole('button', { name: 'Add service add-on' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add service add-on' });
   await dialog.getByLabel('Add-on name').fill('Recoverable add-on');
@@ -100,7 +100,7 @@ test('add-on creation exception locks its submitted draft and retries one record
 test('discarded add-on creation retains its draft with review feedback', async ({ page }) => {
   const fixture = await seed(page);
   await page.goto(`/clients/${fixture.clientId}`);
-  await page.getByRole('tab', { name: 'Add-ons', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await page.getByRole('button', { name: 'Add service add-on' }).click();
   const dialog = page.getByRole('dialog', { name: 'Add service add-on' });
   await dialog.getByLabel('Add-on name').fill('Discarded add-on');

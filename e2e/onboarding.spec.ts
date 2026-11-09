@@ -95,9 +95,9 @@ test('role onboarding supports Back and Finish, then remains completed after ref
   await expect(page.getByRole('button', { name: 'Back', exact: true })).toBeEnabled();
   await page.getByRole('button', { name: 'Back', exact: true }).click();
   await expect(page.getByText('Step 1 of 6', { exact: true })).toBeVisible();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/tasks$/);
 
-  const expectedPaths = ['/projects', '/', '/tasks', '/reports', '/help'];
+  const expectedPaths = ['/projects', '/clients', '/tasks', '/reports', '/help'];
   for (const [index, step] of [2, 3, 4, 5, 6].entries()) {
     await page.getByRole('button', { name: 'Next', exact: true }).click();
     await expect(page.getByText(`Step ${step} of 6`, { exact: true })).toBeVisible();

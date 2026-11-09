@@ -1,7 +1,8 @@
+import '../lib/pageCopy';
+import ModalShell from '../components/ModalShell';
 import '../lib/actionFeedbackCopy';
 import { formatLocalizedDateRange } from '../lib/i18n';
 import { msg, type MessageDescriptor } from '../lib/messages';
-import { getCycleExtras } from '../lib/opsSignals';
 import type { UiFeedback } from '../lib/actionFeedback';
 import UnavailableWork from '../components/UnavailableWork';
 import SystemMessage from '../components/SystemMessage';
@@ -33,6 +34,7 @@ import type {
   AttachmentRef,
   CommentVisibility,
   DeliverableStatus,
+  ServiceCycle,
 } from "../types";
 import {
   Badge,
@@ -52,11 +54,15 @@ import {
   formatMoney,
   getCycleServiceProgress,
   canSetDeliverableStatus,
+  isDeliverableWorkDone,
 } from "../lib/serviceManagement";
 import { getMonthlyCycleCloseout } from "../lib/monthlyCloseout";
+import { getUnlinkedOpenTasks } from "../lib/deliveryLinks";
 import { isTaskOpen } from "../lib/taskReporting";
 import {
+  canCreateManualTasks,
   canEditTask,
+  canLinkTaskDelivery,
   canManageClientPlans,
   canManageServiceCycles,
   canOpenServiceClient,
@@ -78,6 +84,7 @@ import {
   uploadServiceFile,
 } from "../lib/serviceFiles";
 import DraftServicePlanEditor from "../components/DraftServicePlanEditor";
+import ClientSpecialNotes from "../components/ClientSpecialNotes";
 import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
 import CreateClientPlanModal from "../components/CreateClientPlanModal";
@@ -89,9 +96,11 @@ import { monthlyRecordLabel } from "../lib/monthlyRecords";
 import RevisionRecoveryNotice from "../components/RevisionRecoveryNotice";
 import ConfirmDialog from "../components/ConfirmDialog";
 import MonthlyPlanSchedule from "../components/MonthlyPlanSchedule";
+import CorrectDeliverableName from "../components/CorrectDeliverableName";
 import ContextualTutorialLink from "../components/ContextualTutorialLink";
 
-type Tab = "overview" | "plan" | "cycles" | "addons" | "activity";
+// Team feedback B (9 Nov 2026): Plan, Cycles, Add-ons and Overview are one tab.
+type Tab = "delivery" | "activity";
 const DeliveryReviewPanel = React.lazy(() => import('../components/DeliveryReviewPanel'));
 
 const CLIENT_WORKSPACE_TABS_ID = "client-workspace";
@@ -123,7 +132,8 @@ const OperationsClientWorkspace = () => {
   const location = useLocation();
   const client = store.clients.find((item) => item.id === clientId);
   const tabParam = searchParams.get('tab');
-  const tab: Tab = ['overview', 'plan', 'cycles', 'addons', 'activity'].includes(tabParam || '') ? tabParam as Tab : 'overview';
+  // Old deep links (?tab=overview|plan|cycles|addons) land on the merged tab.
+  const tab: Tab = tabParam === 'activity' ? 'activity' : 'delivery';
   const setTab = (next: Tab) => setSearchParams(current => { const query = new URLSearchParams(current); query.set('tab', next); return query; });
   const [activityCycleId, setActivityCycleId] = React.useState<string | null>(null);
   const [planModalOpen, setPlanModalOpen] = React.useState(false);
@@ -197,12 +207,16 @@ const OperationsClientWorkspace = () => {
   }, [clientId, store.currentUser?.id, addonDefaultDate]);
   useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== addonDefaultDate));
 
+  const [detailsPlanId, setDetailsPlanId] = React.useState<string | null>(null);
+  const [activationConfirmOpen, setActivationConfirmOpen] = React.useState(false);
+  const activationTitleId = React.useId();
   if (!client) return store.currentUser?.role === "Client" ? <Navigate to="/projects" replace /> : <UnavailableWork />;
 
   const canManagePlans = canManageClientPlans(
     store.currentUser,
     store.rolePermissions,
   );
+  const canAddManualTask = canCreateManualTasks(store.currentUser, store.rolePermissions);
   const canManageCycles = canManageServiceCycles(
     store.currentUser,
     store.rolePermissions,
@@ -225,6 +239,13 @@ const OperationsClientWorkspace = () => {
     store.rolePermissions,
   );
   const isClient = store.currentUser?.role === "Client";
+  // Team feedback F2: open tasks of this client that are not counted toward
+  // any month yet, offered on each deliverable so progress can move.
+  const linkCandidates = isClient ? [] : getUnlinkedOpenTasks(
+    getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }),
+    store.deliverables,
+    client.id,
+  ).filter(task => canLinkTaskDelivery(store.currentUser, task, store.rolePermissions, { users: store.users, clients: store.clients, projects: store.projects }));
   if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients, store.projects)) {
     if (store.currentUser?.role === "Client") return <Navigate to="/projects" replace />;
     const departmentLead = isDepartmentScopedUser(store.currentUser, store.rolePermissions);
@@ -287,14 +308,6 @@ const OperationsClientWorkspace = () => {
       (!isClient || item.visibility === "client-visible") && item.cycleId === selectedCycle?.id,
   );
   const addons = store.addons.filter((item) => item.clientId === client.id);
-  // Extra requests outside the plan are one-off add-ons in the month they were asked for.
-  const extrasCycle = selectedCycle && ['Draft', 'Published', 'Completed'].includes(selectedCycle.status) ? selectedCycle : undefined;
-  const cycleExtras = extrasCycle ? getCycleExtras(addons, extrasCycle.id) : undefined;
-  const logExtraRequest = () => {
-    if (!extrasCycle) return;
-    setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: extrasCycle.periodStart, targetCycleId: extrasCycle.id });
-    setAddonSheetOpen(true);
-  };
   const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }).filter(
     (item) =>
       item.clientId === client.id &&
@@ -305,9 +318,8 @@ const OperationsClientWorkspace = () => {
   const currentCycleDeliverables = currentCycle
     ? deliverables.filter((item) => item.cycleId === currentCycle.id)
     : [];
-  const currentDelivered = currentCycleDeliverables.filter(
-    (item) => item.status === "Delivered",
-  ).length;
+  const currentDelivered = currentCycleDeliverables.filter(isDeliverableWorkDone).length;
+  const currentConfirmed = currentCycleDeliverables.filter((item) => item.status === "Delivered").length;
 
 
   const saveAndCommit = async (
@@ -475,6 +487,32 @@ const OperationsClientWorkspace = () => {
     setAddonSheetOpen(false);
   };
 
+  // Team feedback H: one action. A plan that starts this month (or earlier) is
+  // activated and its month published in one confirmed step; a later start is
+  // activated only, and that month shows Publish when it is due.
+  const planToActivate = canManagePlans && activePlan?.status === "Draft" && !activePlan.supersedesPlanId ? activePlan : undefined;
+  const activationPublishesNow = Boolean(planToActivate && planToActivate.startDate <= getTodayInputDate(today));
+  const activationTaskCount = planToActivate
+    ? planToActivate.serviceItems.reduce((sum, item) => sum + item.quantity * (item.workflow?.steps.length || 0), 0)
+    : 0;
+  const activatePlan = async () => {
+    if (!planToActivate || addonSaving) return;
+    const result = store.activateClientPlan(planToActivate.id);
+    if (!(await saveAndCommit(result, "client_plan.manage"))) return;
+    if (activationPublishesNow && result.cycleId) {
+      const cycle = useStore.getState().serviceCycles.find(item => item.id === result.cycleId);
+      if (cycle?.status === "Draft") await saveAndCommit(useStore.getState().setServiceCycleStatus(cycle.id, "Published"), "service_cycle.manage");
+    }
+    setActivationConfirmOpen(false);
+    if (result.cycleId) selectMonth(result.cycleId);
+  };
+  const detailsPlan = store.clientPlans.find(item => item.id === detailsPlanId && item.clientId === client.id);
+  const editDetails = async () => {
+    if (!activePlan || !canManagePlans) return;
+    if (activePlan.status === 'Draft') { setDetailsPlanId(activePlan.id); return; }
+    const result = store.createClientPlanRevision(activePlan.id);
+    if (await saveAndCommit(result, 'client_plan.manage')) setDetailsPlanId(result.planId || null);
+  };
   const createRevision = async () => {
     if (!renewalSourcePlan || addonSaving) return;
     const result = store.createClientPlanRevision(renewalSourcePlan.id);
@@ -487,6 +525,31 @@ const OperationsClientWorkspace = () => {
     if (!saved) return;
     setPlanSavePending(!saved.ok && isPendingMutationResolution(useStore.getState().backend));
     setMessage(saved.ok ? msg('feedback.changesSaved') : saved.error || 'The change is waiting to be saved.', saved.ok ? 'success' : 'error');
+  };
+  const linkExistingTask = async (taskId: string, cycleId: string, deliverableId: string) => {
+    if (addonSaving || !taskId) return;
+    const saved = await saveAndCommit(store.linkTaskToDeliverable(taskId, cycleId, deliverableId), "task.update");
+    if (saved) setMessage(msg('feedback.changesSaved'), 'success');
+  };
+  // F3: publish late, cancel or close a month that has ended.
+  const setMonthStatus = async (cycleId: string, status: ServiceCycle["status"]) => {
+    if (addonSaving) return;
+    await saveAndCommit(store.setServiceCycleStatus(cycleId, status), "service_cycle.manage");
+  };
+  // F6: correct a deliverable name in a published month, with a reason kept
+  // as an internal note on that month.
+  const correctDeliverableName = async (deliverableId: string, cycleId: string, title: string, reason: string) => {
+    if (addonSaving) return false;
+    const result = store.correctDeliverableName(deliverableId, title);
+    const renamed = await saveAndCommit(result, "deliverable.manage");
+    if (!renamed || !result.ok) return false;
+    const note = t('Name corrected from "{from}" to "{to}". Reason: {reason}', { from: result.previousTitle || '', to: title, reason });
+    const noted = await saveAndCommit(useStore.getState().addCycleComment(cycleId, note, 'internal'), "cycle_comment.manage");
+    // The name is already saved. If the note is still queued (for example the
+    // connection dropped), it is retried automatically; say so instead of
+    // "Changes saved", and do not ask the user to submit it again.
+    if (!noted) setMessage(t('The new name is saved. The reason note is still saving and will finish when the connection is back.'));
+    return true;
   };
   const generateTaskChain = async (deliverableId: string) => {
     if (addonSaving) return;
@@ -557,10 +620,7 @@ const OperationsClientWorkspace = () => {
   };
 
   const tabs: { id: Tab; label: string; compactLabel?: string }[] = [
-    { id: "overview", label: t("Overview") },
-    { id: "plan", label: t("Plan") },
-    { id: "cycles", label: t("Cycles") },
-    ...(canManagePlans ? [{ id: "addons" as Tab, label: t("Add-ons") }] : []),
+    { id: "delivery", label: t("Plan & delivery") },
     { id: "activity", label: t("Activity / Files"), compactLabel: t("Activity") },
   ];
 
@@ -586,13 +646,29 @@ const OperationsClientWorkspace = () => {
           </>
         }
         action={
-          canManagePlans && activePlan?.status === "Draft" && !activePlan.supersedesPlanId ? (
-            <Button onClick={() => void saveAndCommit(store.activateClientPlan(activePlan.id), "client_plan.manage")}>
-              <Play className="h-4 w-4" />{t("Activate plan")}
+          planToActivate ? (
+            <Button onClick={() => setActivationConfirmOpen(true)}>
+              <Play className="h-4 w-4" />{t(activationPublishesNow ? "Activate & publish this month" : "Activate plan")}
             </Button>
           ) : null
         }
       />
+      {activationConfirmOpen && planToActivate && <ModalShell labelledBy={activationTitleId} onClose={() => { if (!addonSaving) setActivationConfirmOpen(false); }} panelClassName="max-w-lg"><div className="p-5">
+        <h2 id={activationTitleId} className="font-semibold text-ink">{t(activationPublishesNow ? "Activate & publish this month" : "Activate plan")}</h2>
+        <p className="mt-2 text-sm text-muted">{activationPublishesNow
+          ? t("This activates the plan and publishes this month, so the team can start work.")
+          : t("This activates the plan. Its first month can be published when it is due.")}</p>
+        <ul className="mt-4 divide-y divide-line/70 rounded-control border border-line text-sm">
+          {planToActivate.serviceItems.map(item => <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2"><span data-i18n-skip className="font-medium text-ink">{item.name}</span><span className="text-muted">{item.quantity} <span data-i18n-skip>{item.unit}</span></span></li>)}
+          {planToActivate.serviceItems.length === 0 && <li className="px-3 py-2 text-muted">{t("No services in this plan yet.")}</li>}
+        </ul>
+        {activationPublishesNow && activationTaskCount > 0 && <p className="mt-3 text-sm text-muted">{t("{count} workflow tasks can then be generated from this month.", { count: activationTaskCount })}</p>}
+        <div className="mt-5 flex justify-end gap-2">
+          <Button variant="secondary" disabled={addonSaving} onClick={() => setActivationConfirmOpen(false)}>{t("Cancel")}</Button>
+          <Button disabled={addonSaving} onClick={() => void activatePlan()}><Play className="h-4 w-4" />{t(activationPublishesNow ? "Activate & publish" : "Activate plan")}</Button>
+        </div>
+      </div></ModalShell>}
+      {detailsPlan && canManagePlans && <ModalShell labelledBy="plan-details-title" onClose={() => setDetailsPlanId(null)} panelClassName="max-w-4xl"><div className="p-4"><h2 id="plan-details-title" className="mb-4 font-semibold">{t('Edit details')}</h2><DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${detailsPlan.id}`} plan={detailsPlan} source={store.clientPlans.find(item => item.id === detailsPlan.supersedesPlanId) || detailsPlan} /><Button variant="secondary" className="mt-4" onClick={() => setDetailsPlanId(null)}>{t('Close')}</Button></div></ModalShell>}
       {canManagePlans && <div className="flex justify-end"><ContextualTutorialLink tutorialId="manage-service-plans" label={t("How do service plans work?")} /></div>}
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
         <SegmentedTabs<Tab> items={tabs} value={tab} onChange={next => {
@@ -614,165 +690,17 @@ const OperationsClientWorkspace = () => {
       )}
 
       {(
-        <div hidden={tab !== 'overview'} style={tab !== 'overview' ? { display: 'none' } : undefined} id={`${CLIENT_WORKSPACE_TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
+        <div hidden={tab !== 'delivery'} style={tab !== 'delivery' ? { display: 'none' } : undefined} id={`${CLIENT_WORKSPACE_TABS_ID}-panel-delivery`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-delivery`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+          <div className={cn("grid gap-5", !isClient && "xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]")}>
           <Surface variant="inset" className="p-6 sm:p-8">
-            <p className="calm-eyebrow">{t('Delivery progress')}</p>
-            <DeliveryProgress published={Boolean(currentCycle)} total={currentCycleDeliverables.length} delivered={currentDelivered}
+            <h2 className="calm-eyebrow">{t('Delivery progress')}</h2>
+            <DeliveryProgress published={Boolean(currentCycle)} total={currentCycleDeliverables.length} delivered={currentDelivered} confirmed={isClient ? undefined : currentConfirmed}
               draft={!isClient && allCycles.some(item => item.status === 'Draft' && parseOptionalDate(item.periodStart) && parseOptionalDate(item.periodEnd) && parseOptionalDate(item.periodStart)! <= today && today <= parseOptionalDate(item.periodEnd)!)} />
-            {!isClient && <React.Suspense fallback={null}><DeliveryReviewPanel clientId={client.id} includeOpenTasks /></React.Suspense>}
+            {!isClient && <div id="delivery-review" className="scroll-mt-36"><React.Suspense fallback={null}><DeliveryReviewPanel clientId={client.id} includeOpenTasks /></React.Suspense></div>}
           </Surface>
-          <Surface className="p-6">
-            <p className="calm-eyebrow">{t('Plan details')}</p>
-            <dl className="mt-5 divide-y divide-line/70">
-              {[["Active plan", activePlan?.name || "Not configured"], ["Plan status", activePlan?.status || "None"], ["Service cycles", String(cycles.length)], ["Next key date", activePlan?.contractEndDate || currentCycle?.periodEnd || "Not scheduled"]].map(([label, value]) => <div key={label} className="grid grid-cols-[120px_1fr] gap-3 py-3 text-sm"><dt className="text-muted">{t(label)}</dt><dd className="text-right font-medium text-ink">{label === 'Active plan' && activePlan?.name ? <span data-i18n-skip>{value}</span> : t(String(value))}</dd></div>)}
-            </dl>
-          </Surface>
-        </div>
-      )}
-
-      {tab === "plan" && (
-        <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-plan`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-plan`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} canManagePlans={canManagePlans} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => setTab('cycles')} />}
-          <section className={cn(cardBase, "overflow-hidden")}>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
-              <div>
-                <h2 className="font-semibold text-ink">
-                  {displayPlan?.name ? <span data-i18n-skip>{displayPlan.name}</span> : t("No service plan")}
-                </h2>
-                {displayPlan && (
-                  <p className="mt-1 text-sm text-muted">
-                    {selectedCycle && <>{t(selectedCycle.id === monthly.current?.id ? 'This month’s record' : 'Historical record')} · </>}{t('Revision')} {displayPlan.revision} · {selectedCycle ? <span>{monthlyRecordLabel(selectedCycle, locale)}</span> : <><span data-i18n-skip>{displayPlan.origin}</span> · {t('billing day')} {displayPlan.billingDay}</>}
-                    {!selectedCycle && displayPlan.contractEndDate
-                      ? <> · {t('contract reminder')} {!selectedCycle && displayPlan.contractEndDate}</>
-                      : ""}
-                  </p>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {displayPlan && (
-                  <Badge
-                    tone={
-                      displayPlan.status === "Active"
-                        ? "emerald"
-                        : displayPlan.status === "Draft"
-                          ? "amber"
-                          : "slate"
-                    }
-                  >
-                    {displayPlan.status}
-                  </Badge>
-                )}
-                {activePlan && !selectedCycle && activePlan.status === "Draft" && canManagePlans && (
-                  <Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button>
-                )}
-              </div>
-            </div>
-            {displayPlan ? (
-              <div className="divide-y divide-line/70">
-                {displayPlan.serviceItems.map((item) => (
-                  <div
-                    key={item.id}
-                    className="grid gap-2 px-5 py-4 md:grid-cols-[1fr_180px_150px] md:items-center"
-                  >
-                    <div>
-                      <p className="font-semibold text-ink">
-                        {item.name}
-                      </p>
-                      <p className="mt-1 text-sm text-muted">
-                        <span data-i18n-skip>{item.platforms.join(", ") || t("No platform")}</span> ·{" "}
-                        {item.quantity} <span data-i18n-skip>{item.unit}</span>
-                      </p>
-                      {item.workflow && (
-                        <p className="mt-1 text-xs font-medium text-accent">
-                          <span data-i18n-skip>{item.workflow.name}</span> · {t("rev")}{" "}
-                          {item.workflow.templateRevision} ·{" "}
-                          {item.workflow.steps.length} {t("tasks")}
-                        </p>
-                      )}
-                    </div>
-                    {canSeePrices && (
-                      <p className="text-sm font-medium text-ink">
-                        {formatMoney(item.unitPriceMinor, 'MYR', locale)} {t("each")}
-                      </p>
-                    )}
-                    <span className="text-sm text-muted">
-                      {item.quantity} {t("slots")}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-4 p-8 text-center">
-                <p className="text-sm text-muted">{t("No monthly plan record is available for this period.")}</p>
-                {canManagePlans && !activePlan && <Button onClick={() => setPlanModalOpen(true)}><Plus className="h-4 w-4" />{t("Add service plan")}</Button>}
-              </div>
-            )}
-            {canSeePrices && planTotals && (
-              <div className="flex justify-end border-t border-line bg-inset p-5">
-                <div className="text-right">
-                  <p className="text-xs text-muted">
-                    {t("Internal monthly total")}
-                  </p>
-                  <p className="text-xl font-semibold text-ink">
-                    {formatMoney(planTotals.total, 'MYR', locale)}
-                  </p>
-                </div>
-              </div>
-            )}
-            {selectedCycle && selectedCycle.addonSnapshots.length > 0 && <div className="border-t border-line px-5 py-4"><h3 className="text-sm font-semibold text-ink">{t('Add-ons in this period')}</h3>{selectedCycle.addonSnapshots.map(item => <p key={item.id} data-i18n-skip className="mt-2 text-sm text-muted">{item.name} · {item.quantity}{canSeePrices ? ` · ${formatMoney(item.unitPriceMinor, 'MYR', locale)}` : ''}</p>)}</div>}
-            {canManagePlans && activePlan && ['Active', 'Paused'].includes(activePlan.status) && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4"><p className="text-sm text-muted">{t('Plan settings apply to future billing cycles.')}</p><Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button></div>}
-            {canManagePlans && activeOrPausedPlan?.status === "Active" && (
-              <div className="flex flex-wrap justify-end gap-2 border-t p-4">
-                {!scheduledRevision && (
-                  <Button
-                    variant="secondary"
-                    onClick={() => void createRevision()}
-                  >
-                    <GitBranchPlus className="h-4 w-4" />
-                    {t("Create next revision")}
-                  </Button>
-                )}
-                  <Button
-                    variant="secondary"
-                    onClick={() => setPlanAction("pause")}
-                >
-                  <Pause className="h-4 w-4" />
-                  {t("Pause")}
-                </Button>
-                  <Button
-                    variant="secondary"
-                    onClick={() => setPlanAction("end")}
-                >
-                  <StopCircle className="h-4 w-4" />
-                  {t("End")}
-                </Button>
-              </div>
-            )}
-            {canManagePlans && activePlan?.status === "Paused" && (
-              <div className="flex justify-end border-t p-4">
-                <Button
-                  onClick={() =>
-                    void saveAndCommit(
-                      store.activateClientPlan(activePlan.id),
-                      "client_plan.manage",
-                    )
-                  }
-                >
-                  <Play className="h-4 w-4" />
-                  {t("Resume from next billing day")}
-                </Button>
-              </div>
-            )}
-          </section>
-          {canManagePlans && scheduledRevision && revisionSource && (
-            <DraftServicePlanEditor key={scheduledRevision.id} plan={scheduledRevision} source={revisionSource} />
-          )}
-        </div>
-      )}
-
-      {tab === "cycles" && (
-        <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-cycles`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-cycles`} tabIndex={0} className="scroll-mt-36 space-y-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} canManagePlans={canManagePlans} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => setTab('cycles')} />}
+            {!isClient && <ClientSpecialNotes client={client} />}
+          </div>
+          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} deliverables={store.deliverables} today={today} canManagePlans={canManagePlans} canManageCycles={!isClient && canManageCycles} busy={addonSaving} onSetCycleStatus={(id, status) => void setMonthStatus(id, status)} onEditDetails={() => void editDetails()} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => selectMonth(null)} />}
           {(selectedCycle ? [selectedCycle] : []).map((cycle) => {
             const cycleDeliverables = deliverables.filter(
               (item) => item.cycleId === cycle.id,
@@ -783,7 +711,6 @@ const OperationsClientWorkspace = () => {
             const progress = getCycleServiceProgress(cycle, cycleDeliverables);
             const closeout = getMonthlyCycleCloseout(cycle, cycleDeliverables, tasks, today);
             const includedTotal = progress.reduce((sum, item) => sum + item.included, 0);
-            const completedTotal = progress.reduce((sum, item) => sum + item.completed, 0);
             return (
               <section
                 key={cycle.id} id={`cycle-${cycle.id}`}
@@ -826,16 +753,16 @@ const OperationsClientWorkspace = () => {
                   </div>
                 </div>
                 <div className="border-b border-line bg-inset/70 px-5 py-5">
-                  <DeliveryProgress published={cycle.status === 'Published' || cycle.status === 'Completed'} total={includedTotal} delivered={completedTotal} draft={cycle.status === 'Draft'} />
-                  {cycle.status === 'Draft' && <p className="mt-2 text-sm text-muted">{t('Planned deliverables')}: {includedTotal}</p>}
-                  {progress.length > 1 && <p className="mt-4 text-xs text-muted">{progress.map((item) => item.name).join(" · ")}</p>}
-                  <section aria-label={t('Monthly cycle closeout')} className="mt-5 border-t border-line/70 pt-4">
+                  {/* The month's % lives in the delivery summary above; this block keeps the closeout figures. */}
+                  {cycle.status === 'Draft' && <p className="text-sm text-muted">{t('Planned deliverables')}: {includedTotal}</p>}
+                  {progress.length > 1 && <p className="mt-2 text-xs text-muted">{progress.map((item) => item.name).join(" · ")}</p>}
+                  <section aria-label={t('Monthly cycle closeout')} className={cn((cycle.status === 'Draft' || progress.length > 1) && "mt-5 border-t border-line/70 pt-4")}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div><h3 className="text-sm font-semibold text-ink">{t('Cycle closeout')}</h3><p className="mt-1 text-xs text-muted">{closeout.isReadyToClose ? t('All deliverables and tasks are complete.') : t('Resolve the remaining work before closing this cycle.')}</p></div>
                       <Badge tone={closeout.isReadyToClose ? 'emerald' : closeout.overdueTasks > 0 ? 'red' : 'amber'}>{t(closeout.isReadyToClose ? 'Ready to close' : 'In progress')}</Badge>
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-muted sm:grid-cols-5">
-                      <div><span className="calm-number block text-lg font-semibold text-ink">{closeout.completionPercent}%</span>{t('Delivery completion')}</div>
+                    {/* The % is shown once, in the delivery summary at the top of the tab. */}
+                    <div className="mt-4 grid grid-cols-2 gap-3 text-xs text-muted sm:grid-cols-4">
                       <div><span className="calm-number block text-lg font-semibold text-ink">{closeout.openTasks}</span>{t('Open tasks')}</div>
                       <div><span className="calm-number block text-lg font-semibold text-ink">{closeout.overdueTasks}</span>{t('Overdue tasks')}</div>
                       <div><span className="calm-number block text-lg font-semibold text-ink">{closeout.waitingApproval}</span>{t('Waiting approval')}</div>
@@ -986,8 +913,27 @@ const OperationsClientWorkspace = () => {
                                   }{" "}{t("tasks")}
                                 </Button>
                               )}
-                            {canLinkTasks && <Button variant="secondary" onClick={() => setTab('overview')}>{t('Review task links')}</Button>}
-                            <Button
+                            {deliverable.status !== "Delivered" && !serviceItem?.workflow && linkCandidates.length > 0 && (
+                              <select
+                                aria-label={`${t("Link a task")}: ${deliverable.title}`}
+                                value=""
+                                disabled={addonSaving}
+                                onChange={event => void linkExistingTask(event.target.value, cycle.id, deliverable.id)}
+                                className="min-h-10 max-w-full rounded-control border border-line bg-surface px-3 text-sm text-ink"
+                              >
+                                <option value="">{t("Link a task")}…</option>
+                                {linkCandidates.map(task => <option key={task.id} value={task.id} data-i18n-skip>{task.title}{task.dueDate ? ` · ${task.dueDate}` : ''}</option>)}
+                              </select>
+                            )}
+                            {!isClient && canManageCycles && (cycle.status === "Published" || cycle.status === "Completed") && (
+                              <CorrectDeliverableName
+                                deliverable={deliverable}
+                                disabled={addonSaving}
+                                onSave={(title, reason) => correctDeliverableName(deliverable.id, cycle.id, title, reason)}
+                              />
+                            )}
+                            {canLinkTasks && <Button variant="secondary" onClick={() => document.getElementById('delivery-review')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{t('Review task links')}</Button>}
+                            {canAddManualTask && <Button
                               variant="secondary"
                               disabled={deliverable.status === 'Delivered'}
                               title={deliverable.status === 'Delivered' ? t('Reopen the delivery before adding task links.') : undefined}
@@ -1003,7 +949,7 @@ const OperationsClientWorkspace = () => {
                             >
                               <Plus className="h-4 w-4" />
                               {t("Task")}
-                            </Button>
+                            </Button>}
                           </div>
                         )}
                       </div>
@@ -1018,22 +964,140 @@ const OperationsClientWorkspace = () => {
               {t("No visible service cycles yet.")}
             </p>
           )}
-        </div>
-      )}
-
-      {tab === "addons" && canManagePlans && (
-        <div id={`${CLIENT_WORKSPACE_TABS_ID}-panel-addons`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-addons`} tabIndex={0} className="scroll-mt-36 space-y-4 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="font-semibold text-ink">{t("Service add-ons")}</h2><p className="mt-1 text-sm text-muted">{t("One-off and recurring scope changes remain visible in the history.")}</p></div><div className="flex flex-wrap gap-2">{extrasCycle && <Button variant="secondary" onClick={logExtraRequest}><Plus className="h-4 w-4" />{t("Log extra request")}</Button>}<Button onClick={() => setAddonSheetOpen(true)}><Plus className="h-4 w-4" />{t("Add service add-on")}</Button></div></div>
-          {extrasCycle && cycleExtras && <section aria-labelledby="cycle-extras-title" className={cn(cardBase, "p-5")}>
-            <h3 id="cycle-extras-title" className="font-semibold text-ink">{t("Extra requests this month")}</h3>
-            <p className="mt-1 text-sm text-muted">{t("Work asked for outside the plan. Log it at no charge to keep a record, or with a price to bill it.")}</p>
-            <dl className="mt-3 grid grid-cols-3 gap-3 text-sm">
-              <div><dt className="text-muted">{t("Requests")}</dt><dd className="calm-number text-lg font-semibold text-ink">{cycleExtras.extras.length}</dd></div>
-              <div><dt className="text-muted">{t("At no charge")}</dt><dd className="calm-number text-lg font-semibold text-ink">{cycleExtras.free}</dd></div>
-              <div><dt className="text-muted">{t("Billable")}</dt><dd className="calm-number text-lg font-semibold text-ink">{cycleExtras.billable}{canSeePrices && cycleExtras.billableMinor > 0 ? ` · ${formatMoney(cycleExtras.billableMinor, 'MYR', locale)}` : ''}</dd></div>
-            </dl>
-            {cycleExtras.free >= 2 && <p className="mt-3 text-sm text-amber-800">{t("Several requests were done at no charge this month. Consider billing them or discussing a larger plan.")}</p>}
-          </section>}
+          <section className={cn(cardBase, "overflow-hidden")}>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
+              <div>
+                <h2 className="font-semibold text-ink">
+                  {displayPlan?.name ? <span data-i18n-skip>{displayPlan.name}</span> : t("No service plan")}
+                </h2>
+                {displayPlan && (
+                  <p className="mt-1 text-sm text-muted">
+                    {selectedCycle && <>{t(selectedCycle.id === monthly.current?.id ? 'This month’s record' : 'Historical record')} · </>}{t('Revision')} {displayPlan.revision} · {selectedCycle ? <span>{monthlyRecordLabel(selectedCycle, locale)}</span> : <><span data-i18n-skip>{displayPlan.origin}</span> · {t('billing day')} {displayPlan.billingDay}</>}
+                    {!selectedCycle && displayPlan.contractEndDate
+                      ? <> · {t('contract reminder')} {!selectedCycle && displayPlan.contractEndDate}</>
+                      : ""}
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {displayPlan && (
+                  <Badge
+                    tone={
+                      displayPlan.status === "Active"
+                        ? "emerald"
+                        : displayPlan.status === "Draft"
+                          ? "amber"
+                          : "slate"
+                    }
+                  >
+                    {displayPlan.status}
+                  </Badge>
+                )}
+                {activePlan && !selectedCycle && activePlan.status === "Draft" && canManagePlans && (
+                  <Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button>
+                )}
+              </div>
+            </div>
+            {displayPlan ? (
+              <div className="divide-y divide-line/70">
+                {displayPlan.serviceItems.map((item) => (
+                  <div
+                    key={item.id}
+                    className="grid gap-2 px-5 py-4 md:grid-cols-[1fr_180px_150px] md:items-center"
+                  >
+                    <div>
+                      <p className="font-semibold text-ink">
+                        {item.name}
+                      </p>
+                      <p className="mt-1 text-sm text-muted">
+                        <span data-i18n-skip>{item.platforms.join(", ") || t("No platform")}</span> ·{" "}
+                        {item.quantity} <span data-i18n-skip>{item.unit}</span>
+                      </p>
+                      {item.workflow && (
+                        <p className="mt-1 text-xs font-medium text-accent">
+                          <span data-i18n-skip>{item.workflow.name}</span> · {t("rev")}{" "}
+                          {item.workflow.templateRevision} ·{" "}
+                          {item.workflow.steps.length} {t("tasks")}
+                        </p>
+                      )}
+                    </div>
+                    {canSeePrices && (
+                      <p className="text-sm font-medium text-ink">
+                        {formatMoney(item.unitPriceMinor, 'MYR', locale)} {t("each")}
+                      </p>
+                    )}
+                    <span className="text-sm text-muted">
+                      {item.quantity} {t("slots")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-4 p-8 text-center">
+                <p className="text-sm text-muted">{t("No monthly plan record is available for this period.")}</p>
+                {canManagePlans && !activePlan && <Button onClick={() => setPlanModalOpen(true)}><Plus className="h-4 w-4" />{t("Add service plan")}</Button>}
+              </div>
+            )}
+            {canSeePrices && planTotals && (
+              <div className="flex justify-end border-t border-line bg-inset p-5">
+                <div className="text-right">
+                  <p className="text-xs text-muted">
+                    {t("Internal monthly total")}
+                  </p>
+                  <p className="text-xl font-semibold text-ink">
+                    {formatMoney(planTotals.total, 'MYR', locale)}
+                  </p>
+                </div>
+              </div>
+            )}
+            {selectedCycle && selectedCycle.addonSnapshots.length > 0 && <div className="border-t border-line px-5 py-4"><h3 className="text-sm font-semibold text-ink">{t('Add-ons in this period')}</h3>{selectedCycle.addonSnapshots.map(item => <p key={item.id} data-i18n-skip className="mt-2 text-sm text-muted">{item.name} · {item.quantity}{canSeePrices ? ` · ${formatMoney(item.unitPriceMinor, 'MYR', locale)}` : ''}</p>)}</div>}
+            {canManagePlans && activePlan && ['Active', 'Paused'].includes(activePlan.status) && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4"><p className="text-sm text-muted">{t('Plan settings apply to future billing cycles.')}</p><Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button></div>}
+            {canManagePlans && activeOrPausedPlan?.status === "Active" && (
+              <div className="flex flex-wrap justify-end gap-2 border-t p-4">
+                {!scheduledRevision && (
+                  <Button
+                    variant="secondary"
+                    onClick={() => void createRevision()}
+                  >
+                    <GitBranchPlus className="h-4 w-4" />
+                    {t("Create next revision")}
+                  </Button>
+                )}
+                  <Button
+                    variant="secondary"
+                    onClick={() => setPlanAction("pause")}
+                >
+                  <Pause className="h-4 w-4" />
+                  {t("Pause")}
+                </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => setPlanAction("end")}
+                >
+                  <StopCircle className="h-4 w-4" />
+                  {t("End")}
+                </Button>
+              </div>
+            )}
+            {canManagePlans && activePlan?.status === "Paused" && (
+              <div className="flex justify-end border-t p-4">
+                <Button
+                  onClick={() =>
+                    void saveAndCommit(
+                      store.activateClientPlan(activePlan.id),
+                      "client_plan.manage",
+                    )
+                  }
+                >
+                  <Play className="h-4 w-4" />
+                  {t("Resume from next billing day")}
+                </Button>
+              </div>
+            )}
+          </section>
+          {canManagePlans && (
+        <section aria-labelledby="client-addons-title" className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="client-addons-title" className="font-semibold text-ink">{t("Service add-ons")}</h2><p className="mt-1 text-sm text-muted">{t("One-off and recurring scope changes remain visible in the history.")}</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => setAddonSheetOpen(true)}><Plus className="h-4 w-4" />{t("Add service add-on")}</Button></div></div>
           <section className={cn(cardBase, "divide-y divide-line/70")}>
             {addons.map((item) => (
               <div
@@ -1099,6 +1163,11 @@ const OperationsClientWorkspace = () => {
               <EmptyState title={t("No add-ons yet")} description={t("Add one-off or monthly scope when this client needs work outside the active plan.")} className="m-4" />
             )}
           </section>
+        </section>
+          )}
+          {canManagePlans && scheduledRevision && revisionSource && (
+            <DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${scheduledRevision.id}`} plan={scheduledRevision} source={revisionSource} />
+          )}
         </div>
       )}
 
@@ -1153,7 +1222,7 @@ const OperationsClientWorkspace = () => {
         footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAddonSheetOpen(false)} disabled={addonSaving}>{t("Cancel")}</Button><Button type="submit" form="add-addon-form" disabled={addonSaving}><Plus className="h-4 w-4" />{addonSaving ? t("Saving…") : pendingAddon.current ? t("Retry save") : t("Add add-on")}</Button></div>}
       >
         <form id="add-addon-form" onSubmit={addAddon} className="space-y-5">
-          {message && tab === 'addons' && <p role={feedback?.tone === 'error' ? 'alert' : 'status'}><SystemMessage message={message} /></p>}
+          {message && addonSheetOpen && <p role={feedback?.tone === 'error' ? 'alert' : 'status'}><SystemMessage message={message} /></p>}
           <fieldset disabled={addonSaving || Boolean(pendingAddon.current)} className="min-w-0 border-0 p-0 space-y-5">
           <label className="block text-sm font-medium text-ink">{t("Add-on name")}<input data-i18n-skip required className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.name} onChange={(e) => setAddon({ ...addon, name: e.target.value })} /></label>
           <label className="block text-sm font-medium text-ink">{t("Platforms")}<input data-i18n-skip placeholder={t("Instagram, TikTok")} className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.platforms} onChange={(e) => setAddon({ ...addon, platforms: e.target.value })} /></label>

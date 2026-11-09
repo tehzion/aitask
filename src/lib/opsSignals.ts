@@ -21,7 +21,7 @@ export const getStuckWork = (tasks: readonly Task[], today: Date, overdueDays = 
 export type CyclePace = 'done' | 'onTrack' | 'atRisk' | 'missed';
 
 /**
- * Compares confirmed deliveries with how much of the cycle has passed, so a
+ * Compares completed work (Ready or Delivered) with how much of the cycle has passed, so a
  * month can be flagged while there is still time to recover.
  */
 export const getCyclePace = (

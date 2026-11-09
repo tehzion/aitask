@@ -63,6 +63,15 @@ const saved = (page: Page) => page.evaluate(async () => {
   return { status: task.status, isCompleted: task.isCompleted, revisionCount: task.revisionCount, attachmentLink: task.attachmentLink, history: (task.workHistory || []).length };
 });
 
+test('an unassigned pending task shows its blocked next action instead of unrelated status actions', async ({ page }) => {
+  await seed(page, PM, { assignedTo: '' });
+  const panel = await openAs(page, PM);
+  await expect(panel.getByRole('button', { name: 'Start work', exact: true })).toBeDisabled();
+  await expect(panel.getByText('Assign a responsible person before starting work.')).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Waiting for review', exact: true })).toHaveCount(0);
+  await expect(panel.getByRole('button', { name: 'Cancelled', exact: true })).toHaveCount(0);
+});
+
 test('A: an ordinary task is started and sent for review without any attachment', async ({ page }) => {
   await seed(page, STAFF);
   const panel = await openAs(page, STAFF);

@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import { BookOpen, CheckCircle2, CircleHelp, Clock3, Filter, GitBranch, LockKeyhole, MessageSquareText, RefreshCw, Route, Search, ShieldCheck, X } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';

@@ -313,6 +313,20 @@ export interface AttachmentRef {
   uploadedAt: string;
 }
 
+export interface ServiceCyclePayment {
+  id: string;
+  version?: number;
+  cycleId: string;
+  clientId: string;
+  amountMinor: number;
+  paymentDate: string;
+  createdBy: string;
+  createdAt: string;
+  voidedBy?: string;
+  voidedAt?: string;
+  voidReason?: string;
+}
+
 export interface ServiceCycle {
   id: string;
   version?: number;
@@ -553,6 +567,8 @@ export interface Task {
   assignedAt?: string; // ISO timestamp of the last assignment change
   startDate: string; // ISO Date String, defaults to the current date
   dueDate: string; // Optional ISO Date String, blank when unset
+  /** Optional ISO date the deliverable is scheduled to be posted/published. */
+  postingDate?: string;
   priority: Priority;
   status: TaskStatus;
   completionPercentage: number;

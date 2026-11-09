@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import { getLocalizedDepartment, getLocalizedTaskStatus } from '../lib/localeLabels';
 import UnavailableWork from './UnavailableWork';
 import '../lib/staffWorkflowCopy';
@@ -8,7 +9,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import type { Priority, TaskStatus } from '../types';
 import { useStore } from '../store';
-import { getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
+import { getVisibleTasks, isDepartmentScopedUser, isHodUser, canCreateTasksFromAnywhere } from '../lib/access';
 import { buildStaffWorkQueue, getHodScopeTasks, isStaffGuidedActionEnabled } from '../lib/staffWorkspace';
 import { normalizeDepartment } from '../lib/departments';
 import { getTodayInputDate } from '../lib/utils';
@@ -18,7 +19,7 @@ import SideSheet from './SideSheet';
 import StaffTaskFocus from './StaffTaskFocus';
 import StaffWorkItem from './StaffWorkItem';
 import TaskDetailsModal from './TaskDetailsModal';
-import { canCreateTasks, canEditTask } from '../lib/access';
+import { canEditTask } from '../lib/access';
 import { useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
@@ -28,6 +29,11 @@ import { shouldApplyTaskListScope, TASK_LIST_SCOPE_PARAM } from '../lib/taskList
 import { countTasksByStageFilter, isTaskInStageFilter, parseTaskStageFilter, type TaskStageFilter } from '../lib/taskStage';
 import { isTaskOverdue } from '../lib/taskReporting';
 import TaskStageFilterBar from './TaskStageFilterBar';
+
+// Portfolio replaced the PM dashboard (team feedback, 9 Nov 2026). Its overview
+// (summary, review lanes, stuck work, plans at risk, renewals, project health)
+// sits above the full task list. Lazy so Staff and HOD never load it.
+const ServiceRoleDashboard = React.lazy(() => import('./ServiceRoleDashboard'));
 
 // Older links used queue tabs; map them onto the shared stage tabs.
 const legacyQueueStage: Record<string, TaskStageFilter> = { done: 'completed', waiting: 'review', up_next: 'todo' };
@@ -48,7 +54,7 @@ const StaffAllWork: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }) 
     deliverables: state.deliverables,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
-  const canCreateTask = canCreateTasks(currentUser, rolePermissions);
+  const canCreateTask = canCreateTasksFromAnywhere(currentUser, rolePermissions);
   const legacyQueue = searchParams.get('queue') || '';
   const stage: TaskStageFilter = searchParams.has(TASK_LIST_SCOPE_PARAM) ? parseTaskStageFilter(searchParams.get(TASK_LIST_SCOPE_PARAM)) : legacyQueueStage[legacyQueue] || 'active';
   const needsActionOnly = legacyQueue === 'needs_action';
@@ -190,7 +196,7 @@ const StaffAllWork: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }) 
     <div className={`${pageShell} max-w-6xl`}>
       <PageHeader
         compact
-        title={t(isProjectManager ? 'Portfolio work' : isDepartmentLead ? 'Department tasks' : 'All work')}
+        title={t(isProjectManager ? 'Portfolio' : isDepartmentLead ? 'Department tasks' : 'All work')}
         description={t(isProjectManager ? 'Every task in your projects, ordered by risk and next action.' : isDepartmentLead ? 'Department and delegated tasks, including work awaiting your review.' : 'Your assigned and created tasks, ordered by next action.')}
         hideDescriptionOnMobile
         meta={<><span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>{viewsSlot}</>}
@@ -199,6 +205,8 @@ const StaffAllWork: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }) 
           <Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />{t('Filters')}{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>
         </div>}
       />
+
+      {isProjectManager && <div className="mt-5"><React.Suspense fallback={null}><ServiceRoleDashboard /></React.Suspense></div>}
 
       <div className="mt-5 flex items-center gap-2">
         <label className="relative block min-w-0 flex-1">

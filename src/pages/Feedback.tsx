@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from '../components/SystemMessage';
 import React from 'react';
 import { CheckCircle2, ClipboardCheck, Languages, Send } from 'lucide-react';

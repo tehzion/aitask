@@ -1,4 +1,6 @@
+import '../lib/pageCopy';
 import SystemMessage from '../components/SystemMessage';
+import { isDeliverableWorkDone } from '../lib/serviceManagement';
 import React from 'react';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { createPortal } from 'react-dom';
@@ -20,7 +22,7 @@ import {
 } from 'lucide-react';
 import { Badge, Button, PageHeader, ProgressBar, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateClientProfiles, canCreateTasks, canDeleteClientProfile, canEditClientProfile, canEditProject, canHandOverClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo, isClientHandoverTarget, isHodUser } from '../lib/access';
+import { canCreateClientProfiles, canCreateManualTasks, getAssignableProjects, canDeleteClientProfile, canEditClientProfile, canEditProject, canHandOverClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo, isClientHandoverTarget, isHodUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { resolveClientAddedDate } from '../lib/clientDates';
 import { cn } from '../lib/utils';
@@ -147,7 +149,7 @@ const Clients: React.FC = () => {
     users,
     currentUser,
     rolePermissions,
-    setCreateTaskModalOpen,
+    openCreateTaskForProject,
     upsertClientProfile,
     renameClient,
     assignClientOwner,
@@ -164,7 +166,7 @@ const Clients: React.FC = () => {
     users: state.users,
     currentUser: state.currentUser,
     rolePermissions: state.rolePermissions,
-    setCreateTaskModalOpen: state.setCreateTaskModalOpen,
+    openCreateTaskForProject: state.openCreateTaskForProject,
     upsertClientProfile: state.upsertClientProfile,
     renameClient: state.renameClient,
     assignClientOwner: state.assignClientOwner,
@@ -321,7 +323,17 @@ const Clients: React.FC = () => {
     () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions, { clients: clientProfiles, projects: allProjects }),
     [allProjects, allTasks, clientProfiles, currentUser, rolePermissions]
   );
-  const canAddTasks = !upgradeRequired && canCreateTasks(currentUser, rolePermissions);
+  const canAddTasks = !upgradeRequired && canCreateManualTasks(currentUser, rolePermissions);
+  // Tasks are opened from inside a project (team feedback, 9 Nov 2026), so the
+  // company and project never need picking from a long list. An HOD may only add
+  // tasks to projects they are an HOD on (decision C1).
+  const taskProjectIds = React.useMemo(() => new Set(
+    canAddTasks
+      ? getAssignableProjects(currentUser, allProjects, allTasks, rolePermissions, users, { clients: clientProfiles, projects: allProjects })
+        .filter(project => !isHodUser(currentUser, rolePermissions) || Boolean(currentUser && project.hodMemberIds?.includes(currentUser.id)))
+        .map(project => project.id)
+      : [],
+  ), [allProjects, allTasks, canAddTasks, clientProfiles, currentUser, rolePermissions, users]);
   const canAddProjects = !upgradeRequired && canManageProjects(currentUser, rolePermissions);
 
   const clients = React.useMemo(() => {
@@ -515,7 +527,7 @@ const Clients: React.FC = () => {
       const plan = plans.find(item => item.status === 'Active') || plans.find(item => item.status === 'Paused') || plans[0];
       const cycle = serviceCycles.filter(item => item.clientId === profileId).sort((a, b) => b.periodStart.localeCompare(a.periodStart))[0];
       const cycleDeliverables = cycle ? deliverables.filter(item => item.cycleId === cycle.id) : [];
-      const deliveredCount = cycleDeliverables.filter(item => item.status === 'Delivered').length;
+      const deliveredCount = cycleDeliverables.filter(isDeliverableWorkDone).length;
       contextByKey.set(getClientKey(client.name), { plan, cycle, included: cycleDeliverables.length, delivered: deliveredCount });
     });
     return contextByKey;
@@ -804,7 +816,6 @@ const Clients: React.FC = () => {
           {canAddProjects && <ContextualTutorialLink tutorialId="create-project" label={t('Need help creating a project?')} />}
           {canCreateClientProfiles(currentUser, rolePermissions) && <Button data-onboarding-target="create-company" onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />{t('New client')}</Button>}
           {canAddProjects && <Button data-onboarding-target="create-project" variant="secondary" onClick={() => openProjectEditor(null)}><Plus className="h-4 w-4" />{t('New project')}</Button>}
-          {canAddTasks && <Button data-onboarding-target="create-task" variant="secondary" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
         </div>}
       />
 
@@ -900,7 +911,7 @@ const Clients: React.FC = () => {
                       <div className="font-semibold text-ink">{client.taskCount} {t('total')}</div>
                       <p className="mt-1 text-xs text-slate-500">{client.openTaskCount} {t('open')}, {client.completedTaskCount} {t('completed')}</p>
                       <p className="mt-1 text-xs text-slate-500">{client.projectIds.size} {t(client.projectIds.size === 1 ? 'company record' : 'company records')}</p>
-                      {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label={t('Cycle delivered')} value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
+                      {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label={t('Cycle progress')} value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
                     </td>
                     <td className="px-5 py-6 align-top">
                       <div className="flex flex-col items-start gap-2">
@@ -1311,6 +1322,9 @@ const Clients: React.FC = () => {
                             <p className="mt-0.5 text-xs text-slate-500">{t('Start date')}: {project.startDate || '—'} · {t('Deadline')}: {project.deadline || '—'}</p>
                           </div>
                           <div className="flex flex-wrap gap-2">
+                            {taskProjectIds.has(project.id) && (
+                              <button type="button" data-onboarding-target="create-task" aria-label={`${t('Add task to')} ${project.projectName}`} onClick={() => openCreateTaskForProject({ projectId: project.id, clientId: project.clientId, clientName: project.clientName })} className="inline-flex min-h-9 items-center gap-1 rounded-lg border border-blue-200 px-3 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-50"><Plus className="h-3.5 w-3.5" />{t('Task')}</button>
+                            )}
                             <button type="button" onClick={() => setManagedProjectId(project.id)} className="inline-flex min-h-9 items-center rounded-lg bg-blue-600 px-3 text-xs font-semibold text-white transition-colors hover:bg-blue-700">{t('Open project')}</button>
                             {canEditProject(currentUser, project, rolePermissions) && (
                               <button type="button" onClick={() => openProjectEditor(project)} className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50">{t('Edit project')}</button>

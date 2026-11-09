@@ -1,3 +1,4 @@
+import '../../../lib/pageCopy';
 import SystemMessage from '../../../components/SystemMessage';
 import type { MessageDescriptor } from '../../../lib/messages';
 import { useSoundNotifications } from '../hooks/useSoundNotifications';

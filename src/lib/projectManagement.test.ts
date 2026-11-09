@@ -6,6 +6,7 @@ import {
   getEffectiveTaskApprovalMode,
   getProjectClosureWarnings,
   milestoneTaskProgress,
+  projectDeletionBlocker,
 } from './projectManagement';
 
 const project: Project = {
@@ -52,5 +53,31 @@ describe('milestones and closure', () => {
     expect(health.health).toBe('atRisk');
     expect(health.milestoneCount).toBe(1);
     expect(health.progressPercent).toBeUndefined();
+  });
+});
+
+describe('project deletion blocker', () => {
+  const linked = [{ projectId: project.id, assignedTo: 'staff-a' }];
+  const pm = { id: 'pm-a', role: 'Project Manager' as const };
+  const staff = { id: 'staff-a', role: 'Staff' as const };
+
+  it('allows any role to delete a project without tasks', () => {
+    expect(projectDeletionBlocker(staff, project, [], true)).toBeUndefined();
+    expect(projectDeletionBlocker(staff, { ...project, status: 'Closed' } as Project, [])).toBeUndefined();
+  });
+
+  it('asks to reopen a closed project that still has tasks', () => {
+    expect(projectDeletionBlocker(pm, { ...project, status: 'Closed' } as Project, linked)).toMatch(/^Reopen this project/);
+  });
+
+  it('blocks an HOD but not a Project Manager or Boss Koo', () => {
+    expect(projectDeletionBlocker(pm, project, linked)).toBeUndefined();
+    expect(projectDeletionBlocker({ id: 'boss', role: 'Staff', isSuperAdmin: true }, project, linked)).toBeUndefined();
+    expect(projectDeletionBlocker({ id: 'staff-a', role: 'Staff' }, project, linked, true)).toMatch(/^Only a Project Manager or Boss Koo can delete a project that still has tasks/);
+  });
+
+  it('lets Staff delete only when every linked task is theirs', () => {
+    expect(projectDeletionBlocker(staff, project, linked)).toBeUndefined();
+    expect(projectDeletionBlocker(staff, project, [...linked, { projectId: project.id, assignedTo: 'staff-b' }])).toMatch(/assigned to other staff/);
   });
 });

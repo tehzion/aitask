@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CustomRole, User } from '../types';
-import { defaultRolePermissions } from './access';
+import { canCreateManualTasks, canCreateTasksFromAnywhere, defaultRolePermissions, getDefaultAccessiblePath } from './access';
 import { getDeliveryWorkspaceLabel, getMobileNavigation, getNavigationSections } from './navigation';
 
 const internalUsers: User[] = [
@@ -77,5 +77,34 @@ describe('delivery tracker navigation labels', () => {
       departments: ['Client'],
       department: 'Client',
     })).toBe('Deliveries');
+  });
+});
+
+describe('one home per role (team feedback, 9 Nov 2026)', () => {
+  const [boss, pm, hod, staff] = internalUsers;
+
+  it('lands a Project Manager on Portfolio and hides the duplicate dashboard', () => {
+    const sections = getNavigationSections(pm);
+    expect(sections.primary[0]).toMatchObject({ path: '/tasks', label: 'Portfolio' });
+    expect(sections.primary.some(entry => entry.path === '/')).toBe(false);
+    expect(getMobileNavigation(pm).some(entry => entry.path === '/')).toBe(false);
+    expect(getMobileNavigation(pm)[0]).toMatchObject({ path: '/tasks', label: 'Portfolio' });
+    expect(getDefaultAccessiblePath(pm)).toBe('/tasks');
+  });
+
+  it('keeps the agency dashboard for Boss Koo', () => {
+    expect(getNavigationSections(boss).primary.some(entry => entry.path === '/')).toBe(true);
+    expect(getDefaultAccessiblePath(boss)).not.toBe('/tasks');
+  });
+
+  it('limits global New task entry points to Boss Koo', () => {
+    expect(canCreateTasksFromAnywhere(boss)).toBe(true);
+    [pm, hod, staff].forEach(user => expect(canCreateTasksFromAnywhere(user), user.role).toBe(false));
+  });
+
+  it('never lets Staff write tasks by hand, even with the createTasks permission', () => {
+    const permitted = { ...staff, permissions: { createTasks: true } } as typeof staff;
+    expect(canCreateManualTasks(permitted)).toBe(false);
+    expect(canCreateManualTasks(pm)).toBe(true);
   });
 });

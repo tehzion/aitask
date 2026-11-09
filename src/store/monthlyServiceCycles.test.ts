@@ -1,6 +1,8 @@
+import { defaultRolePermissions } from '../lib/access';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task, User } from '../types';
 import { useStore } from './index';
+import { nextRevisionBoundary } from '../lib/serviceManagement';
 
 const initial = useStore.getState();
 const pm: User = { id: 'monthly-pm', name: 'Monthly PM', role: 'Project Manager', department: 'Management', departments: ['Management'] };
@@ -72,6 +74,21 @@ describe('monthly service cycle rollover', () => {
     expect(useStore.getState().serviceCycles[0]).toEqual(oldCycle);
     expect(useStore.getState().serviceCycles.slice(1).map(item => item.planId)).toEqual([revision.planId, revision.planId]);
     expect(useStore.getState().deliverables).toHaveLength(8);
+  });
+
+  it('schedules a draft created before a cycle rolled over for the next upcoming boundary', () => {
+    const id = createPlan();
+    useStore.getState().activateClientPlan(id);
+    const revision = useStore.getState().createClientPlanRevision(id);
+    expect(useStore.getState().clientPlans.find(item => item.id === revision.planId)?.effectiveFromCycleStart).toBe('2026-10-09');
+    setDay(2026, 11, 4);
+    useStore.getState().generateDueLocalServiceCycles();
+    const source = useStore.getState().clientPlans.find(item => item.id === id)!;
+    expect(source.nextCycleStart).toBe('2026-11-09');
+    expect(nextRevisionBoundary(source, '2026-11-04')).toBe('2026-11-09');
+    expect(useStore.getState().scheduleClientPlanRevision(revision.planId!, '2026-10-09').ok).toBe(false);
+    expect(useStore.getState().scheduleClientPlanRevision(revision.planId!, '2026-11-09').ok).toBe(true);
+    expect(useStore.getState().clientPlans.find(item => item.id === revision.planId)).toMatchObject({ revisionScheduleStatus: 'scheduled', effectiveFromCycleStart: '2026-11-09' });
   });
 
   it.each(['Draft', 'Paused', 'Ended'] as const)('does not renew a %s plan', status => {
@@ -198,5 +215,44 @@ describe('monthly service cycle rollover', () => {
     };
     useStore.setState(current => ({ tasks: [...current.tasks, sourceTask], currentUser: { ...pm, role: 'Staff' } }));
     expect(useStore.getState().carryForwardTaskToCycle(sourceTask.id, targetCycle.id).ok).toBe(false);
+  });
+  it('edits one pending revision while leaving a paused source and all existing months intact', () => {
+    const id = createPlan(); useStore.getState().activateClientPlan(id);
+    useStore.getState().setClientPlanStatus(id, 'Paused');
+    const source = structuredClone(useStore.getState().clientPlans.find(plan => plan.id === id));
+    const history = structuredClone(useStore.getState().serviceCycles);
+    const revision = useStore.getState().createClientPlanRevision(id);
+    expect(revision.ok).toBe(true);
+    expect(useStore.getState().createClientPlanRevision(id)).toEqual(revision);
+    expect(useStore.getState().updateDraftClientPlan(revision.planId!, { name: 'Future terms', billingDay: 15, taxRateBps: 600, discountType: 'fixed', discountValue: 1000 }).ok).toBe(true);
+    expect(useStore.getState().scheduleClientPlanRevision(revision.planId!, '2026-10-09').ok).toBe(false);
+    setDay(2026, 10, 10); useStore.getState().generateDueLocalServiceCycles();
+    expect(useStore.getState().clientPlans.find(plan => plan.id === id)).toEqual(source);
+    expect(useStore.getState().serviceCycles).toEqual(history);
+  });
+
+});
+
+describe('PM scope-only plan changes', () => {
+  it('preserves prices and discounts when the PM cannot view prices', () => {
+    const id = createPlan();
+    const before = structuredClone(useStore.getState().clientPlans.find(plan => plan.id === id)!);
+    const pricing = structuredClone(useStore.getState().servicePricingSnapshots);
+    useStore.setState({ currentUser: { ...pm, permissions: { ...defaultRolePermissions['Project Manager'], viewServicePrices: false } } });
+    expect(useStore.getState().updateDraftClientPlan(id, {
+      name: 'Scope only', serviceItems: before.serviceItems.map(item => ({ ...item, quantity: 3, unitPriceMinor: 0 })),
+      discountType: 'none', discountValue: 0, taxRateBps: 0,
+    }).ok).toBe(true);
+    const saved = useStore.getState().clientPlans.find(plan => plan.id === id)!;
+    expect(saved.serviceItems[0]).toMatchObject({ quantity: 3, unitPriceMinor: before.serviceItems[0].unitPriceMinor });
+    expect([saved.discountType, saved.discountValue, saved.taxRateBps]).toEqual([before.discountType, before.discountValue, before.taxRateBps]);
+    expect(useStore.getState().servicePricingSnapshots).toEqual(pricing);
+  });
+  it('rejects a PM outside the company portfolio without changing the plan', () => {
+    const id = createPlan();
+    const before = useStore.getState().clientPlans;
+    useStore.setState({ currentUser: { ...pm, id: 'outside-pm' } });
+    expect(useStore.getState().updateDraftClientPlan(id, { name: 'Unauthorized' }).ok).toBe(false);
+    expect(useStore.getState().clientPlans).toBe(before);
   });
 });

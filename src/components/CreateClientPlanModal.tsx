@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import SystemMessage from './SystemMessage';
 import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import DraftRecoveryNotice from './DraftRecoveryNotice';

@@ -39,6 +39,29 @@ const expectNoHorizontalOverflow = async (page: Page, context: string) => {
 };
 
 test.describe('Calendar overview and navigation', () => {
+  test('shows Sunday tasks and allows selecting Sunday in month and week views', async ({ page }) => {
+    await page.clock.setFixedTime(new Date('2026-11-04T12:00:00'));
+    await signInAs(page, 'Boss Koo');
+    await page.evaluate(async () => {
+      const { useStore } = await import('/src/store/index.ts');
+      const state = useStore.getState();
+      useStore.setState({ tasks: [{ ...state.tasks[0], id: 'sunday-test', title: 'Sunday calendar task', startDate: '2026-11-08', dueDate: '2026-11-08' }, ...state.tasks] });
+    });
+    await page.goto('/calendar');
+    const sunday = page.locator('[data-calendar-date="2026-11-08"]');
+    await expect(sunday).toBeVisible();
+    await expect(page.getByRole('group', { name: /Sunday calendar task/ })).toBeVisible();
+    await sunday.getByRole('button', { name: /Select date/ }).click();
+    await expect(page.locator('#calendar-selected-day-title')).toContainText('Sunday');
+    await sunday.getByRole('button', { name: /Select date/ }).focus();
+    await page.keyboard.press('ArrowLeft');
+    await expect(page.locator('[data-calendar-date="2026-11-07"] button[aria-current="date"]')).toBeFocused();
+    await page.keyboard.press('ArrowRight');
+    await expect(sunday.locator('button[aria-current="date"]')).toBeFocused();
+    await page.getByRole('button', { name: 'Week', exact: true }).click();
+    await expect(page.locator('[data-calendar-date="2026-11-08"]')).toBeVisible();
+    await expect(page.getByRole('group', { name: /Sunday calendar task/ })).toBeVisible();
+  });
   test('keeps role-scoped calendar scanning usable across desktop and mobile', async ({ page }) => {
     test.setTimeout(180_000);
 

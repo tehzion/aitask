@@ -35,7 +35,9 @@ describe('local service demo fixture', () => {
     expect(cycle.status).toBe('Published');
     expect(fixture.deliverables.filter(item => item.cycleId === cycle.id && item.status === 'Delivered')).toHaveLength(2);
     expect(progress.reduce((sum, item) => sum + item.included, 0)).toBe(7);
-    expect(progress.reduce((sum, item) => sum + item.remaining, 0)).toBe(5);
+    // Ready deliverables (all required tasks complete) count as done, like Delivered.
+    const done = fixture.deliverables.filter(item => item.cycleId === cycle.id && (item.status === 'Delivered' || item.status === 'Ready')).length;
+    expect(progress.reduce((sum, item) => sum + item.remaining, 0)).toBe(7 - done);
   });
 
   it('includes a frozen ten-step task chain plus client-visible and internal activity', () => {

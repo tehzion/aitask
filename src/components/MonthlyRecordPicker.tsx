@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import React from 'react';
 import type { ServiceCycle } from '../types';
 import { monthlyRecordLabel } from '../lib/monthlyRecords';

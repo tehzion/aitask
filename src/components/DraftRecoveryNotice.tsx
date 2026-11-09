@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import '../lib/actionFeedbackCopy';
 import { Button } from './ui';
 import { useI18n } from './I18nProvider';

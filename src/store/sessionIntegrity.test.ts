@@ -23,7 +23,7 @@ import { clearWorkspaceSession, isPendingMutationResolution, isWorkspaceMutation
 import { canRetrySave } from '../lib/actionFeedback';
 import type { User } from '../types';
 const initial = useStore.getState();
-const actor: User = { id: 'integrity-admin', authUserId: 'integrity-auth', name: 'Admin', role: 'Project Manager', departments: ['Management'], isSuperAdmin: true };
+const actor: User = { id: 'integrity-admin', authUserId: 'integrity-auth', name: 'Project Manager', role: 'Project Manager', departments: ['Management'] };
 const seed = () => useStore.setState({ ...initial, currentUser: actor, users: [actor], tasks: [], clients: [], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], servicePricingSnapshots: [], notifications: [], backend: { ...initial.backend, mode: 'supabase', status: 'live', isConfigured: true, isLoading: false, isSaving: false, isPulling: false, hasLocalChanges: false, pendingMutations: 0, workspaceVersion: 1 } }, true);
 beforeEach(() => { vi.clearAllMocks(); seed(); mocks.retained.mockReturnValue(null); mocks.capabilities.mockResolvedValue({ compatible: true }); mocks.getUser.mockResolvedValue({ data: { user: { id: actor.authUserId } }, error: null }); });
 const input = { clientName: 'Integrity Client', planName: 'Integrity Plan', origin: 'custom' as const, serviceItems: [{ id: 'item', name: 'Design', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 100 }], startDate: '2026-09-01', billingDay: 1, discountType: 'none' as const, discountValue: 0, taxRateBps: 0 };

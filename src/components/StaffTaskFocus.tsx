@@ -1,3 +1,4 @@
+import '../lib/pageCopy';
 import TaskOutputFiles, { ReviewSettingsDisclosure, type OutputUploadState } from './TaskOutputFiles';
 import { formatLocalizedDateRange } from '../lib/i18n';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
@@ -155,7 +156,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(liveTask, visibleTasks);
   const guidedAction = getStaffGuidedAction(liveTask, taskStatuses, currentUser, rolePermissions, { users, clients, projects });
   const statusOptions = getTaskStatusControls(currentUser, liveTask, taskStatuses, rolePermissions, { users, clients, projects }, { tasks, cycles: serviceCycles, deliverables });
-  const guidedActionError = statusOptions.find(option => option.status === guidedAction.targetStatus)?.disabledReason;
+  const guidedActionError = statusOptions.find(option => option.status === guidedAction.targetStatus)?.disabledReason
+    || (guidedAction.targetStatus === 'In Progress' && !liveTask.assignedTo?.trim() ? 'Assign a responsible person before starting work.' : undefined);
   const taskProgress = getTaskProgress(liveTask, users);
   const workflowKind = getWorkflowStepKind(liveTask, serviceCycles, deliverables);
   const transitionError = (status: TaskStatus) => workflowTransitionError(liveTask, { ...liveTask, status, isCompleted: status === 'Completed' }, currentUser, visibleTasks, serviceCycles, deliverables, rolePermissions, { users, clients, projects });
@@ -421,8 +423,9 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         )}
         {(error || pendingResolution) && (
           <div role="alert" aria-live="assertive" className="rounded-control bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 ring-1 ring-amber-200">
-            <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
-            {pendingResolution && <BackendFreshness compact className="mt-3" onRetry={async () => { const submitted = pendingSaveRef.current; if (submitted && !isSaving) await performSave(submitted, true); else await useStore.getState().retryPendingSave(); }} onDiscard={pendingSave ? () => requestExit(() => undefined) : undefined} />}
+            <p><SystemMessage message={error === 'You do not have permission to make this change.' && backend.errorCode === 'FORBIDDEN' ? t('This change could not be saved because access was denied.') : error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
+            {pendingSave?.rejected && <p className="mt-2">{t('The task shown may include your unsaved change.')}</p>}
+            {pendingResolution && <BackendFreshness compact hideBackendError={Boolean(error && error === backend.error)} className="mt-3" onRetry={async () => { const submitted = pendingSaveRef.current; if (submitted && !isSaving) await performSave(submitted, true); else await useStore.getState().retryPendingSave(); }} onDiscard={pendingSave ? () => requestExit(() => undefined) : undefined} />}
             {pendingSave?.failed && !pendingSave.rejected && !pendingResolution && <Button variant="secondary" className="mt-3" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button>}
           </div>
         )}
@@ -466,7 +469,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
             {!responsibleHod && contact && !(liveTask.status === 'Waiting Approval' && reviewerNames === contact.name) && <><dt className="text-muted">{t('Task contact')}</dt><dd className="min-w-0 break-words text-ink"><span data-i18n-skip>{contact.name}</span></dd></>}
             {liveTask.status === 'Waiting Approval' && <><dt className="text-muted">{t('Reviewer')}</dt><dd className="min-w-0 break-words text-ink">{reviewerNames ? <span data-i18n-skip>{reviewerNames}</span> : t('Not assigned')}{liveTask.workState?.reviewRequestedAt && <span className="text-muted"> · {t('Sent for review')} {formatLocalizedDistanceToNow(new Date(liveTask.workState.reviewRequestedAt), locale)}</span>}</dd></>}
           </dl>
-          {pendingSave?.workIntent && <p className="mt-2 text-muted" role="status">{t('Awaiting save confirmation')}</p>}
+          {pendingSave?.workIntent && !pendingSave.rejected && <p className="mt-2 text-muted" role="status">{t('Awaiting save confirmation')}</p>}
           {liveTask.workState?.blocker && <div className="mt-3 rounded-control bg-amber-50 px-3 py-2 text-amber-950 ring-1 ring-amber-200 dark:bg-[#31240f] dark:text-[#fff2c2] dark:ring-[#765d22]" role="status"><p className="font-semibold">{t('Help requested')} · <span className="font-normal">{formatLocalizedDistanceToNow(new Date(liveTask.workState.blocker.openedAt), locale)}</span></p><p data-i18n-skip className="mt-1 whitespace-pre-wrap">{liveTask.workState.blocker.reason}</p></div>}
           {canEdit && isTaskOpen(liveTask) && <div className="mt-3 flex flex-wrap gap-2">
             {liveTask.assignedTo === currentUser?.id && liveTask.workState?.acceptedBy !== currentUser.id && <Button variant="secondary" className="min-h-10 px-3 py-1.5" disabled={isSaving || Boolean(pendingSave) || mutationLocked} onClick={() => void saveWork({ kind: 'accept' })}>{t('Accept assignment')}</Button>}

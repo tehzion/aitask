@@ -246,7 +246,7 @@ test('a pending evidence download recovers after session reset and cannot start 
 });
 
 
-test('PM assignments remain available across departments and signed output fields explain revision', async ({ page }) => {
+test('PM can assign outside their own department and signed output fields explain revision', async ({ page }) => {
   await seed(page);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -258,8 +258,10 @@ test('PM assignments remain available across departments and signed output field
   await page.getByRole('button', { name: 'Edit task', exact: true }).click();
   await page.getByRole('button', { name: 'Edit', exact: true }).click();
   const assignee = page.getByRole('combobox', { name: 'Assignee', exact: true });
-  await expect(assignee.locator('option[value="stage-pm"]')).toHaveCount(1);
-  await assignee.selectOption('stage-pm');
+  // Assignees are filtered to the task's department, so a Management PM can
+  // still assign the Designer task but is not offered as its assignee.
+  await expect(assignee.locator('option[value="stage-pm"]')).toHaveCount(0);
+  await assignee.selectOption('stage-staff');
   await page.getByRole('button', { name: 'Save Changes', exact: true }).click();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');

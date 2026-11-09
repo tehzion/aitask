@@ -29,18 +29,20 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
     return { clientId: created.clientId!, revisionId: revision.planId!, originalId: created.planId!, previousCycles: useStore.getState().serviceCycles };
   });
   await page.goto(`/clients/${seeded.clientId}`);
-  await page.getByRole('tab', { name: locale === 'zh' ? '方案' : 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: locale === 'zh' ? '方案与交付' : 'Plan & delivery', exact: true }).click();
   const revision = page.getByRole('region', { name: locale === 'zh' ? '下月方案' : 'Next month’s plan', exact: true });
+  await expect(revision).toContainText(locale === 'zh' ? '已保存为草稿，但尚未安排生效。' : 'Saved as a draft, but not scheduled.');
   const date = revision.getByLabel(locale === 'zh' ? '合同结束日期（仅提醒）' : 'Contract end date (reminder only)');
   await expect(date).toHaveValue('2026-10-03');
   await expect(date).toHaveAttribute('min', '2026-09-30');
   await expect(revision).toContainText(locale === 'zh' ? '2026年10月30日' : '30 Oct 2026');
   await revision.getByLabel(locale === 'zh' ? '方案名称' : 'Plan name', { exact: true }).fill('Revised RM2250 PACKAGE');
+  await expect(revision).toContainText(locale === 'zh' ? '您有未保存的修改。' : 'You have unsaved edits.');
   await revision.getByRole('button', { name: locale === 'zh' ? '保存草稿' : 'Save draft', exact: true }).click();
   await expect(revision.getByText(locale === 'zh' ? '草稿已保存。安排前请检查更改。' : 'Draft saved. Review the changes before scheduling.', { exact: true })).toBeVisible();
 
   await page.reload();
-  await page.getByRole('tab', { name: locale === 'zh' ? '方案' : 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: locale === 'zh' ? '方案与交付' : 'Plan & delivery', exact: true }).click();
   await expect(date).toHaveValue('2026-10-03');
   await expect(revision.getByLabel(locale === 'zh' ? '方案名称' : 'Plan name', { exact: true })).toHaveValue('Revised RM2250 PACKAGE');
   const saved = await page.evaluate(async ({ revisionId, originalId }) => {

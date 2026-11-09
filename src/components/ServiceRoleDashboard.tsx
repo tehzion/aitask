@@ -1,13 +1,16 @@
+import '../lib/pageCopy';
+import { getAssignmentStateLabel, isAwaitingHodAssignment } from '../lib/taskWorkflowAccess';
 import React from 'react';
 import { AlertTriangle, CalendarDays, CheckCircle2, Clock3, FileCheck2, UsersRound, WalletCards } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { isBefore } from 'date-fns/isBefore';
-import { isToday } from 'date-fns/isToday';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
 import { canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
-import { parseOptionalDate } from '../lib/utils';
+import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
+import { getRoleWorkSummary } from '../lib/roleWorkSummary';
+import { getMonthsToTidy } from '../lib/monthHousekeeping';
 import { isTaskCompleted } from '../lib/taskCompletion';
 import { isTaskOpen } from '../lib/taskReporting';
 import { CountLabel, DataRow, MetricStrip, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
@@ -71,7 +74,7 @@ const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: Works
     <div className="divide-y divide-line/60">
       {tasks.slice(0, 6).map(task => {
         const dueDate = parseOptionalDate(task.dueDate);
-        const assignmentOverdue = task.assignmentState === 'pending_hod' && Boolean(dueDate && isBefore(dueDate, new Date()) && isTaskOpen(task));
+        const assignmentOverdue = isAwaitingHodAssignment(task) && Boolean(dueDate && isBefore(dueDate, new Date()));
         return <DataRow
           key={task.id}
           titleI18nSkip={false}
@@ -79,7 +82,7 @@ const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: Works
           title={<Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="hover:text-accent"><span data-i18n-skip>{task.title}</span></Link>}
           description={<><span data-i18n-skip>{task.clientName}</span> · {dueDate ? formatLocalizedDate(dueDate, locale) : t('No deadline')}</>}
           meta={task.responsibleHodId
-            ? `${t('Responsible HOD')}: ${users.find(user => user.id === task.responsibleHodId)?.name || t('Unavailable member')} · ${t(task.assignmentState === 'assigned_staff' ? 'Assigned to Staff' : task.assignmentState === 'pending_hod' ? 'Pending HOD Assignment' : 'Awaiting HOD')}${assignmentOverdue ? ` · ${t('Overdue assignment')}` : ''}`
+            ? `${t('Responsible HOD')}: ${users.find(user => user.id === task.responsibleHodId)?.name || t('Unavailable member')} · ${t(getAssignmentStateLabel(task))}${assignmentOverdue ? ` · ${t('Overdue assignment')}` : ''}`
             : task.assignedTo ? t('Assigned') : t('Unassigned')}
           action={<StatusChip tone={task.isCompleted ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(task.status)}</StatusChip>}
         />;
@@ -155,17 +158,18 @@ const ServiceRoleDashboard = () => {
     : persona === 'boss' || persona === 'projectManager'
       ? visibleTasks
       : serviceTasks;
-  const overdue = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isBefore(due, now) && !isToday(due)); });
-  const dueToday = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isToday(due)); });
+  const workSummary = getRoleWorkSummary(scopeTasks, now);
+  const overdue = workSummary.overdue;
+  const dueToday = workSummary.dueToday;
   const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && commercialClientKeys.has(getClientKey(plan.clientName)));
   const contractedMonthly = canSeePrices ? activePlans.reduce((sum, plan) => sum + (store.servicePricingSnapshots.find(item => item.parentType === 'client_plan' && item.parentId === plan.id)?.totalMinor || 0), 0) : 0;
   const delivered = store.deliverables.filter(item => item.status === 'Delivered' && commercialClientKeys.has(getClientKey(item.clientName)));
   const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
   const waitingInternal = portfolioReviews.internal;
   const waitingClient = portfolioReviews.client;
-  const awaitingStaffAssignment = scopeTasks.filter(task => isTaskOpen(task) && task.assignmentState === 'pending_hod');
+  const awaitingStaffAssignment = scopeTasks.filter(isAwaitingHodAssignment);
   const revisions = scopeTasks.filter(task => task.revisionCount > 0 && isTaskOpen(task));
-  const completed = scopeTasks.filter(isTaskCompleted);
+  const completed = workSummary.done;
   const renewalPlans = activePlans.filter(plan => plan.contractEndDate).sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || ''));
   const workers = store.users.filter(user => user.role === 'Staff' || user.role === 'HOD').map(user => ({
     user,
@@ -181,8 +185,9 @@ const ServiceRoleDashboard = () => {
       ...getPlanDeliverySummary(plan, store.serviceCycles, store.deliverables, visibleTasks, now),
       taskActivity: getCompanyTaskActivity(plan.clientId, visibleTasks, store.users, now),
     };
-  }).map(item => ({ ...item, pace: item.currentCycle ? getCyclePace(item.currentCycle, item.delivered, item.total, now) : undefined })),
+  }).map(item => ({ ...item, pace: item.currentCycle ? getCyclePace(item.currentCycle, item.delivered + item.ready, item.total, now) : undefined })),
   [activePlans, store.deliverables, store.serviceCycles, visibleTasks, store.users, now]);
+  const monthsToTidy = getMonthsToTidy(store.serviceCycles.filter(cycle => commercialClientKeys.has(getClientKey(cycle.clientName))), store.deliverables, getTodayInputDate(now));
   const plansAtRisk = activeCompanies.filter(item => item.pace === 'atRisk' || item.pace === 'missed');
   const renewingSoon = renewalPlans
     .map(plan => ({ plan, days: getContractDaysRemaining(plan.contractEndDate, now) }))
@@ -337,6 +342,7 @@ const ServiceRoleDashboard = () => {
       { label: t('Active clients'), value: activePlans.length, to: '/clients' },
       { label: t('Delivered outputs'), value: delivered.length, to: '/clients' },
       { label: t('Plans at risk this month'), value: plansAtRisk.length, to: '/clients', tone: plansAtRisk.length ? 'danger' : undefined },
+      { label: t('Months to tidy up'), value: monthsToTidy.length, to: '/clients', tone: monthsToTidy.length ? 'warning' : undefined },
     ]} />
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
@@ -353,7 +359,7 @@ const ServiceRoleDashboard = () => {
             <div className="min-w-0">
               {item.currentCycle && item.total > 0 ? <>
               {item.pace && <div className="mb-1.5"><PaceChip pace={item.pace} /></div>}
-              <ProgressBar className="mb-1.5" label={`${t('Deliverables')} ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
+              <ProgressBar className="mb-1.5" label={`${t('Done')} ${item.delivered + item.ready}/${item.total}`} value={item.delivered + item.ready} max={Math.max(item.total, 1)} />
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
                 <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>
                 <StatusChip tone="blue">{item.ready} {t('Ready')}</StatusChip>
@@ -365,7 +371,7 @@ const ServiceRoleDashboard = () => {
                 : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
               <CompanyTaskActivity activity={item.taskActivity} />
               {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
-                {t('Progress counts confirmed deliveries, not completed tasks.')}
+                {t('Progress counts completed work.')}
               </p>}
             </div>
           </div>
