@@ -62,7 +62,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByText('Short Video Production · rev 1 · 10 tasks')).toBeVisible();
   await page.getByRole('button', { name: 'Create next revision' }).click();
   await expect(page.getByRole('region', { name: 'Next month’s plan', exact: true })).toBeVisible();
-  await expect(page.getByText(/Existing monthly records keep their scope and prices/)).toBeVisible();
+  await expect(page.getByText(/Saved as a draft, but not scheduled\. .*Until then, these changes will not apply\./)).toBeVisible();
   await page.getByRole('button', { name: 'Pause' }).click();
   const pauseDialog = page.getByRole('dialog', { name: /Pause the/ });
   await expect(pauseDialog).toBeVisible();
@@ -74,7 +74,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await billingPeriod.selectOption(await publishedPeriod.getAttribute('value'));
   const cyclesPanel = page.getByRole('tabpanel', { name: 'Cycles', exact: true });
   await expect(cyclesPanel.getByText('Included', { exact: true })).toBeVisible();
-  await expect(page.getByRole('term').filter({ hasText: /^Delivered$/ })).toBeVisible();
+  await expect(page.getByRole('term').filter({ hasText: /^Done$/ })).toBeVisible();
   await expect(cyclesPanel.getByText('Remaining', { exact: true })).toBeVisible();
   await expect(page.getByText('10 linked task(s) · Short Video Production', { exact: true })).toBeVisible();
   await expect(page.getByText('Invoice', { exact: true })).toHaveCount(0);

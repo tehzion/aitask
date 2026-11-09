@@ -51,7 +51,7 @@ for (const [timezoneId, time] of [['Asia/Jakarta', '2026-10-07T17:30:00Z'], ['Am
  });
 });
 
-test('Calendar does not render a seventh Sunday task column', async ({page}) => {
+test('Calendar renders Sunday as the seventh task column', async ({page}) => {
   await login(page,'2026-10-07T17:30:00Z');
   await setSingleTask(page);
   await page.evaluate(async () => {
@@ -61,8 +61,7 @@ test('Calendar does not render a seventh Sunday task column', async ({page}) => 
   });
   await page.goto('/calendar');
   const bars=page.getByRole('group',{name:/^(Sunday-only|Full week) fixture\./});
-  await expect(bars).toHaveCount(1);
-  await expect(bars).toHaveAttribute('style', /span 6/);
-  await expect(page.locator('[data-calendar-date="2026-10-11"]')).toHaveCount(0);
-  await expect(page.getByRole('button',{name:/Edit dates for Sunday-only fixture/})).toHaveCount(0);
+  await expect(bars).toHaveCount(2);
+  await expect(page.getByRole('group',{name:/^Full week fixture\./})).toHaveAttribute('style', /span 7/);
+  await expect(page.locator('[data-calendar-date="2026-10-11"]').first()).toBeVisible();
 });

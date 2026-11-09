@@ -81,7 +81,7 @@ for (const code of ['FORBIDDEN', 'VALIDATION', 'NOT_FOUND']) test(`PM sees resto
   }, code);
   await expect(editor.getByRole('button', { name: 'Retry saved change', exact: true })).toHaveCount(0);
   await expect(editor).toContainText('PM change rejected by the server.');
-  await expect(editor).toContainText('Restore saved data, correct the rejected change or check your access, then save again.');
+  await expect(editor).toContainText('To continue, select Restore saved data. This discards pending changes and reloads the latest saved data.');
 });
 
 test('PM update-required state blocks edits and offers refresh instead of save retry', async ({ page }) => {
