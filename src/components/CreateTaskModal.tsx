@@ -12,7 +12,7 @@ import { Department, Priority, ServiceType, TaskApprovalMode, TaskVisibility } f
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getServiceOptions, hasChoice } from '../lib/choiceOptions';
-import { canAssignTasksToOthers, canCreateTasks, canManageProjects, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { canAssignTasksToOthers, canCreateManualTasks, canManageProjects, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { assignableDepartments, getMemberDepartments } from '../lib/departments';
@@ -430,7 +430,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     if (!taskId) {
       setFormError(
-        canCreateTasks(currentUser, rolePermissions)
+        canCreateManualTasks(currentUser, rolePermissions)
           ? 'This task could not be created. Review the selected company, department, and fields.'
           : 'You do not have permission to create tasks.'
       );

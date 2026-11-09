@@ -447,6 +447,14 @@ export const canCreateTasks = (user: User | null | undefined, customRoles: Custo
 export const canCreateTasksFromAnywhere = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   isBossKoo(user) && canCreateTasks(user, customRoles)
 );
+/**
+ * Hand-written tasks (the Create task form). Staff never create tasks, even
+ * with the createTasks permission (decision C1, 9 Nov 2026); they still run
+ * service workflows, which generate their own tasks.
+ */
+export const canCreateManualTasks = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
+  Boolean(user) && user!.role !== 'Staff' && canCreateTasks(user, customRoles)
+);
 export const canViewAllTasks = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
   hasPermission(user, 'viewAllTasks', customRoles) || hasPermission(user, 'editTasks', customRoles)
 );

@@ -58,6 +58,7 @@ import {
 import { getMonthlyCycleCloseout } from "../lib/monthlyCloseout";
 import { isTaskOpen } from "../lib/taskReporting";
 import {
+  canCreateManualTasks,
   canEditTask,
   canManageClientPlans,
   canManageServiceCycles,
@@ -206,6 +207,7 @@ const OperationsClientWorkspace = () => {
     store.currentUser,
     store.rolePermissions,
   );
+  const canAddManualTask = canCreateManualTasks(store.currentUser, store.rolePermissions);
   const canManageCycles = canManageServiceCycles(
     store.currentUser,
     store.rolePermissions,
@@ -997,7 +999,7 @@ const OperationsClientWorkspace = () => {
                                 </Button>
                               )}
                             {canLinkTasks && <Button variant="secondary" onClick={() => setTab('overview')}>{t('Review task links')}</Button>}
-                            <Button
+                            {canAddManualTask && <Button
                               variant="secondary"
                               disabled={deliverable.status === 'Delivered'}
                               title={deliverable.status === 'Delivered' ? t('Reopen the delivery before adding task links.') : undefined}
@@ -1013,7 +1015,7 @@ const OperationsClientWorkspace = () => {
                             >
                               <Plus className="h-4 w-4" />
                               {t("Task")}
-                            </Button>
+                            </Button>}
                           </div>
                         )}
                       </div>

@@ -118,14 +118,10 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByText('Internal monthly total')).toHaveCount(0);
   await expectNoAxeViolations(page, 'Operation client workspace plan');
 
+  // Staff never create tasks by hand, even with cycle access (decision C1).
   await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
-  await page.getByRole('button', { name: 'Task', exact: true }).first().click();
-  const taskDialog = page.getByRole('dialog', { name: 'Create task' });
-  await expect(taskDialog).toBeVisible();
-  await taskDialog.getByLabel(/Task Title/).fill('Cycle manual task');
-  await taskDialog.getByRole('button', { name: 'Create & open task' }).click();
-  await expect(taskDialog).toBeHidden();
-  await expect(page).toHaveURL(/\/tasks\?.*taskId=/);
+  await expect(page.getByRole('tabpanel', { name: 'Cycles', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Task', exact: true })).toHaveCount(0);
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CustomRole, User } from '../types';
-import { canCreateTasksFromAnywhere, defaultRolePermissions, getDefaultAccessiblePath } from './access';
+import { canCreateManualTasks, canCreateTasksFromAnywhere, defaultRolePermissions, getDefaultAccessiblePath } from './access';
 import { getDeliveryWorkspaceLabel, getMobileNavigation, getNavigationSections } from './navigation';
 
 const internalUsers: User[] = [
@@ -100,5 +100,11 @@ describe('one home per role (team feedback, 9 Nov 2026)', () => {
   it('limits global New task entry points to Boss Koo', () => {
     expect(canCreateTasksFromAnywhere(boss)).toBe(true);
     [pm, hod, staff].forEach(user => expect(canCreateTasksFromAnywhere(user), user.role).toBe(false));
+  });
+
+  it('never lets Staff write tasks by hand, even with the createTasks permission', () => {
+    const permitted = { ...staff, permissions: { createTasks: true } } as typeof staff;
+    expect(canCreateManualTasks(permitted)).toBe(false);
+    expect(canCreateManualTasks(pm)).toBe(true);
   });
 });

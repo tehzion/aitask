@@ -69,6 +69,7 @@ import {
   canLinkTaskDelivery,
   canEditProject,
   canApproveRegistrations,
+  canCreateManualTasks,
   canCreateTasks,
   canCreateUsers,
   canHandOverClientProfile,
@@ -3586,7 +3587,7 @@ export const useStore = create<StoreState>()(
           return '';
         }
         const currentUser = state.currentUser;
-        if (!currentUser || !canCreateTasks(currentUser, state.rolePermissions)) return '';
+        if (!currentUser || !canCreateManualTasks(currentUser, state.rolePermissions)) return '';
         if (taskData.createdBy !== undefined && taskData.createdBy !== currentUser.id) return '';
         if (['Staff', 'HOD'].includes(currentUser.role) && !isMemberInDepartment(currentUser, taskData.department)) return '';
         const project = taskData.projectId
@@ -3648,7 +3649,7 @@ export const useStore = create<StoreState>()(
         const transitionError = taskTransitionError(currentUser, undefined, { ...taskData, assignedTo: resolvedAssigneeId || '', status, isCompleted: status === 'Completed' }, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects });
         if (transitionError) { useToastStore.getState().addToast(transitionError, 'warning'); return ''; }
         set((state) => {
-          if (!canCreateTasks(state.currentUser, state.rolePermissions)) return state;
+          if (!canCreateManualTasks(state.currentUser, state.rolePermissions)) return state;
 
           const now = new Date().toISOString();
           const isCompleted = status === 'Completed';

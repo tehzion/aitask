@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { Badge, Button, PageHeader, ProgressBar, StatusChip } from '../components/ui';
 import { buttonBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
-import { canCreateClientProfiles, canCreateTasks, getAssignableProjects, canDeleteClientProfile, canEditClientProfile, canEditProject, canHandOverClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo, isClientHandoverTarget, isHodUser } from '../lib/access';
+import { canCreateClientProfiles, canCreateManualTasks, getAssignableProjects, canDeleteClientProfile, canEditClientProfile, canEditProject, canHandOverClientProfile, canManageClientPlans, canManageProjects, canOpenServiceClient, canRenameClient, canViewAllClients, getRoleDisplayName, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo, isClientHandoverTarget, isHodUser } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { resolveClientAddedDate } from '../lib/clientDates';
 import { cn } from '../lib/utils';
@@ -322,7 +322,7 @@ const Clients: React.FC = () => {
     () => getVisibleProjects(currentUser, allProjects, allTasks, rolePermissions, { clients: clientProfiles, projects: allProjects }),
     [allProjects, allTasks, clientProfiles, currentUser, rolePermissions]
   );
-  const canAddTasks = !upgradeRequired && canCreateTasks(currentUser, rolePermissions);
+  const canAddTasks = !upgradeRequired && canCreateManualTasks(currentUser, rolePermissions);
   // Tasks are opened from inside a project (team feedback, 9 Nov 2026), so the
   // company and project never need picking from a long list. An HOD may only add
   // tasks to projects they are an HOD on (decision C1).
