@@ -317,4 +317,233 @@ Built from `origin/codex/hod-workflow-regression-20261106`. Committed on the bra
 | C task entry | Done: "+ Task" on each project in Companies (company and project locked in the form; HOD only on projects where they are HOD). Global "New task" (header buttons, sidebar, command palette, `N` shortcut, calendar day click, delivery tracker) kept for Boss Koo only. Milestone shows only when the project has milestones. |
 | D approval | Done (UI): approval dropdowns removed from the project form, task form and Review responsibility. New tasks are saved with `approvalMode: 'pm'`; saving a project sets `defaultApprovalMode: 'pm'`. R3 backfill still pending. Live check: Mabel's 10 pending tasks are already `pm`. |
 | E Mabel | Data checked (read-only): Mabel is HOD, has a login, departments Video Shooting + Video Editor, HOD on 27/43 projects, 3 Staff in her departments, 10 tasks `pending_hod` assigned to her (7 already In Progress, 3 Completed with a stale `pending_hod`). No data fault found, and In Progress is not assignment-locked in code. **Needs a live repro on her account.** |
-| Gate | `pnpm check`, `pnpm lint`, `pnpm test` (1052 passing), `pnpm build`: green. Playwright (one worker): specs updated for Portfolio home, Done label, project-scoped task entry and Staff not creating tasks; calm-ui and staff-workspace-v2 screenshots regenerated. Also fixed specs that were already failing on the live line (recovery copy, Sunday calendar, department-filtered assignees, draft-plan copy). Staff never write tasks by hand (`canCreateManualTasks`): the cycle "+ Task" button is hidden for them and the store refuses; service workflows still generate tasks. Server-side enforcement is an R3 item. |
+| Gate | `pnpm check`, `pnpm lint`, `pnpm test` (1052 passing), `pnpm build`: green. Playwright (one worker): specs updated for Portfolio home, Done label, project-scoped task entry and Staff not creating tasks; calm-ui and staff-workspace-v2 screenshots regenerated. Also fixed specs that were already failing on the live line (recovery copy, Sunday calendar, department-filtered assignees, draft-plan copy). Staff never write tasks by hand (`canCreateManualTasks`): the cycle "+ Task" button is hidden for them and the store refuses; service workflows still generate tasks. The server already refuses this: `aitask_has_permission` returns false for Staff `createTasks` (live since `hod_department_delegation_disable_staff_creation`), so no R3 work is needed. |
+
+## 5. R2 status (2026-11-09, same branch)
+
+Front end only; no migration.
+
+| Item | Status |
+|---|---|
+| B merged page | Done: the client workspace has two tabs, **Plan & delivery** and **Activity / Files**. Old links (`?tab=overview|plan|cycles|addons`, `#cycle-…`) open Plan & delivery with the month selected. Order on the tab: delivery summary (one %, review panel) + special notes → monthly schedule (rendered once) → selected month (deliverables, tasks, closeout, Publish) → plan & amounts → service add-ons → next month's plan editor. The % appears once; the month block keeps open/overdue/waiting/delivered counts. |
+| B1 | Done: "Extra requests this month" block, "Log extra request" button, and the extras count / "Suggest a larger plan" chip in renewal signals are removed. One-off add-ons are unchanged and still bill. |
+| B2 | Done: **Special notes** card (`ClientProfile.notes`) for internal roles; editable by anyone who can edit the client profile. Verified on the live DB (read-only): Client users cannot read `client` rows (RLS), and `private.aitask_client_profile_projection` is an allow-list without `notes`. |
+| H UI | Done: one header action. A draft plan starting this month or earlier shows **Activate & publish this month** (confirmation lists the services and workflow-task count; activates, then publishes that month). A later start shows **Activate plan** only; that month's block shows **Publish** when due. Corrections after publish remain R3. |
+| A shared work summary | Not started (kept for a later pass). |
+| Gate | `pnpm check`, `pnpm lint`, `pnpm test`, `verify:i18n`, `pnpm build` green. New `e2e/plan-and-delivery.spec.ts` (activate & publish, activate only, special notes, no extras). Client-workspace specs updated for the two tabs. |
+
+---
+
+## 6. Deep plan: features and Supabase (2026-11-09)
+
+This section uses read-only checks run on the live DB (`ohjhwyiffgzyatcmmdql`) on 9 Nov 2026. Nothing has been written to the DB.
+
+### 6.1 What the live data says
+
+| # | Finding (live, read-only) | Effect the team sees | Fix type |
+|---|---|---|---|
+| L1 | 30 of 43 projects have `defaultApprovalMode = 'none'`; 13 have `pm`. The server refuses `Waiting Approval` when the effective mode is `none`. 1 open task resolves to `none` today. | "Staff can't Send for review" on those projects | R3 backfill (S1) |
+| L2 | 49 of 57 deliverables in Published cycles are `Planned` with **no linked task**. Only 34 of 53 tasks carry a `deliverableId`. 0 tasks came from workflow generation. | Progress stays at 0% even with the R1 formula, because no task moves the deliverable | Front end (F2) + R3 link backfill (S3) |
+| L3 | 18 Draft cycles have ended without being published. 9 Published cycles have ended without being completed. 2 deliverables are `Ready` inside Draft cycles. | Old months clutter the schedule; closeout and renewal numbers are wrong | Front end (F3) + R3 reconcile (S4) |
+| L4 | All 10 `pending_hod` tasks are assigned to Mabel herself (6 In Progress, 1 Waiting Approval, 3 Completed). Her projects have `staffMemberIds: []`. There are no Staff in Video Shooting. | "HOD can't assign": there is no one to assign shooting work to. 3 tasks have a stale state | Data/people (S5) + R3 reconcile (S2) |
+| L5 | 16 projects have no HOD. | HOD "+ Task" and HOD assignment are unavailable there; the PM fallback applies | People/UI (S5) |
+| L6 | Staff `createTasks` is refused by the server already. | none | Doc corrected in §4 |
+| L7 | `ClientProfile.notes` cannot reach Client users (RLS plus the allow-list projection). | none: B2 is safe | none |
+| L8 | Migration drift: every live migration has a matching file in `supabase/migrations` by name. 58 of them have a different version stamp in the repo, because they were applied through the MCP tool, which stamps its own time. Content matches by name. Repo: 142 files. | `supabase db push` from the repo would try to re-run those 58 | S0 |
+
+### 6.2 Front end (no migration)
+
+**F2. Link tasks to the month they deliver (fixes L2 for new work)**
+- When "+ Task" is opened from a project whose client has a current Published cycle, pre-fill `serviceCycleId` and offer a "Counts toward" picker of that month's deliverables (default: the first unlinked deliverable whose service name matches the task title; else none).
+- Cycle block: for each `Planned` deliverable with no tasks, show **Generate tasks** (workflow services) or **Link a task** (opens a picker of the project's open tasks with no `deliverableId`). Both go through `deliverable.manage` / the existing task save, which the server already validates.
+- Task drawer: show "Counts toward: <deliverable>" with a change link for PM/Boss.
+- Tests: unit test for the match rule; e2e "task added from project lands in this month's progress".
+
+**F3. Month housekeeping (fixes L3 going forward)**
+- In the monthly schedule, mark ended Draft months as "Never published" with two PM actions: **Publish late** or **Cancel month** (both existing `service_cycle.manage` transitions).
+- Mark ended Published months as "Ready to close" when every deliverable is done, and show **Close month**; otherwise "Overdue: n not done".
+- PM Portfolio "Plans at risk" counts these, so they are visible without opening each client.
+
+**F4. HOD assignment clarity (L4/L5)**
+- When an HOD opens Assign and no Staff in the task's department are members of the project, show "No Staff in Video Shooting on this project. Ask the PM to add one, or do it yourself" with a **Keep it myself** action (sets `assigned_staff` to the HOD, which the server allows for an HOD actor).
+- Only send fields that changed in an HOD assignment patch; never resend `approvalMode` or other restricted fields (the HOD patch validator rejects any change to them).
+- On projects without an HOD, hide HOD wording and show "PM assigns directly".
+
+**F5. Shared `getRoleWorkSummary` (R2 leftover)**
+- One selector for open / overdue / waiting review / done counts per role, used by Portfolio, HOD and Staff homes, and reports. Unit-tested against fixture tasks.
+
+**F6. Corrections after publish (UI half of H)**
+- "Correct" link on published deliverables and service items for Boss and owning PM; a sheet with reason (required), allowed fields only. Disabled until S6 is live; until then it says "Ask Y.L".
+
+### 6.3 Supabase (R3: Y.L approval, backup gate, one migration per item)
+
+Every item below follows the same gate:
+1. A backup/PITR point is confirmed and noted (`NEXT_AGENT_START_HERE.md` §7–8).
+2. Run the sizing query and save the result.
+3. Apply on a Supabase branch first, run the pgTAP suite and the role e2e specs against it.
+4. Y.L approves, then apply to production through a migration file committed first (same version stamp in repo and live).
+5. Run the verification query. Keep the rollback snapshot table for 30 days.
+
+Backfills write a snapshot first so they can be undone:
+```sql
+create table if not exists private.r3_backfill_snapshot (
+  batch text, entity_type text, entity_id text, data jsonb, taken_at timestamptz default now(),
+  primary key (batch, entity_type, entity_id));
+```
+Writes run inside the migration as the owner, with `set local aitask.audit_reason = '<batch>'` so the existing audit triggers record them; they do not bypass the guard triggers.
+
+**S0. Fix the migration ledger (no schema change)**
+- Rename the 58 repo files to the live version stamps (git mv only), so repo and live agree. Script: match by name from `supabase_migrations.schema_migrations`.
+- Verify: `comm` of repo versions vs live versions is empty both ways.
+- From now on, write the file first, then apply with that version.
+
+**S1. Approval → PM (L1, decision D1)**
+- Size:
+  ```sql
+  select data->>'defaultApprovalMode', count(*) from public.aitask_entities where entity_type='project' group by 1;
+  select coalesce(data->>'approvalMode','(unset)'), data->>'status', count(*) from public.aitask_entities
+  where entity_type='task' and data->>'status' not in ('Completed','Cancelled') group by 1,2;
+  ```
+- Change: snapshot, then
+  - projects: `defaultApprovalMode` → `'pm'` where not `pm`;
+  - open tasks with mode `none`, `hod`, missing, or `inherit`: set `approvalMode` → `'pm'`, **except** tasks in `Waiting Approval` (left as they are).
+- Verify: no open task resolves to `none` (`private` effective-mode function over all open tasks returns 0 rows for `none`).
+- Rollback: restore `data` from the snapshot for batch `s1`.
+
+**S2. Stale assignment state (L4)**
+- Completed/Cancelled tasks with `assignmentState = 'pending_hod'` → `assigned_staff` (state only; assignee unchanged). Today: 3 rows.
+- Verify: `count(*) = 0` for closed tasks still `pending_hod`.
+
+**S3. Task ↔ deliverable links (L2)**
+- Size: per Published/Completed cycle, deliverables with no tasks, and tasks in that client's projects with no `deliverableId` whose due date falls in the cycle period.
+- Change only exact matches: one unlinked task and one unlinked deliverable in the same cycle with the same service name. Everything else goes on a list for the PM to link in F2's picker.
+- After linking, run the existing deliverable status derivation so a deliverable whose tasks are all done becomes `Ready`.
+- Verify: re-run the §F reconcile query; expect 0 rows.
+
+**S4. Cycle reconcile (L3)**
+- Not automatic. Produce the list (client, month, status, done/total) and let each PM choose Publish late / Cancel / Close in F3. Only cycles the PM marks are changed, through `service_cycle.manage`.
+- The 2 `Ready` deliverables in Draft cycles are flagged on the same list.
+- Optional later: a nightly job that only **flags** ended months (no status change).
+
+**S5. People and coverage (L4, L5): data, not migration**
+- Y.L/PMs add a Staff member to Video Shooting, or confirm Mabel shoots herself.
+- Add the right Staff to `staffMemberIds` on Mabel's projects.
+- Assign an HOD on the 16 projects without one, or confirm "PM assigns directly" for them.
+- Then repro on Mabel's account: assign one task to a Staff, and Staff sends it for review. Record the result here.
+
+**S6. Correction command (H)**
+- New `service_cycle.correct` command: Boss or owning PM; required reason; allowed fields only (deliverable title, service item name/platforms, quantity not below done count, task start/due); never prices.
+- Writes an audit row with old and new values (uses `audit_value_history`).
+- pgTAP: PM of another portfolio refused; price change refused; quantity below done refused; reason required.
+
+**S7. Legacy `projectId` (C, optional)**
+- Tasks without `projectId` where the client has exactly one active project → set it. Others are listed for manual fixing.
+
+### 6.4 Order
+
+| Step | What | Needs |
+|---|---|---|
+| 1 | Commit R2 (this branch) | suite green |
+| 2 | F2 link-on-create + Link/Generate, F4 HOD assign clarity | front end only |
+| 3 | S0 ledger rename | repo only |
+| 4 | S5 people fixes + Mabel repro | Y.L / PMs |
+| 5 | S1 approval backfill, S2 stale state | Y.L approval, backup |
+| 6 | S3 link backfill, then F3 + S4 PM reconcile | Y.L approval, PM time |
+| 7 | F5 shared summary | front end only |
+| 8 | S6 + F6 corrections, S7 legacy projectId | Y.L approval |
+
+S1 is the only item that changes what Staff can do today, so it goes first among the migrations.
+
+---
+
+## 7. Overall user experience plan (2026-11-09)
+
+This builds on R1, R2 and §6. The live data shows the same root problem across most complaints: **the app asks people to do steps they cannot see the reason for** (approval mode, linking tasks to deliverables, publishing months, assigning without anyone to assign to). The plan below makes each role's next step obvious and removes the steps the system can do itself.
+
+### 7.1 Principles
+1. **One home, one next step.** Every role lands on a page that answers "what do I do now?" at the top, with one primary button per item.
+2. **The system does the bookkeeping.** Links, approval routing, month status and progress are set automatically. People only confirm.
+3. **Explain a blocked button.** A disabled action always says why, and names who can unblock it.
+4. **Saving is invisible when it works.** No yellow banner on normal saves; "Saved" is the only feedback.
+5. **Same numbers everywhere.** One % and one set of counts per role (F1, F5).
+6. **English and 中文 together.** Every new string ships with zh, checked by `verify:i18n`.
+
+### 7.2 By role
+
+**Boss (Koo)**
+| Pain today | Enhancement | How we know it worked |
+|---|---|---|
+| Has to open each client to see what's wrong | Weekly "Company health" card on the dashboard: months overdue, months never published, clients with no HOD, approvals waiting > 2 days. Each line opens the filtered list | Boss opens fewer client pages per week |
+| Corrections after publish go through Y.L | F6/S6 Correct sheet with reason and audit | Correction requests to Y.L drop to zero |
+| Hard to spot people bottlenecks | Workload by person (open, overdue, waiting review), from F5's shared summary | Overloaded people visible in one view |
+
+**PM**
+| Pain today | Enhancement | How we know it worked |
+|---|---|---|
+| Progress shows 0% because tasks aren't linked (L2) | F2: task created from a project auto-links to this month; "Link a task" / "Generate tasks" on empty deliverables | Share of linked tasks goes from 34/53 to > 90% |
+| Old months pile up as Draft/Published (L3) | F3: "Never published" and "Ready to close" chips with one action each; Portfolio "Plans at risk" counts them | Ended unpublished months: 18 → 0 |
+| Review queue mixes HOD and PM work | With D1 everything routes to the PM: one "Waiting for you" list on Portfolio, sorted by wait time, approve/return inline | Median wait in Waiting Approval falls |
+| Activate and Publish in different places | Done in R2 (one confirmed action) | — |
+| Client context scattered | Done in R2 (Special notes); next: pin the notes in the task drawer for tasks of that client | Fewer "what does the client prefer?" questions |
+| Creating a task needs too many fields | Keep the R1 trimmed form; add "Duplicate last month's task" from a month block | Time to add a month's tasks drops |
+
+**HOD (e.g. Mabel)**
+| Pain today | Enhancement | How we know it worked |
+|---|---|---|
+| "Can't assign": no Staff on the project/department (L4) | F4 message naming the gap plus **Keep it myself**; PM is notified of the gap once | No more `pending_hod` tasks older than 2 days |
+| 16 projects without an HOD (L5) | "PM assigns directly" wording there; Boss health card lists them | HOD gaps listed and closed |
+| Mixed personal and team work | Home split: "My tasks" and "To assign" tabs with counts (uses F5) | — |
+
+**Staff**
+| Pain today | Enhancement | How we know it worked |
+|---|---|---|
+| "Send for review" refused on `none` projects (L1) | S1 backfill; until then, the button shows "This project has no reviewer. Ask your PM" instead of failing on save | Zero refused submissions in logs |
+| Not sure what's expected | Task drawer top block: due date, "Counts toward <deliverable>", client special notes (internal), and the one next action | Fewer returned-for-changes tasks |
+| Output upload felt required | Output is optional (E1); keep a gentle "Add a link or file (optional)" | — |
+| Can't create tasks (by decision) | Make it explicit: empty states say "Your PM or HOD adds tasks here" rather than hiding things silently | No confusion reports |
+
+**Client (portal)**
+| Pain today | Enhancement | How we know it worked |
+|---|---|---|
+| Sees 0% while work is in progress | F1 formula (done) plus S3 link backfill so the % moves | Client progress matches internal |
+| Doesn't know what's coming | "This month" list of deliverables with status words (Planned / In progress / Ready / Delivered) and dates; nothing internal | Fewer status-check messages |
+| Reviews arrive without context | Review email/portal item shows deliverable name, month, and what to check | Faster client approvals |
+
+### 7.3 Across the app
+- **Save trust (G, continued).** Track how often the banner shows (client log event). Target: shows only after the automatic retry fails. Replace remaining "Use Retry my changes" copy.
+- **Notifications.** One digest per day per person (overdue, waiting for you, assigned to you) instead of one per event; real-time only for "assigned to you" and "returned to you". Settings toggle per person.
+- **Blocked-action explanations.** Shared `<WhyDisabled>` helper: every disabled primary action gets a reason line and the name of who can unblock. Audit all `disabled=` on primary buttons.
+- **Empty states.** Every list says what fills it and who does it ("Tasks appear here when your PM publishes the month").
+- **Mobile.** HOD and Staff homes, task drawer and review actions at 375px: no horizontal scroll, 44px targets, sticky primary action. Add to the existing mobile e2e projects.
+- **Search.** Command palette searches clients, projects and tasks for every role (create stays Boss-only).
+- **Onboarding refresh.** Update the role tutorials (`src/lib/onboarding.ts`) for R2: Plan & delivery tab, Activate & publish, Special notes, Link a task. Show a one-time "What changed" release notice per role (existing `aitask:release-notice` mechanism).
+- **Help.** Short per-role "How work flows" page in `/help`: PM → HOD → Staff → PM review → Client, with the D1 rule in one sentence.
+- **Accessibility.** Keep the axe checks green on new screens; heading order and region labels on every new card.
+
+### 7.4 Measuring
+Read-only queries, run weekly and saved in this doc:
+```sql
+-- linked tasks share
+select count(*) filter (where data->>'deliverableId' is not null)::float / nullif(count(*),0)
+from public.aitask_entities where entity_type='task' and data->>'status' <> 'Cancelled';
+-- ended months not published / not closed
+select data->>'status', count(*) from public.aitask_entities
+where entity_type='service_cycle' and (data->>'periodEnd')::date < current_date
+  and data->>'status' in ('Draft','Published') group by 1;
+-- old pending_hod
+select count(*) from public.aitask_entities where entity_type='task'
+  and data->>'assignmentState'='pending_hod' and data->>'status' not in ('Completed','Cancelled')
+  and (data->>'updatedAt')::timestamptz < now() - interval '2 days';
+```
+Plus the in-app Feedback page: one question after each release ("Was today's work easier? 1–5 + comment"), read in Feedback Results.
+
+### 7.5 Phasing
+| Phase | Contents | Migration? |
+|---|---|---|
+| U1 (with R2 commit) | Onboarding refresh, release notice, empty states, Staff "no reviewer" message | No |
+| U2 | F2 linking, F4 HOD clarity, `<WhyDisabled>`, task drawer top block, PM "Waiting for you" list | No |
+| U3 | S1/S2 backfills, S3 links, F3 + S4 month housekeeping, Boss health card | Yes (R3 gate) |
+| U4 | F5 shared summary, workload view, notification digest, client "This month" list, mobile pass | Digest needs a server job (approval) |
+| U5 | S6/F6 corrections, search for all roles, Help flow page | S6 yes |
+
+Before each phase ships: a 15-minute walkthrough with one person per role on the preview build, then the weekly queries above as the before/after record.

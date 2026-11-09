@@ -18,7 +18,7 @@ for (const locale of ['en', 'zh']) test(`monthly payment records and revision de
   });
   await page.goto(`/clients/${seed.clientId}`);
   const zh = locale === 'zh';
-  await page.getByRole('tab', { name: zh ? '方案' : 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: zh ? '方案与交付' : 'Plan & delivery', exact: true }).click();
   const overview = page.getByRole('region', { name: zh ? '每月更新安排' : 'Monthly update schedule' });
   const table = overview.getByRole('table');
   await expect(table.getByRole('columnheader').nth(3)).toHaveText(zh ? '付款' : 'Payment');

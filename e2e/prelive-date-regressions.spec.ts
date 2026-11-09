@@ -43,7 +43,7 @@ for (const [timezoneId, time] of [['Asia/Jakarta', '2026-10-07T17:30:00Z'], ['Am
   await login(page, time);
   await setSingleTask(page);
   await page.goto('/clients/audit-date-client');
-  await page.getByRole('tab', {name:'Plan',exact:true}).click();
+  await page.getByRole('tab', {name:'Plan & delivery',exact:true}).click();
   await page.getByRole('button', {name:'Add service plan'}).click();
   const summary = page.getByRole('complementary', {name:'Draft summary'});
   await expect(summary).toContainText('2026-10-08');

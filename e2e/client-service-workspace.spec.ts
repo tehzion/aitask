@@ -45,19 +45,19 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   expect(seeded.origins).toEqual(['standard', 'customized', 'custom']);
   expect(seeded.taskIds).toHaveLength(10);
   await page.goto(`/clients/${seeded.clientId}`);
-  await expect(page.getByRole('heading', { name: 'Customized Co' })).toBeVisible();
-  const overviewTab = page.getByRole('tab', { name: 'Overview', exact: true });
-  await overviewTab.focus();
+  await expect(page.getByRole('heading', { name: 'Customized Co', level: 1 })).toBeVisible();
+  // Plan, cycles, add-ons and progress share one tab (team feedback B).
+  const deliveryTab = page.getByRole('tab', { name: 'Plan & delivery', exact: true });
+  await expect(page.getByRole('tablist', { name: 'Client workspace' }).getByRole('tab')).toHaveCount(2);
+  await deliveryTab.focus();
   await page.keyboard.press('End');
   await expect(page.getByRole('tab', { name: 'Activity / Files' })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tabpanel', { name: 'Activity / Files' })).toBeVisible();
   await page.keyboard.press('Home');
-  await expect(overviewTab).toHaveAttribute('aria-selected', 'true');
-  await page.keyboard.press('ArrowRight');
-  await expect(page.getByRole('tab', { name: 'Plan', exact: true })).toHaveAttribute('aria-selected', 'true');
-  await expect(page.getByRole('tabpanel', { name: 'Plan', exact: true })).toBeVisible();
+  await expect(deliveryTab).toHaveAttribute('aria-selected', 'true');
+  await expect(page.getByRole('tabpanel', { name: 'Plan & delivery', exact: true })).toBeVisible();
   await expectNoAxeViolations(page, 'Boss client workspace plan');
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(page.getByText('Internal monthly total')).toBeVisible();
   await expect(page.getByText('Short Video Production · rev 1 · 10 tasks')).toBeVisible();
   await page.getByRole('button', { name: 'Create next revision' }).click();
@@ -68,11 +68,11 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(pauseDialog).toBeVisible();
   await pauseDialog.getByRole('button', { name: 'Pause plan' }).click();
 
-  await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   const billingPeriod = page.getByRole('combobox', { name: 'Billing period' });
   const publishedPeriod = billingPeriod.locator('option').filter({ hasText: /Published/ }).first();
   await billingPeriod.selectOption(await publishedPeriod.getAttribute('value'));
-  const cyclesPanel = page.getByRole('tabpanel', { name: 'Cycles', exact: true });
+  const cyclesPanel = page.getByRole('tabpanel', { name: 'Plan & delivery', exact: true });
   await expect(cyclesPanel.getByText('Included', { exact: true })).toBeVisible();
   await expect(page.getByRole('term').filter({ hasText: /^Done$/ })).toBeVisible();
   await expect(cyclesPanel.getByText('Remaining', { exact: true })).toBeVisible();
@@ -80,7 +80,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByText('Invoice', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Outstanding', { exact: true })).toHaveCount(0);
 
-  await page.getByRole('tab', { name: 'Add-ons', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   const openAddon = page.getByRole('button', { name: 'Add service add-on' });
   await openAddon.click();
   const addonDialog = page.getByRole('dialog', { name: 'Add service add-on' });
@@ -114,13 +114,13 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByRole('heading', { name: 'Operation context' })).toBeVisible();
   await expect(page.getByText('Pricing is not shown.')).toHaveCount(0);
   await page.goto(`/clients/${seeded.clientId}`);
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(page.getByText('Internal monthly total')).toHaveCount(0);
   await expectNoAxeViolations(page, 'Operation client workspace plan');
 
   // Staff never create tasks by hand, even with cycle access (decision C1).
-  await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
-  await expect(page.getByRole('tabpanel', { name: 'Cycles', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
+  await expect(page.getByRole('tabpanel', { name: 'Plan & delivery', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Task', exact: true })).toHaveCount(0);
 
   await page.evaluate(async () => {

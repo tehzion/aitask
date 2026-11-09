@@ -27,7 +27,7 @@ test('monthly plans roll over on their billing date and retain previous months a
     return created.clientId!;
   });
   await page.goto(`/clients/${clientId}`);
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   const schedule = page.getByRole('region', { name: 'Monthly update schedule' });
   await expect(schedule.getByText('Day 9', { exact: true })).toBeVisible();
   await expect(schedule.getByText('9 Oct 2026', { exact: true })).toBeVisible();
@@ -36,14 +36,14 @@ test('monthly plans roll over on their billing date and retain previous months a
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
   await expect(schedule.getByText('9 Oct 2026 – 8 Nov 2026', { exact: true })).toBeVisible();
   await expect(schedule.getByText('9 Nov 2026', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: 'Cycles', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(page.getByRole('heading', { name: '9 Oct 2026 – 8 Nov 2026', exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Deliverable status: Ads Management Fee 1' }).first()).toHaveValue('Planned');
   // The prior month remains retained and selectable from the billing-period picker.
   await expect(page.getByRole('combobox', { name: 'Billing period' }).locator('option', { hasText: 'September 2026' })).toHaveCount(1);
 
   await page.reload();
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(schedule.getByText('9 Nov 2026', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Edit plan dates', exact: true }).click();
   await page.getByRole('spinbutton', { name: 'Monthly billing day', exact: true }).fill('20');
@@ -53,7 +53,7 @@ test('monthly plans roll over on their billing date and retain previous months a
   await expect(schedule.getByText('9 Oct 2026 – 8 Nov 2026', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'tmp/monthly-update-desktop.png', fullPage: true, animations: 'disabled' });
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(schedule).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: 'tmp/monthly-update-mobile.png', fullPage: true, animations: 'disabled' });

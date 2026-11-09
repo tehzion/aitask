@@ -4,11 +4,10 @@ import type { ClientServicePlan } from '../types';
 import { useStore } from '../store';
 import { getRenewalSignals } from '../lib/opsSignals';
 import { useI18n } from './I18nProvider';
-import { StatusChip } from './ui';
 
 const percent = (value?: number) => value === undefined ? '—' : `${Math.round(value * 100)}%`;
 
-/** The delivery record to bring to a renewal conversation: on time, revisions and extras. */
+/** The delivery record to bring to a renewal conversation: on time and revisions. Extra requests are no longer tracked here (team feedback B1). */
 const RenewalSignals = ({ plan }: { plan: Pick<ClientServicePlan, 'id' | 'clientId'> }) => {
   const { t } = useI18n();
   const { serviceCycles, deliverables, addons, tasks } = useStore(useShallow(state => ({
@@ -22,8 +21,6 @@ const RenewalSignals = ({ plan }: { plan: Pick<ClientServicePlan, 'id' | 'client
   return <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
     <span>{t('On time')} {percent(signals.onTimeRate)}</span>
     <span>{t('Revisions')} {percent(signals.revisionRate)}</span>
-    <span>{signals.extras} {t(signals.extras === 1 ? 'extra request' : 'extra requests')}</span>
-    {signals.suggestUpgrade && <StatusChip tone="blue">{t('Suggest a larger plan')}</StatusChip>}
     <span className="basis-full text-[11px]">{t('Last {count} months', { count: signals.cyclesReviewed })}</span>
   </div>;
 };

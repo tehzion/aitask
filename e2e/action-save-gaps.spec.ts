@@ -235,7 +235,7 @@ test('plan date save locks submitted dates and recovers a rejected promise', asy
     return created.clientId!;
   });
   await page.goto(`/clients/${clientId}`);
-  await page.getByRole('tab', { name: 'Plan', exact: true }).click();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await page.getByRole('button', { name: 'Edit plan dates', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Edit plan dates' });
   await dialog.getByLabel('Monthly billing day').fill('15');
