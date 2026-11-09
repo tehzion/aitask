@@ -1,0 +1,47 @@
+{
+  "manifestVersion": "2026-11-09.1",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261104_delete_guard_production.json",
+  "immutable": false,
+  "capturedAt": "2026-11-09T16:30:00Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "APPLIED 2026-11-09: production records 20261109141920_r3_s1_project_approval_pm (team feedback R3 S1, approved by Y.L). Repository migration filenames were renamed to the exact production version stamps (99b86ae), so repository and production migration history are identical (143/143); no connector alias map is needed.",
+  "validatedMigrationTail": [
+    "20261023063131_hod_task_execution_permissions",
+    "20261023063344_task_workflow_action_guards",
+    "20261023154255_bind_service_command_entity_types",
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover",
+    "20261102120000_plan_activation_entity_types",
+    "20261102130000_hod_assignee_output_files",
+    "20261102140000_addon_save_entity_types",
+    "20261102150000_task_assigned_at_format",
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign",
+    "20261103125940_hod_department_delegation_disable_staff_creation",
+    "20261103125949_pm_direct_internal_assignment",
+    "20261103143949_service_cycle_payments",
+    "20261104053237_restore_hod_handoff_and_codify_live_grants",
+    "20261104062406_block_project_delete_with_linked_tasks",
+    "20261106041228_optimize_pm_service_access",
+    "20261109141920_r3_s1_project_approval_pm"
+  ],
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261109141920_r3_s1_project_approval_pm",
+    "latestAppliedMigration": "20261109141920_r3_s1_project_approval_pm"
+  },
+  "changeSummary": {
+    "20261106041228_optimize_pm_service_access": "PM service access lookups (production-only migration recorded in the repository).",
+    "20261109141920_r3_s1_project_approval_pm": "Every project uses PM review: projects with no approval mode and open tasks with none/hod move to pm; Waiting Approval and closed tasks untouched. Snapshot in private.r3_backfill_snapshot; rollback SQL in the migration header."
+  },
+  "qualityGates": {
+    "disposableSupabaseStack": "PASS (2026-11-09): fresh local replay of all migrations in production order, then supabase test db: 88 pgTAP files / 1240 tests.",
+    "productionApply": "APPLIED 2026-11-09 via the Supabase connector after in-database backups private.r3_backup_20261109_entities/members/workspaces (entity checksum matched)."
+  }
+}

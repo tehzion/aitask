@@ -137,7 +137,7 @@ try {
   let dialog = await openEditor();
   await page.route('**/rest/v1/rpc/aitask_execute_command', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: false, code: 'FORBIDDEN', error: 'You do not have permission to make this change.' }) }));
   await dialog.getByRole('button', { name: 'Start work', exact: true }).click();
-  await expect(dialog.getByRole('alert')).toContainText('correct the rejected change');
+  await expect(dialog.getByRole('alert')).toContainText('To continue, select Restore saved data.');
   await expect(dialog.getByRole('button', { name: 'Retry my changes', exact: true })).toHaveCount(0);
   assert.equal(canonicalStatus('status-task'), 'Pending', 'Rejected browser change was not persisted');
   if (process.env.AITASK_HOD_STATUS_EVIDENCE_DIR) await page.screenshot({ path: `${process.env.AITASK_HOD_STATUS_EVIDENCE_DIR}/rejected-status-recovery.png`, fullPage: true });
