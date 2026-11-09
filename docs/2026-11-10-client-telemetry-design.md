@@ -1,0 +1,9 @@
+# Draft client telemetry — not approved for production
+
+The browser sends events only when `VITE_AITASK_CLIENT_TELEMETRY=true` is explicitly set at build time and the app uses Supabase. The default is off. Production must not enable the flag or apply the migration until the rollout is approved.
+
+The insert-only `aitask_client_events` table stores the member ID and current role plus server timestamp and strictly enumerated event type/detail or a bounded duration. It has no task titles, messages, paths, device identifiers, free text, auth IDs, or error payloads. The client validates the same enumerations before transmission and ignores telemetry transport errors. RLS permits an authenticated member to insert only their own member ID and actual role; app roles have no SELECT, UPDATE or DELETE privilege. The service role can inspect events for a future aggregate report. Local pgTAP checks cover the access boundary and reject free text and null required details.
+
+Instrumented signals: shell banner shown by type, failed workspace saves by allowed code, elapsed automatic recovery on successful confirmation, and detected dynamic chunk load failures. A browser may miss events while offline, signed out, closing or reloading; there is no retry queue, device categorization, sampling or deduplication guarantee, so counts are lower bounds and cannot answer device breakdown. Some non-workspace mutations may need separate instrumentation. Never use telemetry to decide whether a user change was saved.
+
+The migration was applied for validation to the local database only, without a migration-history entry; it has not been applied to production. Before any rollout, decide retention/deletion, rate limiting, aggregate access, and whether device categories are permitted; then test the complete enabled flow and review release and privacy requirements.

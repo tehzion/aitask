@@ -281,3 +281,21 @@ test('Customer malformed published periods and contract dates do not break the w
   await expect(page.getByText('Customer Plan', { exact: true })).toBeVisible();
   await expect(page.getByText('Service reminder', { exact: true })).toHaveCount(0);
 });
+
+test('Customer is not offered discard when sign-in is needed to save', async ({ page }) => {
+  await seed(page);
+  const dialog = await open(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState({ commitPendingMutation: async () => {
+      useStore.setState(state => ({ backend: { ...state.backend, status: 'refresh_required', errorCode: 'AUTH_REQUIRED', error: 'Your session expired. Sign in again; your change is kept in this tab.', hasLocalChanges: true, pendingMutations: 1 } }));
+      return { ok: false, code: 'AUTH_REQUIRED', error: 'Your session expired. Sign in again; your change is kept in this tab.' };
+    } });
+  });
+  await dialog.getByRole('textbox', { name: 'Share feedback' }).fill('Please keep this feedback');
+  await dialog.getByRole('button', { name: 'Send feedback' }).click();
+  await expect(dialog.getByRole('alert')).toContainText('Sign in again');
+  await expect(dialog.getByRole('button', { name: 'Restore saved data' })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Retry save' })).toHaveCount(0);
+  await expect(dialog.getByRole('button', { name: 'Sign in again' })).toBeVisible();
+});

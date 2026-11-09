@@ -1,4 +1,5 @@
 import '../lib/pageCopy';
+import { recordClientEvent, setClientTelemetryActor } from '../lib/clientTelemetry';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { acknowledgeActionFeedback, canRetrySave } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
@@ -7,7 +8,7 @@ import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-do
 import { useShallow } from 'zustand/react/shallow';
 import Sidebar from './Sidebar';
 import Navbar from './Navbar';
-import { isPendingMutationResolution, useStore } from '../store';
+import { clearWorkspaceSession, isPendingMutationResolution, useStore } from '../store';
 import { useNotificationReadActions } from '../modules/notifications/hooks/useNotificationReadActions';
 import { canAccessPath, getUnreadNotifications, canCreateTasksFromAnywhere } from '../lib/access';
 import { getBackendStatus } from '../lib/backend';
@@ -18,6 +19,7 @@ import { useColorTheme } from '../hooks/useColorTheme';
 import { getNavigationShortcut, isEditableShortcutTarget } from '../lib/keyboard';
 import { useI18n } from './I18nProvider';
 import { getMobileNavigation } from '../lib/navigation';
+import { useHodWaitingCounts } from '../hooks/useHodWaitingCounts';
 import OnboardingExperience from './OnboardingExperience';
 
 const CreateTaskModal = React.lazy(() => import('./CreateTaskModal'));
@@ -229,6 +231,8 @@ const Layout: React.FC = () => {
   const unreadCount = shouldUseSecureSupabase() ? notificationUnreadCount : unreadNotifs.length;
   // Keep the bottom bar focused on the highest-frequency destinations while
   // keeping Delivery tracker visible for internal operators.
+  const hodWaiting = useHodWaitingCounts();
+  const hodWaitingTitle = t('{assign} to assign · {review} to review', { assign: hodWaiting.toAssign, review: hodWaiting.toReview });
   const mobileNavItems = useMemo(() => getMobileNavigation(currentUser, rolePermissions), [currentUser, rolePermissions]);
   const canOpenSettings = Boolean(currentUser?.mustResetPassword)
     || canAccessPath(currentUser, '/settings', rolePermissions);
@@ -248,6 +252,8 @@ const Layout: React.FC = () => {
     ? t('Shared workspace is unavailable')
     : missingSupabaseConfig
       ? t('Shared workspace is unavailable')
+      : backend.errorCode === 'AUTH_REQUIRED'
+        ? t('Sign in again')
       : upgradeRequired
         ? t('Workspace update required')
         : backend.status === 'conflict'
@@ -265,6 +271,17 @@ const Layout: React.FC = () => {
       ? 'Workspace sharing is not configured. Changes cannot sync between users. Ask your workspace administrator to finish setup.'
       : syncActionError || backend.error || backend.message;
   const syncBannerDetail = syncBannerMessage;
+  const telemetryBanner = upgradeRequired ? 'upgrade' : backend.errorCode === 'AUTH_REQUIRED' ? 'auth' : backend.status === 'conflict' ? 'conflict' : backend.status === 'retry_required' ? 'retry' : backend.status === 'offline' ? 'offline' : remoteUpdateNeedsAttention ? 'remote_update' : 'connection';
+  const previousTelemetryBanner = useRef('');
+  useEffect(() => {
+    setClientTelemetryActor(currentUser ? { id: currentUser.id, role: currentUser.role } : null);
+    return () => setClientTelemetryActor(null);
+  }, [currentUser]);
+  useEffect(() => {
+    const key = syncNeedsAttention && currentUser ? `${currentUser.id}:${telemetryBanner}` : '';
+    if (key && key !== previousTelemetryBanner.current && currentUser) void recordClientEvent(currentUser, { type: 'banner_shown', banner: telemetryBanner });
+    previousTelemetryBanner.current = key;
+  }, [syncNeedsAttention, currentUser, telemetryBanner]);
 
   return (
     <div className="app-frame relative flex h-[100dvh] overflow-hidden bg-canvas font-sans text-ink">
@@ -297,7 +314,7 @@ const Layout: React.FC = () => {
                 </div>
               </div>
               <div className="flex shrink-0 flex-wrap gap-2">
-                {backendStatus.mode === 'supabase' && backendStatus.ready && !pendingResolution && (
+                {backendStatus.mode === 'supabase' && backendStatus.ready && !pendingResolution && backend.errorCode !== 'AUTH_REQUIRED' && (
                   <button
                     type="button"
                     onClick={() => pullBackendNow({ silent: false })}
@@ -308,6 +325,7 @@ const Layout: React.FC = () => {
                     {t('Refresh')}
                   </button>
                 )}
+                {backend.errorCode === 'AUTH_REQUIRED' && <button type="button" onClick={() => { clearWorkspaceSession(); routerNavigate('/login', { replace: true }); }} className="inline-flex min-h-11 items-center justify-center rounded-lg bg-amber-600 px-3 py-1.5 text-sm font-semibold text-white">{t('Sign in again')}</button>}
                 {pendingResolution && (
                   <>
                     {canRetrySave(backend) && <button
@@ -360,6 +378,7 @@ const Layout: React.FC = () => {
               <>
                 <span className="relative flex h-7 w-7 items-center justify-center">
                   <Icon aria-hidden="true" className={cn("h-5 w-5", isActive && "text-accent")} />
+                  {item.path === '/' && hodWaiting.total > 0 && <span aria-hidden="true" title={hodWaitingTitle} className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{hodWaiting.total > 99 ? '99+' : hodWaiting.total}</span>}
                   {item.path === '/notifications' && unreadCount > 0 && <span aria-hidden="true" className="absolute -right-2 -top-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full border border-surface bg-accent px-0.5 text-[8px] font-black text-white">{unreadCount > 99 ? '99+' : unreadCount}</span>}
                 </span>
                 <span className="max-w-full truncate text-[11px] leading-4">{t(item.label)}</span>
@@ -376,7 +395,7 @@ const Layout: React.FC = () => {
                 {...(onboardingTarget ? { 'data-onboarding-target': onboardingTarget } : {})}
                 aria-label={item.path === '/notifications'
                   ? `${t('Notifications')}${unreadCount > 0 ? `, ${t(`${unreadCount} unread`)}` : ''}`
-                  : t(item.label)}
+                  : item.path === '/' && hodWaiting.total > 0 ? `${t(item.label)}, ${hodWaitingTitle}` : t(item.label)}
                 className={({ isActive }) => navClass(isActive)}
               >
                 {({ isActive }) => renderContent(isActive)}

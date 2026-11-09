@@ -604,3 +604,17 @@ Run on a local Supabase stack with all live migrations, realtime on, and real si
 - If the reason note cannot be sent (connection dropped), the rename is kept, the form shows "Saving…" and the note saves on its own about 2 s after the connection returns.
 - Fixed on the way: success toasts sat over dialog footers and blocked the next click for ~4.5 s (Send for review took 4.8 s). Toasts now let clicks pass through except on their close button.
 - Fixed on the way: **Correct name** crashed the month view for deliverables saved without a title; a missing title now reads as empty.
+
+## 10. Click reduction (2026-11-10, branch `codex/click-savers-20261110`, stacked on PR #16)
+
+| # | Item | Result |
+|---|---|---|
+| 1 | Act from the list | Done. Task rows show the next action as a button (Start work, Send for review, Approve, Confirm completion) when the drawer's own checks all pass: guided action and status control, workflow gate, no unfinished predecessors, edit access, no pending save (`useQuickTaskAction`). Anything needing a choice or a note (Return, predecessor confirmation, output upload, HOD assignment) still opens the drawer. Real Supabase: Start work 0.4 s, Send for review 0.13 s, no drawer opened. |
+| 2 | Bulk month decisions | Done. Dashboard "Months to tidy up" panel (Boss Portfolio tab, PM Portfolio home) lists every ended month across companies; select several and Publish late / Cancel (confirmed: cancelled months cannot be reopened) / Close. Each month is its own command, so one refusal does not undo the others. Overdue months link to their company. Bulk task assignment is not built yet. |
+| 3 | One-click linking | Done. The month block suggests the task that clearly fits (due in the month, shared words with the deliverable or service) as a single **Link: …** button; the dropdown lists best matches first. |
+| 4 | Generate the month's tasks | Already existed ("Generate all task chains" / per-deliverable Generate). Copying last month's ad-hoc tasks is not built. |
+| 5 | Create task defaults | Done. Remembers each person's last department, and the last assignee on the same project while they can still be assigned; work counted toward a month defaults its due date to the month's last day (never a past date). |
+| 6 | Notifications open on the action | Already worked: task notifications open `/tasks?taskId=…`, the task drawer with its action in view. |
+| 7 | Daily digest | Not started: needs a scheduled server job and Y.L's approval. |
+
+Tests: `src/lib/clickReduction.test.ts` (7), `e2e/click-reduction.spec.ts` (4).

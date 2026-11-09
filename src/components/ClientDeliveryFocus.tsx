@@ -22,6 +22,7 @@ import { Button, ProgressBar, StatusChip } from './ui';
 import { inputBase } from './uiTokens';
 import SideSheet from './SideSheet';
 import BackendFreshness from './BackendFreshness';
+import SessionRecoveryButton from './SessionRecoveryButton';
 import { useI18n } from './I18nProvider';
 
 interface ClientDeliveryFocusProps {
@@ -273,7 +274,8 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
           <div role="alert" aria-live="assertive" className="rounded-control border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-900 dark:border-amber-900/70 dark:bg-amber-950/30 dark:text-amber-100">
             <p><SystemMessage message={error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
             {pendingResolution && <BackendFreshness compact className="mt-3" onRetry={async () => { if (pendingSave && !isSaving) await performSave(pendingSave, true); else await useStore.getState().retryPendingSave(); }} onDiscard={() => { if (!isSaving && window.confirm(t('Discard unsaved changes?'))) void discardPending(); }} />}
-            {pendingSave?.failed && !pendingResolution && <div className="mt-3 flex gap-2"><Button variant="secondary" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button><Button variant="secondary" disabled={isSaving} onClick={() => { if (window.confirm(t('Discard unsaved changes?'))) void discardPending(); }}>{t('Restore saved data')}</Button></div>}
+            {backend.errorCode === 'AUTH_REQUIRED' && <SessionRecoveryButton />}
+            {pendingSave?.failed && !pendingResolution && backend.errorCode !== 'AUTH_REQUIRED' && <div className="mt-3 flex gap-2"><Button variant="secondary" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button><Button variant="secondary" disabled={isSaving} onClick={() => { if (window.confirm(t('Discard unsaved changes?'))) void discardPending(); }}>{t('Restore saved data')}</Button></div>}
           </div>
         )}
 

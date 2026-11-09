@@ -5,7 +5,7 @@ const reuseExistingServer = process.env.PLAYWRIGHT_REUSE_SERVER === 'true';
 
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: ['**/pwa-install.spec.ts', '**/login-recovery-i18n.spec.ts', '**/staging-release.spec.ts'],
+  testIgnore: ['**/localdb/**', '**/pwa-install.spec.ts', '**/login-recovery-i18n.spec.ts', '**/staging-release.spec.ts'],
   fullyParallel: false,
   workers: 1,
   retries: process.env.CI ? 2 : 0,

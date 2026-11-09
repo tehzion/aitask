@@ -17,6 +17,7 @@ import {
   CheckCircle2,
   FileUp,
   GitBranchPlus,
+  Link2,
   ListChecks,
   MessageSquareText,
   Pause,
@@ -57,7 +58,7 @@ import {
   isDeliverableWorkDone,
 } from "../lib/serviceManagement";
 import { getMonthlyCycleCloseout } from "../lib/monthlyCloseout";
-import { getUnlinkedOpenTasks } from "../lib/deliveryLinks";
+import { getUnlinkedOpenTasks, rankLinkCandidates } from "../lib/deliveryLinks";
 import { isTaskOpen } from "../lib/taskReporting";
 import {
   canCreateManualTasks,
@@ -913,18 +914,33 @@ const OperationsClientWorkspace = () => {
                                   }{" "}{t("tasks")}
                                 </Button>
                               )}
-                            {deliverable.status !== "Delivered" && !serviceItem?.workflow && linkCandidates.length > 0 && (
-                              <select
-                                aria-label={`${t("Link a task")}: ${deliverable.title}`}
-                                value=""
-                                disabled={addonSaving}
-                                onChange={event => void linkExistingTask(event.target.value, cycle.id, deliverable.id)}
-                                className="min-h-10 max-w-full rounded-control border border-line bg-surface px-3 text-sm text-ink"
-                              >
-                                <option value="">{t("Link a task")}…</option>
-                                {linkCandidates.map(task => <option key={task.id} value={task.id} data-i18n-skip>{task.title}{task.dueDate ? ` · ${task.dueDate}` : ''}</option>)}
-                              </select>
-                            )}
+                            {deliverable.status !== "Delivered" && !serviceItem?.workflow && linkCandidates.length > 0 && (() => {
+                              // Best guess first; one click when a single task clearly fits.
+                              const ranked = rankLinkCandidates(linkCandidates, deliverable, cycle, serviceItem?.name);
+                              return <>
+                                {ranked.suggestion && (
+                                  <Button
+                                    variant="secondary"
+                                    className="min-h-10 max-w-full"
+                                    disabled={addonSaving}
+                                    aria-label={`${t("Link suggested task")}: ${ranked.suggestion.title} → ${deliverable.title}`}
+                                    onClick={() => void linkExistingTask(ranked.suggestion!.id, cycle.id, deliverable.id)}
+                                  >
+                                    <Link2 className="h-4 w-4" />{t("Link")}: <span className="truncate" data-i18n-skip>{ranked.suggestion.title}</span>
+                                  </Button>
+                                )}
+                                <select
+                                  aria-label={`${t("Link a task")}: ${deliverable.title}`}
+                                  value=""
+                                  disabled={addonSaving}
+                                  onChange={event => void linkExistingTask(event.target.value, cycle.id, deliverable.id)}
+                                  className="min-h-10 max-w-full rounded-control border border-line bg-surface px-3 text-sm text-ink"
+                                >
+                                  <option value="">{t(ranked.suggestion ? "Link another task" : "Link a task")}…</option>
+                                  {ranked.ordered.map(task => <option key={task.id} value={task.id} data-i18n-skip>{task.title}{task.dueDate ? ` · ${task.dueDate}` : ''}</option>)}
+                                </select>
+                              </>;
+                            })()}
                             {!isClient && canManageCycles && (cycle.status === "Published" || cycle.status === "Completed") && (
                               <CorrectDeliverableName
                                 deliverable={deliverable}

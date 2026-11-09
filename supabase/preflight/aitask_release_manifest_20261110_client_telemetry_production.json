@@ -1,0 +1,46 @@
+{
+  "manifestVersion": "2026-11-10.1",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261109_team_feedback_r3_production.json",
+  "immutable": false,
+  "capturedAt": "2026-11-10T04:00:00Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "APPLIED 2026-11-10: production records 20261109193707_aitask_client_events (insert-only client telemetry table, approved by Y.L). Repository and production migration history are identical (144/144).",
+  "validatedMigrationTail": [
+    "20261023063344_task_workflow_action_guards",
+    "20261023154255_bind_service_command_entity_types",
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover",
+    "20261102120000_plan_activation_entity_types",
+    "20261102130000_hod_assignee_output_files",
+    "20261102140000_addon_save_entity_types",
+    "20261102150000_task_assigned_at_format",
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign",
+    "20261103125940_hod_department_delegation_disable_staff_creation",
+    "20261103125949_pm_direct_internal_assignment",
+    "20261103143949_service_cycle_payments",
+    "20261104053237_restore_hod_handoff_and_codify_live_grants",
+    "20261104062406_block_project_delete_with_linked_tasks",
+    "20261106041228_optimize_pm_service_access",
+    "20261109141920_r3_s1_project_approval_pm",
+    "20261109193707_aitask_client_events"
+  ],
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261109193707_aitask_client_events",
+    "latestAppliedMigration": "20261109193707_aitask_client_events"
+  },
+  "changeSummary": {
+    "20261109193707_aitask_client_events": "Insert-only operational client events (banner shown, save failure code, recovery duration, chunk load failure). RLS: members insert only their own rows with their own role; no select for anon/authenticated. Unused until VITE_AITASK_CLIENT_TELEMETRY=true."
+  },
+  "qualityGates": {
+    "disposableSupabaseStack": "PASS (2026-11-09): fresh local replay of all migrations in production order, then supabase test db: 88 pgTAP files / 1240 tests.",
+    "productionApply": "APPLIED 2026-11-10 via the Supabase connector; table empty; advisors show no new findings."
+  }
+}

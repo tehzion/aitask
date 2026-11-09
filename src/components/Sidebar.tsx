@@ -9,6 +9,7 @@ import { canCreateTasksFromAnywhere } from '../lib/access';
 import { clearPasswordResetBypass } from '../lib/auth';
 import { shouldUseSecureSupabase, signOutSecureSession } from '../lib/supabaseClient';
 import { getRetainedSecureCommand } from '../lib/secureWorkspace';
+import { useHodWaitingCounts } from '../hooks/useHodWaitingCounts';
 import { getMobileNavigation, getNavigationSections, type NavigationItem } from '../lib/navigation';
 import { useI18n } from './I18nProvider';
 const ConfirmDialog = React.lazy(() => import('./ConfirmDialog'));
@@ -42,6 +43,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
   const rolePermissions = useStore((state) => state.rolePermissions);
   const clients = useStore((state) => state.clients);
   const setCreateTaskModalOpen = useStore((state) => state.setCreateTaskModalOpen);
+  // HODs see what waits on them (to assign + to review) on My work.
+  const hodWaiting = useHodWaitingCounts();
   const isStaff = currentUser?.role === 'Staff' || currentUser?.role === 'HOD';
   const isClient = currentUser?.role === 'Client';
   const clientProfile = isClient
@@ -103,6 +106,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
 
   const renderNavItem = (item: NavigationItem) => {
     const label = t(item.label);
+    const badge = item.path === '/' && hodWaiting.total > 0
+      ? { count: hodWaiting.total, title: t('{assign} to assign · {review} to review', { assign: hodWaiting.toAssign, review: hodWaiting.toReview }) }
+      : null;
     const onboardingTarget = item.path === '/' ? 'dashboard' : item.path === '/tasks' ? 'tasks' : item.path === '/projects' ? 'projects' : item.path === '/clients' ? 'clients' : item.path === '/reports' ? 'reports' : item.path === '/approvals' ? 'approvals' : item.path === '/help' ? 'help' : undefined;
     return (
       <div key={item.path} className="group/nav-item relative" {...collapsedLabelHandlers(item.label)}>
@@ -110,7 +116,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
           to={item.path}
           onClick={onClose}
           {...(onboardingTarget ? { 'data-onboarding-target': onboardingTarget } : {})}
-          aria-label={isCollapsed ? label : undefined}
+          aria-label={isCollapsed ? (badge ? `${label}, ${badge.title}` : label) : undefined}
           title={isCollapsed ? label : undefined}
           className={({ isActive }) => clsx(
             'group relative flex min-h-11 items-center rounded-control px-3 py-2.5 transition-[background-color,color,box-shadow] duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
@@ -129,6 +135,13 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                 <item.icon aria-hidden="true" className="h-[18px] w-[18px]" />
               </span>
               <span className={clsx('min-w-0 truncate text-sm', isCollapsed && 'md:hidden')}>{label}</span>
+              {badge && <span
+                title={badge.title}
+                className={clsx(
+                  'ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-accent px-1.5 text-[11px] font-semibold leading-5 text-white',
+                  isCollapsed && 'md:absolute md:right-1 md:top-1 md:ml-0',
+                )}
+              ><span aria-hidden="true">{badge.count > 99 ? '99+' : badge.count}</span><span className="sr-only">{badge.title}</span></span>}
             </>
           )}
         </NavLink>

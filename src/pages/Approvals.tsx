@@ -329,6 +329,8 @@ const Approvals: React.FC = () => {
   const registrationSearchInput = useImeSafeInput(registrationSearch, setRegistrationSearch);
   const memberSearchInput = useImeSafeInput(memberSearch, setMemberSearch);
   const [memberRoleFilter, setMemberRoleFilter] = useState<'All' | Role>('All');
+  // Staffing gaps link here with ?department=… so the Boss lands on that team.
+  const memberDepartmentFilter = normalizeDepartment(searchParams.get('department'));
   
   const [role, setRole] = useState<Role>('Staff');
   const [approvalDepartments, setApprovalDepartments] = useState<Department[]>([]);
@@ -1083,8 +1085,17 @@ const Approvals: React.FC = () => {
     const normalizedSearch = memberSearchInput.value.trim().toLowerCase();
     const matchesSearch = !normalizedSearch || user.name.toLowerCase().includes(normalizedSearch) || (user.email || '').toLowerCase().includes(normalizedSearch);
     const matchesRole = memberRoleFilter === 'All' || user.role === memberRoleFilter;
-    return matchesSearch && matchesRole;
+    const matchesDepartment = !memberDepartmentFilter || getMemberDepartments(user).includes(memberDepartmentFilter);
+    return matchesSearch && matchesRole && matchesDepartment;
   });
+  const departmentRegistrations = memberDepartmentFilter
+    ? pendingRegs.filter(registration => normalizeDepartment(registration.jobPosition) === memberDepartmentFilter)
+    : [];
+  const clearMemberDepartmentFilter = () => {
+    const next = new URLSearchParams(searchParams);
+    next.delete('department');
+    setSearchParams(next, { replace: true });
+  };
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1785,6 +1796,20 @@ const Approvals: React.FC = () => {
             {ROLES.map(role => <option key={role} value={role}>{role}</option>)}
           </select>
         </div>
+        {memberDepartmentFilter && <div className="flex flex-wrap items-center gap-2 border-b border-line/80 px-4 py-3 text-sm sm:px-5">
+          <span className="text-muted">{t('Department')}:</span>
+          <Badge tone="slate">{t(memberDepartmentFilter)}</Badge>
+          <button type="button" onClick={clearMemberDepartmentFilter} className="inline-flex items-center gap-1 text-sm font-semibold text-accent hover:underline">
+            <X className="h-3.5 w-3.5" aria-hidden="true" /> {t('Show all departments')}
+          </button>
+        </div>}
+        {departmentRegistrations.length > 0 && <div role="status" className="flex flex-wrap items-center justify-between gap-3 border-b border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100 sm:px-5">
+          <span>{t(departmentRegistrations.length === 1 ? '{count} sign-up for {department} is waiting for approval.' : '{count} sign-ups for {department} are waiting for approval.', { count: departmentRegistrations.length, department: t(memberDepartmentFilter || '') })}</span>
+          <Button variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => {
+            if (departmentRegistrations.length === 1) handleOpenApproval(departmentRegistrations[0]);
+            else { setRegistrationSearch(memberDepartmentFilter || ''); handleTabChange('registrations'); }
+          }}>{t('Review sign-ups')}</Button>
+        </div>}
         {visibleMembers.length === 0 && (
           <div className="px-6 py-12 text-center">
             <Users className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" />

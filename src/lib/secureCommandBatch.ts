@@ -128,7 +128,7 @@ export const runCommandBatch = async (batch: PendingCommandBatch, options: Build
         // A terminal rejection can never succeed on retry. Clear the whole
         // batch so the user can fix the change and save again instead of being
         // trapped resending a doomed group forever.
-        if (!['OFFLINE', 'CONFLICT', 'RETRY_REQUIRED'].includes(result.code)) {
+        if (!['OFFLINE', 'CONFLICT', 'RETRY_REQUIRED', 'AUTH_REQUIRED'].includes(result.code)) {
           api.complete();
         } else api.retain(group);
         return result;

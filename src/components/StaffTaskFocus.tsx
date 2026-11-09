@@ -22,6 +22,7 @@ import { Button } from './ui';
 import { TaskStatusBadges, TaskWorkflowSteps } from './TaskCard';
 import SideSheet from './SideSheet';
 import BackendFreshness from './BackendFreshness';
+import SessionRecoveryButton from './SessionRecoveryButton';
 import { useI18n } from './I18nProvider';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { getVisibleTasks, getTaskAccess } from '../lib/access';
@@ -426,7 +427,8 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
             <p><SystemMessage message={error === 'You do not have permission to make this change.' && backend.errorCode === 'FORBIDDEN' ? t('This change could not be saved because access was denied.') : error || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
             {pendingSave?.rejected && <p className="mt-2">{t('The task shown may include your unsaved change.')}</p>}
             {pendingResolution && <BackendFreshness compact hideBackendError={Boolean(error && error === backend.error)} className="mt-3" onRetry={async () => { const submitted = pendingSaveRef.current; if (submitted && !isSaving) await performSave(submitted, true); else await useStore.getState().retryPendingSave(); }} onDiscard={pendingSave ? () => requestExit(() => undefined) : undefined} />}
-            {pendingSave?.failed && !pendingSave.rejected && !pendingResolution && <Button variant="secondary" className="mt-3" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button>}
+            {backend.errorCode === 'AUTH_REQUIRED' && <SessionRecoveryButton />}
+            {pendingSave?.failed && !pendingSave.rejected && !pendingResolution && backend.errorCode !== 'AUTH_REQUIRED' && <Button variant="secondary" className="mt-3" disabled={isSaving} onClick={() => void performSave(pendingSave, true)}>{t('Retry save')}</Button>}
           </div>
         )}
 

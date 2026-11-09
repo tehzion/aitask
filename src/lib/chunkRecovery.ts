@@ -1,3 +1,4 @@
+import { recordChunkLoadFailure } from './clientTelemetry';
 import { hasUnsavedChanges } from './unsavedChanges';
 import { notifyPwaUpdateReady } from './pwaUpdates';
 /**
@@ -68,12 +69,13 @@ export const registerChunkRecovery = () => {
   if (typeof window === 'undefined') return;
 
   window.addEventListener('vite:preloadError', event => {
+    recordChunkLoadFailure();
     if (recoverFromChunkLoadError()) event.preventDefault();
   });
 
   window.addEventListener('unhandledrejection', event => {
     const reason = (event as PromiseRejectionEvent).reason;
     const message = reason instanceof Error ? reason.message : String(reason ?? '');
-    if (isChunkLoadError(message)) recoverFromChunkLoadError();
+    if (isChunkLoadError(message)) { recordChunkLoadFailure(); recoverFromChunkLoadError(); }
   });
 };

@@ -4,13 +4,15 @@ import { ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
 import type { Task, User } from '../types';
 import { getLocalizedPriority, getLocalizedTaskStatus } from '../lib/localeLabels';
-import { getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
+import { getLatestRevisionNote, getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
 import { getTaskWorkflowSteps, type TaskWorkflowStep } from '../lib/taskStage';
 import { isTaskOverdue } from '../lib/taskReporting';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { useTaskNextStep } from '../hooks/useTaskNextStep';
+import { useQuickTaskAction } from '../hooks/useQuickTaskAction';
+import { useQuickAssign } from '../hooks/useQuickAssign';
 import { StatusChip } from './ui';
 import { useI18n } from './I18nProvider';
 
@@ -47,11 +49,15 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   const { locale, t } = useI18n();
   const today = useLocalToday();
   const nextStep = useTaskNextStep(task);
+  const quickAction = useQuickTaskAction(task);
+  const quickAssign = useQuickAssign(task);
   const overdue = isTaskOverdue(task, today);
   const assignee = users.find(user => user.id === task.assignedTo)?.name;
   const blockers = getTaskBlockers(task, allTasks).length;
   const unavailableDependencies = getUnavailableTaskDependencyCount(task, allTasks);
   const open = !task.isCompleted && !['Completed', 'Cancelled'].includes(task.status);
+  // What to fix, without opening the task (role UX: revision reason on the card).
+  const revisionNote = open && task.status !== 'Waiting Approval' ? getLatestRevisionNote(task) : undefined;
   const flags = [
     task.revisionCount > 0 && open && `${t('Revision')} ${task.revisionCount}`,
     open && task.workState?.blocker && t('Help requested'),
@@ -112,9 +118,31 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
         {open && (task.priority === 'Urgent' || task.priority === 'High') && <div><dt className="sr-only">{t('Priority')}</dt><dd className={task.priority === 'Urgent' ? 'font-semibold text-red-700 dark:text-red-300' : 'font-medium text-ink'}>{getLocalizedPriority(task.priority, locale)}</dd></div>}
       </dl>
       {flags.length > 0 && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{flags.join(' · ')}</p>}
+      {revisionNote && <p className="line-clamp-2 text-xs leading-5 text-ink"><span className="font-medium text-muted">{t('Reviewer note')}:</span> <span data-i18n-skip>{revisionNote}</span></p>}
+      {quickAssign && <div className="relative z-10 flex items-center gap-2 border-t border-line/60 pt-2.5">
+        <select
+          aria-label={`${t('Assign to…')}: ${task.title}`}
+          value=""
+          disabled={quickAssign.busy}
+          onChange={event => { if (event.target.value) void quickAssign.assign(event.target.value); }}
+          className="min-h-9 min-w-0 flex-1 rounded-control border border-line bg-surface px-2.5 text-sm font-medium text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-60"
+        >
+          <option value="">{quickAssign.busy ? t('Saving…') : t('Assign to…')}</option>
+          {quickAssign.options.map(member => <option key={member.id} value={member.id} data-i18n-skip>{member.name}</option>)}
+        </select>
+      </div>}
       {nextStep && <div className="mt-1 flex items-center justify-between gap-3 border-t border-line/60 pt-2.5">
         <span className="text-sm font-semibold text-ink"><span className="font-medium text-muted">{t('Next')}:</span> {t(nextStep)}</span>
-        <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted transition-transform duration-160 group-hover:translate-x-0.5 group-hover:text-ink" />
+        {quickAction
+          // Sits above the card's full-size open target, so it acts without opening the task.
+          ? <button
+            type="button"
+            disabled={quickAction.busy}
+            aria-label={`${t(quickAction.label)}: ${task.title}`}
+            onClick={() => void quickAction.run()}
+            className="relative z-10 inline-flex min-h-9 shrink-0 items-center rounded-control bg-accent px-3 text-sm font-semibold text-white transition-colors dark:text-[rgb(var(--calm-accent-ink))] duration-160 hover:bg-accent/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-60"
+          >{quickAction.busy ? t('Saving…') : t(quickAction.label)}</button>
+          : <ChevronRight aria-hidden="true" className="h-4 w-4 shrink-0 text-muted transition-transform duration-160 group-hover:translate-x-0.5 group-hover:text-ink" />}
       </div>}
     </article>
   );

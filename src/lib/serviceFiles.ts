@@ -35,6 +35,9 @@ const durableKey = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => `${DU
 const submissions = new Map<string, string>();
 const pendingServiceFiles = new Map<string, AttachmentRef>();
 const durableFiles = new Set<string>();
+// A File object is retained by the form during retry; scope its upload identity
+// to the actor and destination so a lost reply does not create a second object.
+let uncertainUploads = new WeakMap<File, Map<string, AttachmentRef>>();
 let legacyHydrated = false;
 
 const pendingServiceFileKey = (attachment: Pick<AttachmentRef, 'bucket' | 'path'>) => `${attachment.bucket}:${attachment.path}`;
@@ -129,6 +132,7 @@ export const forgetPendingServiceFile = (attachment: Pick<AttachmentRef, 'bucket
 };
 
 export const clearPendingServiceFiles = () => {
+  uncertainUploads = new WeakMap<File, Map<string, AttachmentRef>>();
   pendingServiceFiles.clear();
   submissions.clear();
   durableFiles.clear();
@@ -219,9 +223,13 @@ export const uploadServiceFile = async (input: {
   const contentType = getServiceFileMimeType(input.file);
   if (!contentType) return { ok: false, error: SERVICE_FILE_TYPE_ERROR };
   const sessionToken = captureWorkspaceSession();
-  const id = crypto.randomUUID();
-  const path = `${input.workspaceId}/${input.clientId}/${input.cycleId}/${id}-${safeName(input.file.name)}`;
-  const attachment: AttachmentRef = {
+  const scope = JSON.stringify([input.workspaceId, input.clientId, input.cycleId, input.userId]);
+  const attempts = uncertainUploads.get(input.file) || new Map<string, AttachmentRef>();
+  uncertainUploads.set(input.file, attempts);
+  const retained = attempts.get(scope);
+  const id = retained?.id || crypto.randomUUID();
+  const path = retained?.path || `${input.workspaceId}/${input.clientId}/${input.cycleId}/${id}-${safeName(input.file.name)}`;
+  const attachment: AttachmentRef = retained || {
     id,
     bucket: SERVICE_FILES_BUCKET,
     path,
@@ -242,12 +250,25 @@ export const uploadServiceFile = async (input: {
       upsert: false,
     });
     if (error) {
-      // A definitive rejection means no object was written.
-      forgetPendingServiceFile(attachment);
+      // A lost reply or server failure does not prove that Storage rejected the
+      // write. Keep the recovery record unless the response is a definitive
+      // client-side rejection; otherwise a successfully written object is orphaned.
+      const status = Number(error.status);
+      if (retained && status === 409 && /duplicate|already exists/i.test(error.message)) {
+        assertWorkspaceSession(sessionToken);
+        attempts.delete(scope);
+        return { ok: true, attachment };
+      }
+      if ([400, 401, 403, 404, 413, 415, 422].includes(status)) {
+        forgetPendingServiceFile(attachment);
+        attempts.delete(scope);
+      } else attempts.set(scope, attachment);
       return { ok: false, error: userFacingText(error, 'The file could not be uploaded.') };
     }
     assertWorkspaceSession(sessionToken);
+    attempts.delete(scope);
   } catch (error) {
+    attempts.set(scope, attachment);
     return {
       ok: false,
       error: userFacingText(error, 'The file could not be uploaded.'),
