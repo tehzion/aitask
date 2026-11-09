@@ -52,13 +52,23 @@ export const getUnavailableTaskDependencyCount = (task: Task, visibleTasks: Task
   return [...new Set(task.predecessorTaskIds || [])].filter(id => !visibleIds.has(id)).length;
 };
 
+const REVISION_NOTE_PREFIX = 'Revision requested: ';
+/** The reviewer's note from the latest revision request, shown on list cards. */
+export const getLatestRevisionNote = (task: Pick<Task, 'comments' | 'revisionCount'>): string | undefined => {
+  if (!task.revisionCount) return undefined;
+  const comment = [...(task.comments || [])].reverse().find(item => item.text?.startsWith(REVISION_NOTE_PREFIX));
+  return comment?.text.slice(REVISION_NOTE_PREFIX.length).trim() || undefined;
+};
+
 const isWaiting = (task: Task) => !isTerminal(task) && ['Waiting Approval', 'Approved'].includes(task.status);
 
+// Today order (role UX, 10 Nov 2026): overdue, due today, revisions, in
+// progress, the rest by due date, and blocked work last because it cannot move.
 const urgencyRank = (task: Task, today: string) => {
-  if (task.revisionCount > 0) return 0;
-  if (task.workState?.blocker) return 0;
-  if (task.dueDate && task.dueDate < today) return 1;
-  if (task.dueDate === today) return 2;
+  if (task.workState?.blocker) return 6;
+  if (task.dueDate && task.dueDate < today) return 0;
+  if (task.dueDate === today) return 1;
+  if (task.revisionCount > 0) return 2;
   if (task.status === 'In Progress') return 3;
   if (task.dueDate) return 4;
   return 5;

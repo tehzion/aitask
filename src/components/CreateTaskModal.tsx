@@ -25,6 +25,7 @@ import { modalFooter } from './uiTokens';
 import { useI18n } from './I18nProvider';
 import ContextualTutorialLink from './ContextualTutorialLink';
 import '../lib/uxEnhancementCopy';
+import { defaultDueDateForMonth, readCreateTaskChoice, rememberCreateTaskChoice } from '../lib/createTaskDefaults';
 
 interface Props {
   isOpen: boolean;
@@ -102,6 +103,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   ));
   const [startDate, setStartDate] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const dueDateDefaulted = React.useRef(false);
   const [attachmentLink, setAttachmentLink] = useState('');
   const [attachmentName, setAttachmentName] = useState('');
   const [notes, setNotes] = useState('');
@@ -224,27 +226,48 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         : undefined;
       setStartDate(createTaskInitialDate || getTodayInputDate());
       setDueDate(createTaskInitialDate || '');
+      dueDateDefaulted.current = Boolean(createTaskInitialDate);
       setFormError('');
       setAssignmentError('');
-      setAssignedTo(initialMember?.id || '');
       const lockedProject = createTaskInitialProjectId ? assignableProjects.find(project => project.id === createTaskInitialProjectId) : undefined;
+      let openedProjectId = '';
       if (lockedProject) {
         setProjectId(lockedProject.id);
         setClientName(lockedProject.clientName);
+        openedProjectId = lockedProject.id;
       } else if (createTaskInitialClientName) {
         const initialProject = assignableProjects.find(project => project.clientId === createTaskInitialClientId || project.clientName.toLowerCase() === createTaskInitialClientName.toLowerCase());
         setProjectId(initialProject?.id || '');
         setClientName(createTaskInitialClientName);
+        openedProjectId = initialProject?.id || '';
       }
       if (createTaskInitialServiceType) setServiceType(createTaskInitialServiceType);
+      // Click reduction: reuse this person's last department, and the last
+      // assignee on the same project while they can still be assigned.
+      const remembered = initialMember ? null : readCreateTaskChoice(currentUser?.id);
+      const rememberedDepartment = departmentChoices.find(item => item === remembered?.department) || '';
+      const rememberedAssignee = rememberedDepartment && remembered?.assignedTo && openedProjectId && remembered.projectId === openedProjectId
+        && assignableTaskAssignees(currentUser, rememberedDepartment, users, rolePermissions).some(user => user.id === remembered.assignedTo && (canAssignOthers || user.id === currentUser?.id))
+        ? remembered.assignedTo : '';
+      setAssignedTo(initialMember?.id || rememberedAssignee);
       setDepartment(current => (
         initialDepartment
+          || rememberedDepartment
           || (current && departmentChoices.some(item => item === current)
           ? current
           : departmentChoices.length === 1 ? departmentChoices[0] : '')
       ));
     }
-  }, [assignableProjects, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialDate, createTaskInitialProjectId, createTaskInitialServiceType, departmentChoices, isOpen, users]);
+  }, [assignableProjects, canAssignOthers, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialDate, createTaskInitialProjectId, createTaskInitialServiceType, currentUser, departmentChoices, isOpen, rolePermissions, users]);
+
+  // Work counted toward a month defaults to that month's last day, once per opening.
+  React.useEffect(() => {
+    if (!isOpen || dueDateDefaulted.current || dueDate || !countsTowardId) return;
+    const fallback = defaultDueDateForMonth(currentCycle?.periodEnd, getTodayInputDate());
+    if (!fallback) return;
+    dueDateDefaulted.current = true;
+    setDueDate(fallback);
+  }, [countsTowardId, currentCycle?.periodEnd, dueDate, isOpen]);
 
 
 
@@ -454,6 +477,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
+    rememberCreateTaskChoice(currentUser?.id, { department, assignedTo: resolvedAssignedTo, projectId });
     pendingTaskRecord.current = useStore.getState().tasks.find(task => task.id === taskId) || null;
     await confirmTaskSave(taskId);
   };

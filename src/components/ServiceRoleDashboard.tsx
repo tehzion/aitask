@@ -11,6 +11,10 @@ import { formatMoney } from '../lib/serviceManagement';
 import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
 import { getRoleWorkSummary } from '../lib/roleWorkSummary';
 import { getMonthsToTidy } from '../lib/monthHousekeeping';
+import { canManageServiceCycles } from '../lib/access';
+import MonthsToTidyPanel from './MonthsToTidyPanel';
+import BulkApprovePanel from './BulkApprovePanel';
+import StaffingGapsPanel from './StaffingGapsPanel';
 import { isTaskCompleted } from '../lib/taskCompletion';
 import { isTaskOpen } from '../lib/taskReporting';
 import { CountLabel, DataRow, MetricStrip, ProgressBar, StatGroup, StatusChip, Surface } from './ui';
@@ -263,6 +267,7 @@ const ServiceRoleDashboard = () => {
           </>;
         })()}
       </section>
+      <BulkApprovePanel tasks={personal.mine} />
       {/* Unassigned work needs the PM to act, so it is listed here, not under waiting on others. */}
       <StuckWorkPanel tasks={scopeTasks} />
       {plansAtRisk.length > 0 && <Surface className="overflow-hidden" aria-labelledby="pm-plans-risk-title">
@@ -344,6 +349,8 @@ const ServiceRoleDashboard = () => {
       { label: t('Plans at risk this month'), value: plansAtRisk.length, to: '/clients', tone: plansAtRisk.length ? 'danger' : undefined },
       { label: t('Months to tidy up'), value: monthsToTidy.length, to: '/clients', tone: monthsToTidy.length ? 'warning' : undefined },
     ]} />
+    <MonthsToTidyPanel months={monthsToTidy} deliverables={store.deliverables} todayKey={getTodayInputDate(now)} canManage={canManageServiceCycles(store.currentUser, store.rolePermissions)} />
+    {store.currentUser?.isSuperAdmin && <StaffingGapsPanel users={store.users} projects={store.projects} tasks={store.tasks} />}
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
         <div><h3 className="font-semibold text-ink">{t('Monthly deliverables')}</h3><p className="mt-1 text-sm text-muted">{t('Current cycle delivery progress for each active company.')}</p></div>

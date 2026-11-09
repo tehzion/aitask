@@ -1,5 +1,5 @@
 import { DeliveryProgress } from './DeliveryProgress';
-import { isDeliverableWorkDone } from '../lib/serviceManagement';
+import { getCycleServiceProgress, isDeliverableWorkDone } from '../lib/serviceManagement';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getCurrentPlanCycle, isAwaitingPublication } from '../lib/dashboardData';
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, MessageSquareText, TimerReset } from 'lucide-react';
@@ -55,6 +55,8 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
   const currentCycle = activePlan ? getCurrentPlanCycle(activePlan, serviceCycles, today) : undefined;
   const cycleDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
   const deliveredCount = cycleDeliverables.filter(isDeliverableWorkDone).length;
+  // This month at a glance: completed vs planned per service (Ready counts as completed).
+  const serviceProgress = currentCycle?.serviceItems?.length ? getCycleServiceProgress(currentCycle, deliverables).filter(item => item.included > 0) : [];
   const groups = groupClientDeliveries(tasks, today);
   const focusTask = getClientFocusTask(tasks, today);
   const focusStage = focusTask ? getClientDeliveryStage(focusTask) : null;
@@ -130,6 +132,15 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
         <Surface className="p-6">
           <p className="calm-eyebrow">{t('clientPortal.deliveryProgress')}</p>
           <DeliveryProgress published={Boolean(currentCycle)} total={cycleDeliverables.length} delivered={deliveredCount} draft={isAwaitingPublication(client, activePlan, serviceCycles, today)} />
+          {serviceProgress.length > 1 && <div className="mt-5 border-t border-line pt-4">
+            <h3 className="text-xs font-semibold text-muted">{t('This month by service')}</h3>
+            <ul className="mt-2 space-y-1.5 text-sm">
+              {serviceProgress.map(item => <li key={item.serviceItemId} className="flex items-center justify-between gap-3">
+                <span data-i18n-skip className="min-w-0 truncate text-ink">{item.name}</span>
+                <span className="calm-number shrink-0 font-semibold text-ink"><span aria-hidden="true">{item.completed}/{item.included}</span><span className="sr-only">{t('{completed} of {included} completed', { completed: item.completed, included: item.included })}</span></span>
+              </li>)}
+            </ul>
+          </div>}
           {client && activePlan && (
             <Link to={`/clients/${encodeURIComponent(client.id)}`} className="mt-6 inline-flex min-h-11 w-full items-center justify-between rounded-control border border-line px-3 text-sm font-semibold text-ink transition-colors duration-160 hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
               <span data-i18n-skip>{activePlan.name}</span><ArrowRight className="h-4 w-4 text-accent" />

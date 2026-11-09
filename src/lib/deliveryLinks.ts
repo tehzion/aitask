@@ -83,3 +83,55 @@ export const getTaskDeliverable = (task: Pick<Task, 'id' | 'deliverableId'>, del
   (task.deliverableId ? deliverables.find(item => item.id === task.deliverableId) : undefined)
   || deliverables.find(item => item.taskIds?.includes(task.id))
 );
+
+const LINK_STOP_WORDS = new Set(['the', 'and', 'for', 'with', 'from', 'this', 'that', 'month', 'task', 'post', 'posts']);
+const linkTokens = (value: string | undefined) => new Set((value || '').toLowerCase()
+  .split(/[^\p{L}\p{N}]+/u)
+  .filter(token => token.length >= 3 && !LINK_STOP_WORDS.has(token) && !/^\d+$/.test(token)));
+
+const dayDistance = (date: string, start: string, end: string) => {
+  if (date >= start && date <= end) return 0;
+  const edge = date < start ? start : end;
+  return Math.abs((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${edge}T00:00:00Z`)) / 86_400_000);
+};
+
+/**
+ * How likely an unlinked task belongs to a deliverable (click reduction, item 3):
+ * due inside the month scores most, then shared words between the task's title or
+ * service type and the deliverable's title or service. Higher is better; 0 means
+ * no evidence.
+ */
+export const scoreLinkCandidate = (
+  task: Pick<Task, 'title' | 'serviceType' | 'dueDate'>,
+  deliverable: Pick<Deliverable, 'title'>,
+  cycle: Pick<ServiceCycle, 'periodStart' | 'periodEnd'>,
+  serviceName?: string,
+) => {
+  let score = 0;
+  if (task.dueDate && cycle.periodStart && cycle.periodEnd) {
+    const distance = dayDistance(task.dueDate, cycle.periodStart, cycle.periodEnd);
+    if (distance === 0) score += 3;
+    else if (distance <= 7) score += 1;
+  }
+  const target = new Set([...linkTokens(deliverable.title), ...linkTokens(serviceName)]);
+  const source = new Set([...linkTokens(task.title), ...linkTokens(task.serviceType)]);
+  for (const token of source) if (target.has(token)) score += 2;
+  return score;
+};
+
+/**
+ * Candidates ordered best first, plus a single suggestion when one task clearly
+ * leads: due in the month or a word match, and ahead of the runner-up.
+ */
+export const rankLinkCandidates = <T extends Pick<Task, 'id' | 'title' | 'serviceType' | 'dueDate'>>(
+  candidates: readonly T[],
+  deliverable: Pick<Deliverable, 'title'>,
+  cycle: Pick<ServiceCycle, 'periodStart' | 'periodEnd'>,
+  serviceName?: string,
+) => {
+  const scored = candidates.map((task, index) => ({ task, index, score: scoreLinkCandidate(task, deliverable, cycle, serviceName) }))
+    .sort((left, right) => right.score - left.score || left.index - right.index);
+  const [best, next] = scored;
+  const suggestion = best && best.score >= 3 && (!next || best.score > next.score) ? best.task : undefined;
+  return { ordered: scored.map(item => item.task), suggestion };
+};

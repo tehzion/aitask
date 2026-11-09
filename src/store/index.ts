@@ -1,3 +1,4 @@
+import { recordClientEvent } from '../lib/clientTelemetry';
 import { cyclePaymentSummary } from '../lib/cyclePayments';
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
@@ -182,6 +183,8 @@ interface BackendRuntimeState {
   lastSyncedAt?: string;
   lastSavedAt?: string;
   lastPulledAt?: string;
+  /** Time of the latest background refresh that failed (G7); stale once older than lastPulledAt. */
+  refreshFailedAt?: string;
   remoteVersion?: number;
   workspaceVersion?: number;
   remoteUpdatedAt?: string;
@@ -368,7 +371,11 @@ export interface StoreState {
   reapplyMutationOnLatestWorkspace: () => Promise<{ ok: boolean; error?: string }>;
   retryPendingSave: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
   discardMutation: (options?: { reload?: boolean; confirm?: boolean }) => Promise<void>;
-  commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode }>;
+  /**
+   * Sends the staged change. `queued` means the server has not answered yet
+   * but the change is kept and is being resent automatically.
+   */
+  commitPendingMutation: (commandType?: SecureCommandType) => Promise<{ ok: boolean; error?: string; code?: MutationErrorCode; queued?: boolean }>;
   login: (name: string, password?: string) => Promise<LoginResult>;
   requestPasswordRecovery: (email: string) => Promise<{ ok: boolean; error?: string }>;
   completePasswordSetup: (data: { newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
@@ -521,14 +528,46 @@ const waitForSyncIdle = async (timeoutMs = syncIdleWaitPolicy.timeoutMs) => {
   return !isSyncBusy(useStore.getState());
 };
 /**
- * Saves that failed for a temporary reason (dropped connection, slow server,
- * overlapping save) or conflicted only on fields this user did not touch are
- * resolved automatically before anyone is asked. Only when these attempts run
- * out does the save banner ask the user to act.
+ * Like waitForSyncIdle, but stops waiting once a dropped save has been resent
+ * for a while: the change is kept and saves by itself, so the form need not
+ * hold the person (see automaticRecoveryPolicy.queueAfterMs).
  */
-export const automaticRecoveryPolicy = { delaysMs: [1000, 3000, 6000] };
+const waitForSyncIdleOrQueued = async (timeoutMs = syncIdleWaitPolicy.timeoutMs): Promise<'idle' | 'queued' | 'timeout'> => {
+  const deadline = Date.now() + timeoutMs;
+  for (;;) {
+    if (!isSyncBusy(useStore.getState())) return 'idle';
+    if (isTransientRecoveryQueued()) return 'queued';
+    if (Date.now() >= deadline) return 'timeout';
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+};
+/**
+ * Saves that failed for a temporary reason (dropped connection, slow server,
+ * offline device) are resent automatically until the server answers: the
+ * change is kept on this device, so nobody is asked to "Retry my changes"
+ * for a dropped save. The wait grows to the last delay and then repeats; it
+ * is cut short when the browser comes back online or the tab is shown again.
+ * A conflict on fields this user did not touch is merged automatically, but
+ * only `conflictAttempts` times before the person decides.
+ *
+ * A save that is still being resent after `queueAfterMs` is reported to the
+ * form as accepted (`queued`), so forms close normally and later edits are
+ * saved right after it.
+ */
+export const automaticRecoveryPolicy = {
+  delaysMs: [1000, 3000, 6000, 10_000, 15_000, 30_000],
+  conflictAttempts: 3,
+  queueAfterMs: 8000,
+  // After this long the calm "Still saving" note says plainly it is not saved yet.
+  escalateAfterMs: 5 * 60_000,
+};
 let autoRecoveryAttempt = 0;
 let autoRecoveryToken = 0;
+let autoRecoveryStartedAt = 0;
+let autoRecoveryTimer: ReturnType<typeof setTimeout> | undefined;
+let autoRecoveryFire: (() => void) | undefined;
+let autoRecoveryListenersInstalled = false;
+const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine === false;
 // While a network-type failure is resent, people can keep working: the resend
 // carries exactly their earlier change, and anything edited meanwhile is saved
 // next. A merged conflict keeps the short lock, because the local copy still
@@ -543,23 +582,55 @@ export const isMergeableConflict = (conflict?: MutationConflict) => Boolean(
   && conflict.serverChangedFields && conflict.changedFields?.length
   && !conflict.changedFields.some(field => !SERVER_OWNED_CONFLICT_FIELDS.has(field) && conflict.serverChangedFields!.includes(field)),
 );
-const resetAutomaticRecovery = () => { autoRecoveryAttempt = 0; autoRecoveryAcceptsEdits = false; };
+// Set when a form was told its edit was queued behind a save being resent. If
+// that save is later refused, the form has closed, so a toast names it (G5).
+let queuedEditReportedAsSaved = false;
+const resetAutomaticRecovery = () => { autoRecoveryAttempt = 0; autoRecoveryAcceptsEdits = false; autoRecoveryStartedAt = 0; queuedEditReportedAsSaved = false; };
+/** True while a dropped save is being resent and has been for `queueAfterMs`. */
+const isTransientRecoveryQueued = () => (
+  autoRecoveryAcceptsEdits
+  && autoRecoveryStartedAt > 0
+  && (isOffline() || Date.now() - autoRecoveryStartedAt >= automaticRecoveryPolicy.queueAfterMs)
+);
+// Coming back online (or back to the tab) resends a waiting save at once.
+const installAutomaticRecoveryListeners = () => {
+  if (autoRecoveryListenersInstalled || typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+  autoRecoveryListenersInstalled = true;
+  const resendNow = () => {
+    if (!autoRecoveryPending || !autoRecoveryFire || isOffline()) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    if (autoRecoveryTimer !== undefined) clearTimeout(autoRecoveryTimer);
+    autoRecoveryAttempt = 0;
+    const fire = autoRecoveryFire;
+    autoRecoveryFire = undefined;
+    fire();
+  };
+  window.addEventListener('online', resendNow);
+  if (typeof document !== 'undefined') document.addEventListener('visibilitychange', resendNow);
+};
 const scheduleAutomaticRecovery = (
   result: { code?: MutationErrorCode; error?: string; conflict?: MutationConflict },
   sessionToken: ReturnType<typeof captureWorkspaceSession>,
 ) => {
-  const transient = result.code === 'RETRY_REQUIRED' && result.error !== BACKEND_UPGRADE_REQUIRED_MESSAGE;
+  const delays = automaticRecoveryPolicy.delaysMs;
+  const transient = (result.code === 'RETRY_REQUIRED' || result.code === 'OFFLINE') && result.error !== BACKEND_UPGRADE_REQUIRED_MESSAGE;
   const recoverable = transient || (result.code === 'CONFLICT' && isMergeableConflict(result.conflict));
-  if (typeof window === 'undefined' || !recoverable || autoRecoveryAttempt >= automaticRecoveryPolicy.delaysMs.length) {
+  // A dropped save is resent until it is answered; a merge is tried a few times.
+  const attemptLimit = transient ? Number.POSITIVE_INFINITY : Math.min(automaticRecoveryPolicy.conflictAttempts, delays.length);
+  if (typeof window === 'undefined' || !recoverable || !delays.length || autoRecoveryAttempt >= attemptLimit) {
     autoRecoveryAcceptsEdits = false;
+    autoRecoveryStartedAt = 0;
     return false;
   }
+  installAutomaticRecoveryListeners();
   if (!autoRecoveryAcceptsEdits) autoRecoveryEpoch = localMutationEpoch;
   autoRecoveryAcceptsEdits = transient;
-  const delay = automaticRecoveryPolicy.delaysMs[autoRecoveryAttempt];
+  if (!autoRecoveryStartedAt) autoRecoveryStartedAt = Date.now();
+  const delay = delays[Math.min(autoRecoveryAttempt, delays.length - 1)];
   autoRecoveryAttempt += 1;
   autoRecoveryPending = true;
   const token = ++autoRecoveryToken;
+  const offline = isOffline();
   useStore.setState(state => ({
     backend: {
       ...state.backend,
@@ -570,11 +641,19 @@ const scheduleAutomaticRecovery = (
       conflict: result.conflict,
       error: undefined,
       errorCode: undefined,
-      message: 'Saving…',
+      message: offline
+        ? 'No connection. Your change is kept and will save when you are back online.'
+        : Date.now() - autoRecoveryStartedAt >= automaticRecoveryPolicy.escalateAfterMs
+          ? 'Still not saved. Keep this tab open; it keeps trying.'
+          : autoRecoveryAttempt > 2
+            ? 'Still saving. Your change is kept on this device.'
+            : 'Saving…',
     },
   }));
-  window.setTimeout(() => {
+  const fire = () => {
     if (token !== autoRecoveryToken) return;
+    autoRecoveryTimer = undefined;
+    autoRecoveryFire = undefined;
     if (!isWorkspaceSessionCurrent(sessionToken)) { autoRecoveryPending = false; return; }
     if (getRetainedSecureCommand() || getRetainedSecureMemberMutation()) {
       // Stay busy across the handoff so waiting saves keep waiting.
@@ -585,8 +664,14 @@ const scheduleAutomaticRecovery = (
       autoRecoveryPending = false;
       void useStore.getState().syncBackendNow();
     }
-  }, delay);
+  };
+  autoRecoveryFire = fire;
+  autoRecoveryTimer = setTimeout(fire, delay);
   return true;
+};
+const resendRestoredChange = (sessionToken: ReturnType<typeof captureWorkspaceSession>) => {
+  resetAutomaticRecovery();
+  scheduleAutomaticRecovery({ code: 'RETRY_REQUIRED' }, sessionToken);
 };
 let isApplyingRemoteSnapshot = false;
 let isApplyingNotificationRead = false;
@@ -1282,6 +1367,8 @@ export const useStore = create<StoreState>()(
               },
             }));
             isApplyingRemoteSnapshot = false;
+            // A change kept from before the reload is resent by itself.
+            if (compatibility.compatible && hasRetainedChange) resendRestoredChange(sessionToken);
             return;
           }
         } catch (error) {
@@ -1363,6 +1450,7 @@ export const useStore = create<StoreState>()(
             );
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (result.ok === false) {
+              if (stateToSave.currentUser) void recordClientEvent(stateToSave.currentUser, { type: 'save_failure', code: result.code });
               const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
               if (!upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) return;
               apply((state) => ({
@@ -1374,6 +1462,8 @@ export const useStore = create<StoreState>()(
                     ? 'conflict'
                     : result.code === 'OFFLINE'
                       ? 'offline'
+                      : result.code === 'AUTH_REQUIRED'
+                        ? 'refresh_required'
                       : isTerminalMutationError(result.code)
                         ? 'refresh_required'
                       : 'retry_required',
@@ -1390,6 +1480,7 @@ export const useStore = create<StoreState>()(
               }));
               return;
             }
+            if (autoRecoveryStartedAt && stateToSave.currentUser) void recordClientEvent(stateToSave.currentUser, { type: 'recovery_duration', durationMs: Date.now() - autoRecoveryStartedAt });
             resetAutomaticRecovery();
             const syncedAt = new Date().toISOString();
             const hasChangesAfterSave = !workspaceStatesEqual(savedWorkspace, selectPersistedWorkspaceState(get()));
@@ -1426,7 +1517,8 @@ export const useStore = create<StoreState>()(
           }
         } catch (error) {
           const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
-          if (!offline && scheduleAutomaticRecovery({ code: 'RETRY_REQUIRED' }, sessionToken)) return;
+          if (isWorkspaceSessionCurrent(sessionToken) && get().currentUser) void recordClientEvent(get().currentUser!, { type: 'save_failure', code: offline ? 'OFFLINE' : 'RETRY_REQUIRED' });
+          if (scheduleAutomaticRecovery({ code: offline ? 'OFFLINE' : 'RETRY_REQUIRED' }, sessionToken)) return;
           apply((state) => ({
             backend: {
               ...state.backend,
@@ -1472,11 +1564,18 @@ export const useStore = create<StoreState>()(
             restoreSecureMemberMutation(capabilityUser.id);
             const compatibility = await loadSecureBackendCapabilities();
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
+            if (!compatibility.compatible && compatibility.retryable && (options.silent || autoRecoveryPending || autoRecoveryAcceptsEdits)) {
+              // A background check that could not connect changes nothing; a
+              // dropped save that is being resent stays "Saving…".
+              const recovering = autoRecoveryPending || autoRecoveryAcceptsEdits;
+              apply((state) => ({ backend: { ...state.backend, status: recovering ? 'saving' : statusBeforePull === 'loading' ? 'live' : statusBeforePull, isPulling: false, refreshFailedAt: new Date().toISOString() } }));
+              return;
+            }
             if (!compatibility.compatible) {
               apply((state) => ({
                 backend: {
                   ...state.backend,
-                  status: compatibility.retryable ? 'retry_required' : 'upgrade_required',
+                  status: compatibility.retryable ? (isOffline() ? 'offline' : 'retry_required') : 'upgrade_required',
                   isPulling: false,
                   upgradeRequired: !compatibility.retryable,
                   error: compatibility.error,
@@ -1632,6 +1731,23 @@ export const useStore = create<StoreState>()(
           }
         } catch (error) {
           isApplyingRemoteSnapshot = false;
+          // A background check that fails (after a save, on a timer, on focus)
+          // is simply tried again next time. Only a Refresh the person asked
+          // for, or an ended session, is worth a banner.
+          const sessionEnded = /session|sign in|jwt|not authenticated/i.test(error instanceof Error ? error.message : String(error || ''));
+          if (options.silent && !sessionEnded) {
+            apply((state) => ({
+              backend: {
+                ...state.backend,
+                status: autoRecoveryPending || autoRecoveryAcceptsEdits || state.backend.isSaving
+                  ? 'saving'
+                  : statusBeforePull === 'loading' ? 'live' : statusBeforePull,
+                isPulling: false,
+                refreshFailedAt: new Date().toISOString(),
+              },
+            }));
+            return;
+          }
           apply((state) => ({
             backend: {
               ...state.backend,
@@ -1812,18 +1928,24 @@ export const useStore = create<StoreState>()(
         if (shouldUseSecureSupabase()) {
           const compatibility = await loadSecureBackendCapabilities();
           if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
+          if (!compatibility.compatible && compatibility.retryable && options.automatic
+            && scheduleAutomaticRecovery({ code: 'RETRY_REQUIRED' }, sessionToken)) {
+            return { ok: false, code: 'RETRY_REQUIRED', error: 'Saving…' };
+          }
           if (!compatibility.compatible) {
+            const needsSignIn = compatibility.code === 'AUTH_REQUIRED';
             apply((state) => ({
               backend: {
                 ...state.backend,
-                status: compatibility.retryable ? 'retry_required' : 'upgrade_required',
+                status: needsSignIn ? 'refresh_required' : compatibility.retryable ? 'retry_required' : 'upgrade_required',
                 isSaving: false,
-                upgradeRequired: !compatibility.retryable,
+                upgradeRequired: !needsSignIn && !compatibility.retryable,
+                errorCode: needsSignIn ? 'AUTH_REQUIRED' : undefined,
                 error: compatibility.error,
                 message: compatibility.error,
               },
             }));
-            return { ok: false, error: compatibility.error };
+            return needsSignIn ? { ok: false, code: 'AUTH_REQUIRED', error: compatibility.error } : { ok: false, error: compatibility.error };
           }
         }
         const conflict = current.backend.conflict;
@@ -1852,9 +1974,14 @@ export const useStore = create<StoreState>()(
         });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         if (result.ok === false) {
+          if (get().currentUser) void recordClientEvent(get().currentUser!, { type: 'save_failure', code: result.code });
           const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
           if (options.automatic && !upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) {
             return { ok: false, code: 'RETRY_REQUIRED', error: 'Saving…' };
+          }
+          if (queuedEditReportedAsSaved) {
+            queuedEditReportedAsSaved = false;
+            useToastStore.getState().addToast('A change you made earlier could not be saved. Check the message at the top of the page.', 'error');
           }
           apply((state) => ({
             backend: {
@@ -1865,6 +1992,8 @@ export const useStore = create<StoreState>()(
                 ? 'conflict'
                 : result.code === 'OFFLINE'
                   ? 'offline'
+                  : result.code === 'AUTH_REQUIRED'
+                    ? 'refresh_required'
                   : isTerminalMutationError(result.code)
                     ? 'refresh_required'
                   : 'retry_required',
@@ -1884,6 +2013,7 @@ export const useStore = create<StoreState>()(
         }
 
         const editedDuringRecovery = autoRecoveryAcceptsEdits && localMutationEpoch !== autoRecoveryEpoch;
+        if (autoRecoveryStartedAt && get().currentUser) void recordClientEvent(get().currentUser!, { type: 'recovery_duration', durationMs: Date.now() - autoRecoveryStartedAt });
         resetAutomaticRecovery();
         const savedAt = new Date().toISOString();
         const hasNewerChanges = editedDuringRecovery || !workspaceStatesEqual(workspaceBeforeRetry, selectPersistedWorkspaceState(get()));
@@ -2029,9 +2159,11 @@ export const useStore = create<StoreState>()(
           if (commandType && get().backend.hasLocalChanges && !hasRetainedSecureMutation()) {
             set(state => ({ backend: { ...state.backend, pendingCommandType: state.backend.pendingCommandType || commandType } }));
           }
-          const idle = await waitForSyncIdle();
+          const waited = await waitForSyncIdleOrQueued();
           if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
-          if (!idle) return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
+          // The earlier dropped save is still being resent; this edit is saved right after it.
+          if (waited === 'queued') { queuedEditReportedAsSaved = true; return { ok: true, queued: true }; }
+          if (waited === 'timeout') return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
         }
         const before = get().backend;
         if (before.status === 'upgrade_required') {
@@ -2054,9 +2186,10 @@ export const useStore = create<StoreState>()(
         // An acknowledged write may have queued newer local edits. Wait for
         // that write too instead of reporting a generic false save failure.
         if (isSyncBusy(get())) {
-          const idle = await waitForSyncIdle();
+          const waited = await waitForSyncIdleOrQueued();
           if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
-          if (!idle) return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
+          if (waited === 'queued') { queuedEditReportedAsSaved = true; return { ok: true, queued: true }; }
+          if (waited === 'timeout') return { ok: false, code: 'RETRY_REQUIRED', error: 'Another synchronization request is still running.' };
         }
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         const backend = get().backend;
@@ -2132,6 +2265,7 @@ export const useStore = create<StoreState>()(
             }));
             isApplyingRemoteSnapshot = false;
             if (typeof window !== 'undefined') startBackendAutoSync();
+            if (compatibility.compatible && hasRetainedChange) resendRestoredChange(sessionToken);
             return { ok: true };
           } catch (loadError) {
             isApplyingRemoteSnapshot = false;

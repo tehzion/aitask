@@ -43,6 +43,7 @@ beforeEach(() => {
   mocks.rpc.mockImplementation(async (name: string, args: Record<string,unknown>) => {
     if (name === 'aitask_get_backend_capabilities') return {data:{ok:true,schemaVersion:5,workspaceOptimisticLock:true,serviceOperations:true,releaseNoticeAcknowledgements:true,memberPermissionManagement:true,workflowReviewGate:true},error:null};
     if (name === 'aitask_read_notifications') return {data:{ok:true,memberId:member.id,items:[],unreadCount:0},error:null};
+    if (name === 'aitask_get_workflow_task_context') return {data:{ok:true,tasks:[]},error:null};
     if (name === 'aitask_execute_command' || name === 'aitask_execute_service_command') {
       if (name === 'aitask_execute_service_command' && failService) { failService = false; throw new Error('Lost service connection'); }
       if (name === 'aitask_execute_command' && failGeneric) { failGeneric = false; throw new Error('Lost connection'); }
@@ -187,6 +188,56 @@ it('recovers a dropped save by itself without showing a retry banner', async () 
   }
 });
 
+it('keeps resending a dropped save past the old three attempts, without a retry banner', async () => {
+  automaticRecoveryPolicy.delaysMs = [0];
+  try {
+    await useStore.getState().pullBackendNow({force:true});
+    expect((await saveSecureWorkspace(useStore.getState())).ok).toBe(true);
+    await useStore.getState().pullBackendNow({force:true});
+    const originalRpc = mocks.rpc.getMockImplementation()!;
+    let drops = 7;
+    mocks.rpc.mockImplementation(async (...args) => {
+      if (args[0] === 'aitask_execute_command' && drops > 0) { drops -= 1; throw new Error('Lost connection'); }
+      return originalRpc(...args);
+    });
+    expect(useStore.getState().renameClient('Old Company','Patient Company')).toEqual({ok:true});
+    expect(await useStore.getState().commitPendingMutation()).toEqual({ok:true});
+    expect(drops).toBe(0);
+    expect(useStore.getState().backend).toMatchObject({status:'live',hasLocalChanges:false,pendingMutations:0});
+    expect(getRetainedSecureCommand()).toBeNull();
+  } finally {
+    automaticRecoveryPolicy.delaysMs = [];
+  }
+});
+
+it('lets the form finish while a dropped save is resent, then saves it and the next edit', async () => {
+  automaticRecoveryPolicy.delaysMs = [20];
+  automaticRecoveryPolicy.queueAfterMs = 0;
+  try {
+    await useStore.getState().pullBackendNow({force:true});
+    expect((await saveSecureWorkspace(useStore.getState())).ok).toBe(true);
+    await useStore.getState().pullBackendNow({force:true});
+    const originalRpc = mocks.rpc.getMockImplementation()!;
+    let drops = 3;
+    mocks.rpc.mockImplementation(async (...args) => {
+      if (args[0] === 'aitask_execute_command' && drops > 0) { drops -= 1; throw new Error('Lost connection'); }
+      return originalRpc(...args);
+    });
+    expect(useStore.getState().renameClient('Old Company','Queued Company')).toEqual({ok:true});
+    expect(await useStore.getState().commitPendingMutation()).toEqual({ok:true,queued:true});
+    expect(useStore.getState().backend).toMatchObject({status:'saving',hasLocalChanges:true});
+    expect(useStore.getState().backend.error).toBeUndefined();
+    // A second edit during the outage is accepted too, and saved after the first.
+    expect(useStore.getState().renameClient('Queued Company','Final Company')).toEqual({ok:true});
+    expect(await useStore.getState().commitPendingMutation()).toMatchObject({ok:true});
+    await vi.waitFor(() => expect(useStore.getState().backend).toMatchObject({status:'live',hasLocalChanges:false,pendingMutations:0}), {timeout:3000});
+    expect(entities.find(entity => entity.entity_id === 'client-1')!.data.clientName).toBe('Final Company');
+  } finally {
+    automaticRecoveryPolicy.delaysMs = [];
+    automaticRecoveryPolicy.queueAfterMs = 8000;
+  }
+});
+
 it('accepts an edit made while an earlier save is still on its way and saves it next', async () => {
   await useStore.getState().pullBackendNow({force:true});
   expect((await saveSecureWorkspace(useStore.getState())).ok).toBe(true);
@@ -210,4 +261,117 @@ it('accepts an edit made while an earlier save is still on its way and saves it 
   const saved = entities.find(e => e.entity_type === 'client')!.data;
   expect(saved).toMatchObject({ phone: '111', address: 'Level 2' });
   expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false });
+});
+
+it('saves a cycle change made while an earlier task update is being resent', async () => {
+  automaticRecoveryPolicy.delaysMs = [50];
+  automaticRecoveryPolicy.queueAfterMs = 0;
+  try {
+    entities.push({ entity_type: 'task', entity_id: 'task-mixed', workspace_id: 'aitask-main', version: 1, updated_at: stamp, data: {
+      id: 'task-mixed', title: 'Original task', description: '', clientId: 'client-1', clientName: 'Old Company',
+      serviceType: 'Design', department: 'Designer', priority: 'Medium', status: 'Pending', isCompleted: false,
+      startDate: '2026-10-01', dueDate: '2026-10-30', visibility: 'internal', assignedTo: member.id,
+      createdBy: member.id, revisionCount: 0, completionPercentage: 0, createdAt: stamp, updatedAt: stamp,
+    } });
+    await useStore.getState().pullBackendNow({ force: true });
+    expect((await saveSecureWorkspace(useStore.getState())).ok).toBe(true);
+    await useStore.getState().pullBackendNow({ force: true });
+    mocks.rpc.mockClear();
+    expect(useStore.getState().tasks.some(task => task.id === 'task-mixed')).toBe(true);
+    failGeneric = true;
+    expect(useStore.getState().updateTask('task-mixed', { title: 'Edited task' })).toEqual({ ok: true });
+    expect(await useStore.getState().commitPendingMutation('task.update')).toEqual({ ok: true, queued: true });
+    expect(useStore.getState().setServiceCycleStatus('cycle-1', 'Cancelled')).toEqual({ ok: true });
+    await useStore.getState().commitPendingMutation('service_cycle.manage');
+    await vi.waitFor(() => {
+      expect(entities.find(row => row.entity_id === 'task-mixed')?.data.title).toBe('Edited task');
+      expect(entities.find(row => row.entity_id === 'cycle-1')?.data.status).toBe('Cancelled');
+      expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false });
+    }, { timeout: 5000 });
+    const calls = mocks.rpc.mock.calls.filter(([name]) => name === 'aitask_execute_command' || name === 'aitask_execute_service_command');
+    expect(calls.some(([name, args]) => name === 'aitask_execute_command' && args.p_operations.some((op: { entityType: string }) => op.entityType === 'task'))).toBe(true);
+    expect(calls.some(([name, args]) => name === 'aitask_execute_service_command' && args.p_operations.some((op: { entityType: string }) => op.entityType === 'service_cycle'))).toBe(true);
+    expect(calls.every(([name, args]) => name !== 'aitask_execute_command' || args.p_operations.every((op: { entityType: string }) => op.entityType !== 'service_cycle'))).toBe(true);
+  } finally {
+    automaticRecoveryPolicy.delaysMs = [];
+    automaticRecoveryPolicy.queueAfterMs = 8000;
+  }
+});
+
+it('continues a ten-minute hidden-tab outage with capped retries and resumes on visibility', async () => {
+  await useStore.getState().pullBackendNow({ force: true });
+  expect((await saveSecureWorkspace(useStore.getState())).ok).toBe(true);
+  await useStore.getState().pullBackendNow({ force: true });
+  vi.useFakeTimers();
+  const windowListeners = new Map<string, () => void>();
+  const documentListeners = new Map<string, () => void>();
+  const windowObject = window as unknown as { addEventListener: (name: string, listener: () => void) => void };
+  windowObject.addEventListener = (name, listener) => { windowListeners.set(name, listener); };
+  const documentObject = { visibilityState: 'hidden', addEventListener: (name: string, listener: () => void) => { documentListeners.set(name, listener); } };
+  vi.stubGlobal('document', documentObject);
+  vi.stubGlobal('navigator', { onLine: true });
+  automaticRecoveryPolicy.delaysMs = [1000, 3000, 6000, 10_000, 15_000, 30_000];
+  automaticRecoveryPolicy.queueAfterMs = 0;
+  const originalRpc = mocks.rpc.getMockImplementation()!;
+  const attempts: number[] = [];
+  let blocked = true;
+  mocks.rpc.mockImplementation(async (...args) => {
+    if (args[0] === 'aitask_execute_command') {
+      attempts.push(Date.now());
+      if (blocked) throw new Error('Lost connection');
+    }
+    return originalRpc(...args);
+  });
+  try {
+    expect(useStore.getState().upsertClientProfile('Old Company', { phone: '600000' }).ok).toBe(true);
+    const save = useStore.getState().commitPendingMutation();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(await save).toMatchObject({ ok: true, queued: true });
+    await vi.advanceTimersByTimeAsync(600_000);
+    expect(attempts.length).toBeGreaterThan(20);
+    expect(Math.max(...attempts.slice(1).map((time, index) => time - attempts[index]))).toBeLessThanOrEqual(30_000);
+    expect(useStore.getState().backend).toMatchObject({ status: 'saving', hasLocalChanges: true });
+    expect(useStore.getState().backend.error).toBeUndefined();
+    blocked = false;
+    const beforeVisible = attempts.length;
+    windowListeners.get('online')?.();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(attempts).toHaveLength(beforeVisible);
+    documentObject.visibilityState = 'visible';
+    documentListeners.get('visibilitychange')?.();
+    await vi.advanceTimersByTimeAsync(100);
+    expect(attempts.length).toBeGreaterThan(beforeVisible);
+    expect(entities.find(row => row.entity_id === 'client-1')?.data.phone).toBe('600000');
+    expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false });
+  } finally {
+    vi.useRealTimers();
+    automaticRecoveryPolicy.delaysMs = [];
+    automaticRecoveryPolicy.queueAfterMs = 8000;
+  }
+});
+
+it('says plainly that a change is not saved yet after a long outage (G6)', async () => {
+  automaticRecoveryPolicy.delaysMs = [50];
+  automaticRecoveryPolicy.queueAfterMs = 0;
+  const escalate = automaticRecoveryPolicy.escalateAfterMs;
+  automaticRecoveryPolicy.escalateAfterMs = 0;
+  try {
+    await useStore.getState().pullBackendNow({force:true});
+    expect((await saveSecureWorkspace(useStore.getState())).ok).toBe(true);
+    await useStore.getState().pullBackendNow({force:true});
+    const originalRpc = mocks.rpc.getMockImplementation()!;
+    let drops = 2;
+    mocks.rpc.mockImplementation(async (...args) => {
+      if (args[0] === 'aitask_execute_command' && drops > 0) { drops -= 1; throw new Error('Lost connection'); }
+      return originalRpc(...args);
+    });
+    expect(useStore.getState().renameClient('Old Company','Slow Company')).toEqual({ok:true});
+    expect(await useStore.getState().commitPendingMutation()).toEqual({ok:true,queued:true});
+    expect(useStore.getState().backend.message).toBe('Still not saved. Keep this tab open; it keeps trying.');
+    await vi.waitFor(() => expect(useStore.getState().backend).toMatchObject({status:'live',hasLocalChanges:false}), { timeout: 3000 });
+  } finally {
+    automaticRecoveryPolicy.delaysMs = [];
+    automaticRecoveryPolicy.queueAfterMs = 8000;
+    automaticRecoveryPolicy.escalateAfterMs = escalate;
+  }
 });

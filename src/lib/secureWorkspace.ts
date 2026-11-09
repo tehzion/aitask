@@ -103,7 +103,7 @@ export const isSecureCommandType = (value: unknown): value is SecureCommandType 
   typeof value === 'string' && secureCommandTypeSet.has(value)
 );
 
-export type MutationErrorCode = 'OFFLINE' | 'CONFLICT' | 'FORBIDDEN' | 'VALIDATION' | 'NOT_FOUND' | 'RETRY_REQUIRED';
+export type MutationErrorCode = 'OFFLINE' | 'CONFLICT' | 'FORBIDDEN' | 'VALIDATION' | 'NOT_FOUND' | 'RETRY_REQUIRED' | 'AUTH_REQUIRED';
 
 export interface MutationConflict {
   entityType: string;
@@ -1195,8 +1195,8 @@ export const partitionOperationsForRpc = (
 // generic RPC rejects service entity types, failing the whole command with
 // "Unsupported entity type." Keep the requested generic type on the generic
 // operations and send the service rows to the service RPC. Service-typed
-// commands are left whole: the service RPC already accepts `client` and `task`,
-// and `deliverable.workflow.generate` consumes its operation list directly.
+// commands keep service, client and task rows together, while generic-only rows
+// are sent separately. Generated workflow tasks remain with their service rows.
 export const partitionOperationsWithExplicitType = (
   operations: WorkspaceOperation[],
   type: SecureCommandType,
@@ -1211,7 +1211,15 @@ export const partitionOperationsWithExplicitType = (
     ];
   }
   if (serviceCommandTypes.has(type)) {
-    return [{ type, operations }];
+    // The service RPC accepts service rows plus client/task rows, but rejects
+    // notifications, members and other generic-only entities. Keep workflow
+    // tasks with their service command and route the remaining rows separately.
+    const serviceOperations = operations.filter(operation => serviceEntityTypes.has(operation.entityType) || operation.entityType === 'client' || operation.entityType === 'task');
+    const genericOperations = operations.filter(operation => !serviceOperations.includes(operation));
+    return [
+      ...(serviceOperations.length ? [{ type, operations: serviceOperations }] : []),
+      ...(genericOperations.length ? [{ type: inferSecureCommandType(genericOperations, { selfMemberId }), operations: genericOperations }] : []),
+    ];
   }
   const genericOperations = operations.filter(operation => !serviceEntityTypes.has(operation.entityType));
   const serviceOperations = operations.filter(operation => serviceEntityTypes.has(operation.entityType));
@@ -1513,6 +1521,10 @@ const executeCommand = async (
   const { data, error } = rpcResult;
 
   if (error) {
+    if (isAuthError(error)) {
+      retainSecureWorkspaceCommand(command);
+      return { ok: false, code: 'AUTH_REQUIRED', error: 'Your session expired. Sign in again; your change is kept in this tab.' };
+    }
     const code = commandErrorCode(error);
     if (code === 'RETRY_REQUIRED') retainSecureWorkspaceCommand(command);
     else {
@@ -1784,7 +1796,39 @@ const loadClientPortalPayload = async (expectedClientName?: string): Promise<Cli
 
 export const WORKSPACE_LOAD_TIMEOUT_MS = 90000;
 type WorkspaceLoadOptions = { preserveRetainedCommand?: boolean; consistencyAttempt?: number; shouldApplySnapshot?: () => boolean };
+/**
+ * The save path loads these modules on first use. A browser remembers a
+ * failed module load for the rest of the page's life, so a first save made
+ * while offline would otherwise fail on every later retry, even after the
+ * connection returns. Loading them with the workspace avoids that.
+ */
+let saveModulesRequested = false;
+const preloadSaveModules = () => {
+  if (saveModulesRequested) return;
+  saveModulesRequested = true;
+  void Promise.all([
+    import('./secureCommandBatch'),
+    import('./serviceFiles'),
+    import('./secureMemberMutations'),
+  ]).catch(() => { saveModulesRequested = false; });
+  // G10: other lazy modules on everyday paths. A browser keeps a failed dynamic
+  // import for the page's life, so fetch them while the connection is good.
+  // Loaded after the save modules, one by one, and failures are ignored.
+  const later = () => {
+    for (const load of [
+      () => import('./secureBackendCapabilities'),
+      () => import('../modules/notifications/services/secureNotifications'),
+      () => import('./secureReleaseNotices'),
+      () => import('./workflowContext'),
+      () => import('./taskOutputUpload'),
+      () => import('../store/taskReviewActions'),
+    ]) void load().catch(() => undefined);
+  };
+  if (typeof window !== 'undefined') window.setTimeout(later, 3000);
+};
+
 export const loadSecureWorkspace = async (authUser: User, options: WorkspaceLoadOptions = {}) => {
+  preloadSaveModules();
   const controller = new AbortController();
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {

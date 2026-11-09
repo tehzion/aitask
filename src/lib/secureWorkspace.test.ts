@@ -419,6 +419,14 @@ describe('secure command retry identity', () => {
     expect(byType.get('deliverable.manage')).toEqual(['deliverable']);
   });
 
+  it('does not send generic-only rows to the service RPC under an explicit service type', () => {
+    const groups = partitionOperationsWithExplicitType([
+      operation('service_cycle'), operation('notification', 'insert'),
+    ], 'service_cycle.manage');
+    expect(groups.find(group => group.type === 'service_cycle.manage')?.operations.map(item => item.entityType)).toEqual(['service_cycle']);
+    expect(groups.find(group => group.type !== 'service_cycle.manage')?.operations.map(item => item.entityType)).toEqual(['notification']);
+  });
+
   it('keeps a service-typed command whole', () => {
     const operations = [operation('deliverable'), operation('service_cycle')];
     const groups = partitionOperationsWithExplicitType(operations, 'deliverable.manage');
@@ -467,6 +475,35 @@ describe('secure command retry identity', () => {
     expect(refreshSession).toHaveBeenCalledOnce();
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(rpc.mock.calls[1][1].p_command_id).toBe(rpc.mock.calls[0][1].p_command_id);
+  });
+
+  it('resends the retained offline command after an expired token is refreshed', async () => {
+    const connection = { onLine: false };
+    vi.stubGlobal('navigator', connection);
+    const first = await saveSecureWorkspace(stateWithUser('offline-expiry'));
+    expect(first).toMatchObject({ ok: false, code: 'OFFLINE' });
+    const originalId = getRetainedSecureCommand()?.id;
+    expect(originalId).toBeTruthy();
+    connection.onLine = true;
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST301', message: 'JWT expired' } })
+      .mockResolvedValueOnce({ data: { ok: true, workspaceVersion: 2, changed: [] }, error: null });
+    refreshSession.mockResolvedValueOnce({ data: { session: { access_token: 'refreshed' } }, error: null });
+    expect(await retrySecureWorkspaceCommand()).toMatchObject({ ok: true });
+    expect(refreshSession).toHaveBeenCalledOnce();
+    expect(rpc.mock.calls.map(call => call[1].p_command_id)).toEqual([originalId, originalId]);
+    expect(getRetainedSecureCommand()).toBeNull();
+  });
+
+  it('keeps a command and requests sign-in when an expired session cannot refresh', async () => {
+    rpc.mockResolvedValueOnce({ data: null, error: { code: 'PGRST301', message: 'JWT expired' } });
+    refreshSession.mockResolvedValueOnce({ data: { session: null }, error: { message: 'Refresh token invalid' } });
+
+    const result = await saveSecureWorkspace(stateWithUser('expired-session'));
+
+    expect(result).toMatchObject({ ok: false, code: 'AUTH_REQUIRED' });
+    if (result.ok === true) throw new Error('Expected sign-in to be required');
+    expect(result.error).toMatch(/sign in/i);
+    expect(getRetainedSecureCommand()?.id).toBe(rpc.mock.calls[0][1].p_command_id);
   });
 
   it('bounds a stalled session refresh and retains the original command for retry', async () => {

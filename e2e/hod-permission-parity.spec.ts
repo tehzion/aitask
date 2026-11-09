@@ -160,10 +160,10 @@ test('HOD workload links preserve filters and separate personal and delegated wo
   await expect(page.getByRole('heading', { name: 'Legacy Editor oversight' })).toBeVisible();
   await workload.getByRole('link', { name: /Audit Editor/ }).click();
   await expect(page).toHaveURL(/assignee=audit-editor/);
-  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Assigned delegation work', exact: true })).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole('button', { name: /Legacy Editor oversight/ })).toBeVisible();
-  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Assigned delegation work', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: /Filters/ }).click();
   await expect(page.getByRole('combobox', { name: 'Filter by assignee' })).toHaveValue('audit-editor');
   await page.getByRole('combobox', { name: 'Filter by priority' }).selectOption('Medium');
@@ -172,7 +172,7 @@ test('HOD workload links preserve filters and separate personal and delegated wo
   await expect(page).toHaveURL(/priority=Medium/);
   await page.getByRole('button', { name: 'Clear filters' }).click();
   await expect(page).not.toHaveURL(/assignee=|priority=/);
-  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Assigned delegation work', exact: true })).toBeVisible();
   await page.setViewportSize({ width: 375, height: 812 });
   await page.goto('/');
   await expect(page.getByRole('region', { name: 'Department workload' })).toBeVisible();
@@ -217,14 +217,14 @@ test('HOD can open an authorized deep link outside the selected list scope', asy
 test('HOD filters canonical departments across legacy task names', async ({ page }) => {
   await seedHod(page);
   await page.goto('/tasks?department=Video+Editor');
-  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Assigned delegation work', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: /Legacy Editor oversight/ })).toBeVisible();
   await page.getByRole('button', { name: /Filters/ }).click();
   const departments = page.getByRole('combobox', { name: 'Filter by department' });
   await expect(departments.locator('option[value="Video Editor"]')).toHaveCount(1);
   await expect(departments.locator('option[value="Editor"]')).toHaveCount(0);
   await page.goto('/tasks?department=Editor');
-  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Assigned delegation work', exact: true })).toBeVisible();
 });
 
 test('HOD sees an unavailable dependency warning without hidden task details', async ({ page }) => {
@@ -263,9 +263,9 @@ test('HOD queue refreshes its deadline buckets after the local day changes', asy
     useStore.setState({ tasks: useStore.getState().tasks.filter(task => task.id === 'hod-assigned').map(task => ({ ...task, dueDate: '2026-10-08' })) });
   });
   await page.goto('/tasks?queue=needs_action');
-  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Assigned delegation work', exact: true })).toHaveCount(0);
   await page.clock.fastForward(120_000);
   await page.getByRole('button', { name: /Filters/ }).click();
   await page.getByRole('button', { name: /^Show/ }).click();
-  await expect(page.getByRole('button', { name: /Assigned delegation work/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Assigned delegation work', exact: true })).toBeVisible();
 });

@@ -40,6 +40,22 @@ const getFreshnessTone = (backend: ReturnType<typeof useStore.getState>['backend
   return 'emerald';
 };
 
+const STALE_AFTER_MS = 5 * 60_000;
+/** Minutes since the data was last current, once a refresh failed after it and 5 min passed. */
+const useStaleMinutes = (refreshFailedAt: string | undefined, lastCurrentAt: string | undefined) => {
+  const [now, setNow] = React.useState(() => Date.now());
+  const failedAfterCurrent = Boolean(refreshFailedAt && (!lastCurrentAt || refreshFailedAt > lastCurrentAt));
+  React.useEffect(() => {
+    if (!failedAfterCurrent) return;
+    setNow(Date.now());
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
+  }, [failedAfterCurrent]);
+  if (!failedAfterCurrent || !lastCurrentAt) return null;
+  const age = now - Date.parse(lastCurrentAt);
+  return Number.isFinite(age) && age >= STALE_AFTER_MS ? Math.floor(age / 60_000) : null;
+};
+
 const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, className, onRetry, onDiscard, hideBackendError = false }) => {
   const { locale, t } = useI18n();
   const { backend, pullBackendNow, retryPendingSave, discardMutation } = useStore();
@@ -96,7 +112,10 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
         ? RefreshCw
         : Cloud;
   const lastChecked = backend.lastPulledAt || backend.lastSavedAt || backend.lastSyncedAt || backend.remoteUpdatedAt;
-  const showRefresh = !isLocal && !needsResolution && (backend.upgradeRequired || backend.hasRemoteUpdate || backend.error || !compact);
+  // G7: a background refresh that keeps failing is quiet, so say how old the data is.
+  const lastCurrent = [backend.lastPulledAt, backend.lastSavedAt, backend.lastSyncedAt].filter((value): value is string => Boolean(value)).sort().pop();
+  const staleMinutes = useStaleMinutes(isLocal ? undefined : backend.refreshFailedAt, lastCurrent);
+  const showRefresh = backend.errorCode !== 'AUTH_REQUIRED' && !isLocal && !needsResolution && (backend.upgradeRequired || backend.hasRemoteUpdate || backend.error || staleMinutes !== null || !compact);
   const changedFields = [...new Set((backend.conflict?.changedFields || []).flatMap(field => conflictFieldLabels[field] ? [t(conflictFieldLabels[field])] : []))];
 
   return (
@@ -116,6 +135,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           </span>
         )}
       </div>
+      {staleMinutes !== null && !needsResolution && <span className="whitespace-nowrap text-[11px] font-medium text-amber-700 dark:text-amber-300">{t('Last updated {minutes} min ago', { minutes: staleMinutes })}</span>}
       {showRefresh && (
         <Button
           variant="secondary"

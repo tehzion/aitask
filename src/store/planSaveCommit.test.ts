@@ -137,14 +137,14 @@ describe('retryPendingSave', () => {
     useStore.setState({
       ...initialState,
       currentUser: boss,
-      users: [boss],
+      users: [],
       clients: [],
       projects: [],
       tasks: [],
       notifications: [],
       registrations: [],
       rolePermissions: [],
-      taskStatuses: ['Pending', 'In Progress', 'Waiting Approval', 'Completed', 'Cancelled'],
+      taskStatuses: [],
       servicePackages: [],
       clientPlans: [],
       serviceCycles: [],
@@ -187,7 +187,7 @@ describe('retryPendingSave', () => {
     });
     const result = await useStore.getState().retryPendingSave('client_plan.manage');
 
-    expect(result).toMatchObject({ ok: true });
+    expect(result).toEqual({ ok: true });
     expect(useStore.getState().backend.status).toBe('live');
     expect(useStore.getState().backend.hasLocalChanges).toBe(false);
     expect(rpc).toHaveBeenCalledWith('aitask_execute_service_command', expect.objectContaining({

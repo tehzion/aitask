@@ -4,6 +4,7 @@ import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import { acknowledgeActionFeedback, canRetrySave, dismissActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
+import SessionRecoveryButton from './SessionRecoveryButton';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
 import { formatTaskAssigneeName, assignableTaskAssignees, canRequestTaskRevision, eligibleTaskStaff, getAssignmentStateLabel, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
@@ -665,7 +666,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
           <div className="border-b border-amber-200 bg-amber-50 px-6 py-2 text-sm font-medium text-amber-800" role="alert" aria-live="assertive">
             <p><SystemMessage message={mutationError === 'You do not have permission to make this change.' && backend.errorCode === 'FORBIDDEN' ? t('This change could not be saved because access was denied.') : mutationError || t('Your change is waiting to be saved. Use Retry my changes in the workspace banner.')} /></p>
             {pendingResolution && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('The task shown may include your unsaved change.')}</p>}
-            {(pendingResolution || isDeletingTask) && (
+            {backend.errorCode === 'AUTH_REQUIRED' && <SessionRecoveryButton />}
+            {(pendingResolution || isDeletingTask) && backend.errorCode !== 'AUTH_REQUIRED' && (
               <div className="mt-2 flex flex-wrap gap-2">
                 {canRetrySave(backend) && <button
                   type="button"
@@ -687,7 +689,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </button>
               </div>
             )}
-            {(pendingResolution || isDeletingTask) && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('To continue, select Restore saved data. This discards pending changes and reloads the latest saved data. Try again; if it still fails, contact your project manager.')}</p>}
+            {(pendingResolution || isDeletingTask) && backend.errorCode !== 'AUTH_REQUIRED' && !canRetrySave(backend) && <p className="mt-2 leading-5">{t('To continue, select Restore saved data. This discards pending changes and reloads the latest saved data. Try again; if it still fails, contact your project manager.')}</p>}
           </div>
         )}
 
@@ -1100,7 +1102,15 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                       </button>
                     </div>
                   ) : (
-                    <p role="status" className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No Staff in {department} yet. You can do this task yourself, or ask your project manager to add Staff to this department.', { department: t(task.department) })}</p>
+                    <div className="space-y-2">
+                      <p role="status" className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No Staff in {department} yet. You can do this task yourself, or ask your project manager to add Staff to this department.', { department: t(task.department) })}</p>
+                      {/* Role UX: with no Staff to hand to, starting it yourself is the next step. */}
+                      {canEditTask && guidedAction.kind === 'advance' && guidedAction.targetStatus === 'In Progress' && <Button
+                        type="button"
+                        disabled={isSubmitting || Boolean(guidedActionError)}
+                        onClick={() => void handleStatusAction('In Progress')}
+                      ><CheckCircle2 className="h-4 w-4" />{t('Do it myself')}</Button>}
+                    </div>
                   )}
                   <ContextualTutorialLink tutorialId="delegate-task-to-staff" label={t('Need help assigning this task?')} />
                 </form>

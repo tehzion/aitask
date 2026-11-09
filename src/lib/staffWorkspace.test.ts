@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task, User } from '../types';
-import { buildStaffWorkQueue, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks, getUnavailableTaskDependencyCount, isStaffGuidedActionEnabled } from './staffWorkspace';
+import { buildStaffWorkQueue, getLatestRevisionNote, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks, getUnavailableTaskDependencyCount, isStaffGuidedActionEnabled } from './staffWorkspace';
 import { getTaskStatusControls } from './taskStatusControls';
 
 const task = (overrides: Partial<Task>): Task => ({
@@ -33,16 +33,18 @@ describe('staff workspace queue', () => {
       task({ id: 'overdue', dueDate: '2026-08-20' }),
       task({ id: 'revision', revisionCount: 1, dueDate: '2026-09-03' }),
       task({ id: 'progress', status: 'In Progress', dueDate: '2026-09-01' }),
+      task({ id: 'blocked', dueDate: '2026-08-19', workState: { blocker: { reason: 'Waiting for footage', openedBy: 'staff-1', openedAt: '2026-08-19T00:00:00Z' } } as Task['workState'] }),
       task({ id: 'waiting', status: 'Waiting Approval' }),
       task({ id: 'done', status: 'Completed', isCompleted: true, completedAt: '2026-08-25T10:00:00Z' }),
       task({ id: 'cancelled', status: 'Cancelled' }),
     ], '2026-08-26');
 
-    expect(queue.needs_action.map(item => item.id)).toEqual(['revision', 'overdue', 'today', 'progress']);
+    // Today order: overdue, due today, revisions, in progress; blocked last.
+    expect(queue.needs_action.map(item => item.id)).toEqual(['overdue', 'today', 'revision', 'progress', 'blocked']);
     expect(queue.up_next.map(item => item.id)).toEqual(['future', 'undated']);
     expect(queue.waiting.map(item => item.id)).toEqual(['waiting']);
     expect(queue.done.map(item => item.id)).toEqual(['done', 'cancelled']);
-    expect(getStaffFocusTask(queue)?.id).toBe('revision');
+    expect(getStaffFocusTask(queue)?.id).toBe('overdue');
   });
 
   it('breaks equal urgency by priority and then update time', () => {
@@ -210,5 +212,18 @@ describe('reviewer-aware queue', () => {
     const completeTask = task({ status: 'Approved', department: 'Video Editor', deliverableId: 'output', assignedTo: staff.id, createdBy: pm.id });
     const completeControls = getTaskStatusControls(pm, completeTask, statuses, [], { users: [pm, staff] }, { tasks: [completeTask], cycles: [], deliverables: [] });
     expect(completeControls.find(option => option.status === 'Completed')?.disabledReason).toBeUndefined();
+  });
+});
+
+describe('revision note on the card', () => {
+  it('shows the latest reviewer note only while the task is in revision', () => {
+    const comments = [
+      { id: 'c1', userId: 'pm', text: 'Revision requested: Fix the logo', createdAt: '2026-08-01T00:00:00Z' },
+      { id: 'c2', userId: 'staff-1', text: 'On it', createdAt: '2026-08-02T00:00:00Z' },
+      { id: 'c3', userId: 'pm', text: 'Revision requested: Use the new colours', createdAt: '2026-08-03T00:00:00Z' },
+    ];
+    expect(getLatestRevisionNote(task({ revisionCount: 2, comments }))).toBe('Use the new colours');
+    expect(getLatestRevisionNote(task({ revisionCount: 0, comments }))).toBeUndefined();
+    expect(getLatestRevisionNote(task({ revisionCount: 1, comments: [comments[1]] }))).toBeUndefined();
   });
 });

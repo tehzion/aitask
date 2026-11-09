@@ -107,6 +107,31 @@ describe('session and acknowledgement integrity', () => {
     expect(useStore.getState().backend).toMatchObject({ status: 'retry_required', hasLocalChanges: true, pendingMutations: 1 });
     expect(isWorkspaceMutationLocked(useStore.getState())).toBe(true);
   });
+  it('keeps a retained save and asks for sign-in when the recovery capability check needs authentication', async () => {
+    const retained = { id: 'auth-capability-pending', type: 'task.update', operations: [] };
+    mocks.retained.mockReturnValue(retained);
+    mocks.capabilities.mockResolvedValueOnce({ compatible: false, code: 'AUTH_REQUIRED', error: 'Your session expired. Sign in again; your change is kept in this tab.' });
+    useStore.setState(state => ({ backend: { ...state.backend, status: 'saving', hasLocalChanges: true, pendingMutations: 1 } }));
+    expect(await useStore.getState().retryMutation({ automatic: true })).toMatchObject({ ok: false, code: 'AUTH_REQUIRED' });
+    const state = useStore.getState();
+    expect(state.backend).toMatchObject({ status: 'refresh_required', errorCode: 'AUTH_REQUIRED', hasLocalChanges: true, pendingMutations: 1, upgradeRequired: false });
+    expect(isPendingMutationResolution(state.backend)).toBe(false);
+    expect(mocks.retained()).toBe(retained);
+  });
+  it('retains an auth-expired save and does not classify it as discard-required', async () => {
+    const retained = { id: 'auth-pending', type: 'client_plan.manage', operations: [] };
+    mocks.save.mockImplementationOnce(async () => {
+      mocks.retained.mockReturnValue(retained);
+      return { ok: false, code: 'AUTH_REQUIRED', error: 'Your session expired. Sign in again; your change is kept in this tab.' };
+    });
+    expect(useStore.getState().createClientWithPlan(input).ok).toBe(true);
+    expect(await useStore.getState().commitPendingMutation('client_plan.manage')).toMatchObject({ ok: false, code: 'AUTH_REQUIRED' });
+    const state = useStore.getState();
+    expect(state.backend).toMatchObject({ status: 'refresh_required', errorCode: 'AUTH_REQUIRED', hasLocalChanges: true, pendingMutations: 1 });
+    expect(isPendingMutationResolution(state.backend)).toBe(false);
+    expect(isWorkspaceMutationLocked(state)).toBe(true);
+    expect(mocks.retained()).toBe(retained);
+  });
   it('keeps a permanent save rejection available for restore without offering a retry', async () => {
     mocks.save.mockResolvedValueOnce({ ok: false, code: 'FORBIDDEN', error: 'You do not have permission to make this change.' });
     expect(useStore.getState().createClientWithPlan(input).ok).toBe(true);
@@ -137,9 +162,10 @@ describe('session and acknowledgement integrity', () => {
     expect(useStore.getState().createClientWithPlan(input).ok).toBe(true);
     useStore.setState(state => ({ backend: { ...state.backend, hasRemoteUpdate: true } }));
     expect(await useStore.getState().commitPendingMutation('client_plan.manage')).toEqual({ ok: true });
-    expect(useStore.getState().backend).toMatchObject({ status: 'refresh_required', hasLocalChanges: false, pendingMutations: 0, workspaceVersion: 2 });
+    // The save is confirmed; a failed background refresh is retried later, quietly.
+    expect(useStore.getState().backend).toMatchObject({ status: 'live', hasLocalChanges: false, pendingMutations: 0, workspaceVersion: 2 });
     expect(useStore.getState().backend.lastSavedAt).toBeTruthy();
-    expect(useStore.getState().backend.error).toBeTruthy();
+    expect(useStore.getState().backend.error).toBeUndefined();
     expect(isWorkspaceMutationLocked(useStore.getState())).toBe(false);
   });
   it('clears a rejected save code after loading canonical data', async () => {
