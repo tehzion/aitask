@@ -162,3 +162,48 @@ test('an unlinked task can be linked to a deliverable from the month block', asy
   });
   expect(linkedTitle).toBe('Social Posts 2');
 });
+
+test('an ended month that was never published can be cancelled from plan history', async ({ page }) => {
+  const clientId = await seedPublishedMonth(page);
+  await page.goto(`/clients/${clientId}`);
+  await expect(page.getByRole('tab', { name: 'Plan & delivery', exact: true })).toBeVisible();
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const current = state.serviceCycles[0];
+    const start = new Date(current.periodStart);
+    const prevStart = new Date(start.getFullYear(), start.getMonth() - 1, 1);
+    const prevEnd = new Date(start.getFullYear(), start.getMonth(), 0);
+    const key = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    useStore.setState({ serviceCycles: [...state.serviceCycles, { ...current, id: 'old-draft', status: 'Draft', publishedAt: undefined, periodStart: key(prevStart), periodEnd: key(prevEnd) }] });
+  });
+  await expect(page.getByText('Never published', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: /^Cancel month: / }).click();
+  await expect(page.getByText('Never published', { exact: true })).toHaveCount(0);
+  const status = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return useStore.getState().serviceCycles.find(cycle => cycle.id === 'old-draft')?.status;
+  });
+  expect(status).toBe('Cancelled');
+});
+
+test('a deliverable name in a published month is corrected with a reason', async ({ page }) => {
+  const clientId = await seedPublishedMonth(page);
+  await page.goto(`/clients/${clientId}`);
+  await expect(page.getByRole('tab', { name: 'Plan & delivery', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Correct name: Social Posts 1' }).click();
+  const form = page.getByRole('form', { name: 'Correct name: Social Posts 1' });
+  await expect(form.getByRole('button', { name: 'Save correction' })).toBeDisabled();
+  await form.getByLabel('New name').fill('Instagram Posts 1');
+  await expect(form.getByRole('button', { name: 'Save correction' })).toBeDisabled();
+  await form.getByLabel('Reason (required)').fill('Client renamed the series');
+  await form.getByRole('button', { name: 'Save correction' }).click();
+  await expect(form).toHaveCount(0);
+  const result = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    return { titles: state.deliverables.map(item => item.title).sort(), notes: state.cycleComments.filter(comment => comment.text.startsWith("Name corrected")).map(comment => `${comment.visibility}: ${comment.text}`) };
+  });
+  expect(result.titles).toEqual(['Instagram Posts 1', 'Social Posts 2']);
+  expect(result.notes).toEqual(['internal: Name corrected from "Social Posts 1" to "Instagram Posts 1". Reason: Client renamed the series']);
+});

@@ -197,11 +197,6 @@ const Dashboard: React.FC = () => {
   const bossBriefing = useMemo(() => {
     if (!showBossOperations) return null;
     const pendingRegs = (registrations || []).filter(reg => reg.status === 'Pending');
-    const overdue = tasks.filter(task => {
-      const dueDate = parseOptionalDate(task.dueDate);
-      return Boolean(isTaskOpen(task) && dueDate && isBefore(dueDate, today));
-    });
-    const waitingApproval = tasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval');
     const renewing = (clientPlans || []).filter(plan => {
       if (plan.status !== 'Active' || !plan.contractEndDate) return false;
       const days = getContractDaysRemaining(plan.contractEndDate, today);
@@ -209,11 +204,9 @@ const Dashboard: React.FC = () => {
     });
     return {
       pendingRegs,
-      overdueCount: overdue.length,
-      waitingCount: waitingApproval.length,
       renewals: renewing.sort((a, b) => (a.contractEndDate || '').localeCompare(b.contractEndDate || '')),
     };
-  }, [clientPlans, registrations, showBossOperations, tasks, today]);
+  }, [clientPlans, registrations, showBossOperations, today]);
 
   const onboardingSteps = useMemo(() => {
     if (!showBossOperations) return [];

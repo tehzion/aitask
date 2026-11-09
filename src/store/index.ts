@@ -419,6 +419,7 @@ export interface StoreState {
   setServiceCycleStatus: (cycleId: string, status: ServiceCycleStatus) => { ok: boolean; error?: string };
   updateDeliverableStatus: (deliverableId: string, status: DeliverableStatus) => { ok: boolean; error?: string };
   linkTaskToDeliverable: (taskId: string, cycleId?: string, deliverableId?: string) => { ok: boolean; error?: string };
+  correctDeliverableName: (deliverableId: string, title: string) => { ok: boolean; error?: string; previousTitle?: string };
   unlinkInvalidTaskDelivery: (taskId: string) => { ok: boolean; error?: string };
   generateDeliverableTaskChain: (deliverableId: string) => { ok: boolean; taskIds?: string[]; error?: string };
   carryForwardTaskToCycle: (taskId: string, targetCycleId: string, targetDeliverableId?: string) => { ok: boolean; taskId?: string; error?: string };
@@ -4888,6 +4889,24 @@ export const useStore = create<StoreState>()(
           return derived;
         });
         return { ok: true };
+      },
+
+      correctDeliverableName: (deliverableId, title) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const deliverable = state.deliverables.find(item => item.id === deliverableId);
+        const actor = state.currentUser;
+        if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
+        if (actor.role === 'Client' || !canManageServiceCycles(actor, state.rolePermissions)) return { ok: false, error: "Only the Boss or the client's project manager can correct a published month." };
+        if (!isServiceClientInScope(state, deliverable.clientId)) return { ok: false, error: serviceClientScopeError };
+        const cycle = state.serviceCycles.find(item => item.id === deliverable.cycleId);
+        if (!cycle || !['Published', 'Completed'].includes(cycle.status)) return { ok: false, error: 'Only deliverables in a published month are corrected here.' };
+        const clean = title.trim().slice(0, 200);
+        if (!clean) return { ok: false, error: 'Enter a name.' };
+        if (clean === deliverable.title) return { ok: false, error: 'The name is unchanged.' };
+        const now = new Date().toISOString();
+        set(current => ({ deliverables: current.deliverables.map(item => item.id === deliverableId ? { ...item, title: clean, updatedAt: now } : item) }));
+        return { ok: true, previousTitle: deliverable.title ?? '' };
       },
 
       unlinkInvalidTaskDelivery: (taskId) => {

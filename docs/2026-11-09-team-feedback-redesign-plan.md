@@ -562,3 +562,45 @@ Front end only; no migration.
 | F4 HOD patch fields | Checked, no change: the HOD validator compares old and new restricted fields, and the assignment path does not change them. |
 | F4 projects without HOD | Done: on a project with no HOD members, a task with no responsible HOD shows **PM assigns directly** instead of "Awaiting HOD" (`projectHasNoHod`, `getAssignmentStateLabel(task, project)`). The project form says "No HOD on this project: the PM assigns tasks directly." Projects with a missing `hodMemberIds` count as having no HOD. |
 | Tests | `src/lib/teamFeedbackLinking.test.ts` (10 unit tests). `e2e/plan-and-delivery.spec.ts` adds: task from project counts toward the matching deliverable (and task details show it); an unlinked task is linked from the month block. |
+
+## 9. R3 and remaining front end (2026-11-09, same branch)
+
+Approved by Y.L in chat on 9 Nov 2026 ("proceed with all after this, I approve").
+
+### Backup gate as run
+- Platform backup/PITR could not be confirmed from the tools available; instead, before any live write, full copies were taken inside the live DB: `private.r3_backup_20261109_entities` (1256 rows, data checksum matches live at copy time), `private.r3_backup_20261109_members` (12) and `private.r3_backup_20261109_workspaces` (1). Not readable by `anon`/`authenticated`. Drop after 30 days.
+- Each migration was first run on a local Supabase stack (all 142 live migrations replayed in live order), then the full pgTAP suite: 88 files, 1240 tests, PASS.
+
+| Item | Result |
+|---|---|
+| S0 ledger | Done (`99b86ae`). 58 repo files renamed to the live version stamps; repo and live lists are identical (142/142). Historical docs and release manifests still quote the old names as written records. |
+| S1 approval → PM | Done on live as `20261109141920_r3_s1_project_approval_pm`. 30 projects `none` → `pm`; all 43 are `pm`. No open task resolves to `none` (was 1, an `inherit` task). No task needed its own mode changed (all open tasks were already `pm` or `inherit`). Waiting Approval and closed tasks untouched. 30 rows in `private.r3_backfill_snapshot` (batch `s1_project_approval_pm`); rollback SQL is in the migration header. |
+| S2 stale state | Skipped on purpose. The 3 closed `pending_hod` tasks are assigned to the HOD herself; F4 already labels them "Handled by HOD" and keeps them out of queues. Setting `assigned_staff` on an HOD assignee would be a false state. |
+| S3 link backfill | No automatic change. 0 exact matches: deliverable service names ("RM2250 package", "SHORT VIDEO PLANS", …) never equal a task's service type ("Video", "Design"), and most months have more candidate tasks than deliverables. 78 unlinked deliverables / 19 unlinked tasks; PMs link them with F2's **Link a task** picker. |
+| S4 month reconcile | No automatic change (as planned). Live list on 9 Nov: 18 ended months never published (Agree sports, AL Industrial ×2, CICI ×2, Dr Cermin, Hunter Asia Pacific, JL Assets ×2, Lumea ×2, MeTalk ×2, Our Stay ×2, Seven Beauty, The Nail Studio, UMMA) and 9 ended published months with nothing delivered (35 Hair Lab, Agree sports, Coat Master, Dr Ang Clinic, Hunter Asia Pacific, ICAUR Li Koon, Le Motor, Perfect 71, Xin Fo Yuan 76). PMs act on them with F3. |
+| S5 people | Not code. Still needed: Staff for Video Shooting / Mabel's projects, HOD on 16 projects (or accept "PM assigns directly"), then Mabel repro. |
+| S6 correction command | No migration needed. The server already lets the Boss or the client's PM rename a deliverable in a published month through `deliverable.manage`, keeps entity history, and refuses other PMs and Staff. Pinned by `supabase/tests/database/published_deliverable_correction.test.sql` (6 tests). Quantity and price changes stay with Y.L (they change billing). |
+| S7 legacy projectId | Nothing to do: 0 live tasks without `projectId`. |
+| F3 month housekeeping | Done. Plan History shows **Never published** (Publish late / Cancel month), **Ready to close** (Close month), **Overdue: n not done**, Closed, Cancelled (`src/lib/monthHousekeeping.ts`). PM/Boss company strip shows **Months to tidy up**. |
+| F5 shared summary | Done. `getRoleWorkSummary` (open, overdue, due today, waiting review, done) drives the role dashboard counts; the unused Boss-briefing overdue/waiting counts (a different definition) were removed. |
+| F6 corrections UI | Done. **Correct name** on deliverables of Published/Completed months for the Boss and the client's PM; new name and a required reason; the reason is saved as an internal note on the month ("Name corrected from … to …. Reason: …"). |
+| Tests | Unit: `monthHousekeeping.test.ts` (5), `roleWorkSummary.test.ts` (3). e2e `plan-and-delivery.spec.ts`: cancel a never-published month; correct a name with a reason. pgTAP: published deliverable correction (6). |
+| Known flaky | `app-smoke` calendar drag-and-drop step ("Dates saved." after drag) fails about 1 run in 3; calendar code is untouched on this branch. |
+
+### Save speed and retry check against a real Supabase (9 Nov)
+Run on a local Supabase stack with all live migrations, realtime on, and real signed-in PM and Staff users (not the in-browser test backend).
+
+| Action | Time to saved | Result |
+|---|---|---|
+| Link a task to a deliverable | 0.4 s | saved |
+| Create a task that counts toward a month | 1.8 s | saved |
+| Correct a deliverable name (+ internal reason note) | 1.4 s | saved |
+| Cancel a never-published month | 0.14 s | saved |
+| Publish a month late | 0.16 s | saved |
+| Staff Start work | 0.2 s | saved |
+| Staff Send for review (PM review project) | 0.2–1.1 s | saved, goes to PM review |
+
+- A save whose server response is lost is retried with the same command id: "Changes saved.", no duplicate.
+- If the reason note cannot be sent (connection dropped), the rename is kept, the form shows "Saving…" and the note saves on its own about 2 s after the connection returns.
+- Fixed on the way: success toasts sat over dialog footers and blocked the next click for ~4.5 s (Send for review took 4.8 s). Toasts now let clicks pass through except on their close button.
+- Fixed on the way: **Correct name** crashed the month view for deliverables saved without a title; a missing title now reads as empty.

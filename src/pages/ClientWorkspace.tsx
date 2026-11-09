@@ -33,6 +33,7 @@ import type {
   AttachmentRef,
   CommentVisibility,
   DeliverableStatus,
+  ServiceCycle,
 } from "../types";
 import {
   Badge,
@@ -94,6 +95,7 @@ import { monthlyRecordLabel } from "../lib/monthlyRecords";
 import RevisionRecoveryNotice from "../components/RevisionRecoveryNotice";
 import ConfirmDialog from "../components/ConfirmDialog";
 import MonthlyPlanSchedule from "../components/MonthlyPlanSchedule";
+import CorrectDeliverableName from "../components/CorrectDeliverableName";
 import ContextualTutorialLink from "../components/ContextualTutorialLink";
 
 // Team feedback B (9 Nov 2026): Plan, Cycles, Add-ons and Overview are one tab.
@@ -528,6 +530,26 @@ const OperationsClientWorkspace = () => {
     const saved = await saveAndCommit(store.linkTaskToDeliverable(taskId, cycleId, deliverableId), "task.update");
     if (saved) setMessage(msg('feedback.changesSaved'), 'success');
   };
+  // F3: publish late, cancel or close a month that has ended.
+  const setMonthStatus = async (cycleId: string, status: ServiceCycle["status"]) => {
+    if (addonSaving) return;
+    await saveAndCommit(store.setServiceCycleStatus(cycleId, status), "service_cycle.manage");
+  };
+  // F6: correct a deliverable name in a published month, with a reason kept
+  // as an internal note on that month.
+  const correctDeliverableName = async (deliverableId: string, cycleId: string, title: string, reason: string) => {
+    if (addonSaving) return false;
+    const result = store.correctDeliverableName(deliverableId, title);
+    const renamed = await saveAndCommit(result, "deliverable.manage");
+    if (!renamed || !result.ok) return false;
+    const note = t('Name corrected from "{from}" to "{to}". Reason: {reason}', { from: result.previousTitle || '', to: title, reason });
+    const noted = await saveAndCommit(useStore.getState().addCycleComment(cycleId, note, 'internal'), "cycle_comment.manage");
+    // The name is already saved. If the note is still queued (for example the
+    // connection dropped), it is retried automatically; say so instead of
+    // "Changes saved", and do not ask the user to submit it again.
+    if (!noted) setMessage(t('The new name is saved. The reason note is still saving and will finish when the connection is back.'));
+    return true;
+  };
   const generateTaskChain = async (deliverableId: string) => {
     if (addonSaving) return;
     const result = store.generateDeliverableTaskChain(deliverableId);
@@ -677,7 +699,7 @@ const OperationsClientWorkspace = () => {
           </Surface>
             {!isClient && <ClientSpecialNotes client={client} />}
           </div>
-          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} today={today} canManagePlans={canManagePlans} onEditDetails={() => void editDetails()} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => selectMonth(null)} />}
+          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} deliverables={store.deliverables} today={today} canManagePlans={canManagePlans} canManageCycles={!isClient && canManageCycles} busy={addonSaving} onSetCycleStatus={(id, status) => void setMonthStatus(id, status)} onEditDetails={() => void editDetails()} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => selectMonth(null)} />}
           {(selectedCycle ? [selectedCycle] : []).map((cycle) => {
             const cycleDeliverables = deliverables.filter(
               (item) => item.cycleId === cycle.id,
@@ -901,6 +923,13 @@ const OperationsClientWorkspace = () => {
                                 <option value="">{t("Link a task")}…</option>
                                 {linkCandidates.map(task => <option key={task.id} value={task.id} data-i18n-skip>{task.title}{task.dueDate ? ` · ${task.dueDate}` : ''}</option>)}
                               </select>
+                            )}
+                            {!isClient && canManageCycles && (cycle.status === "Published" || cycle.status === "Completed") && (
+                              <CorrectDeliverableName
+                                deliverable={deliverable}
+                                disabled={addonSaving}
+                                onSave={(title, reason) => correctDeliverableName(deliverable.id, cycle.id, title, reason)}
+                              />
                             )}
                             {canLinkTasks && <Button variant="secondary" onClick={() => document.getElementById('delivery-review')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{t('Review task links')}</Button>}
                             {canAddManualTask && <Button

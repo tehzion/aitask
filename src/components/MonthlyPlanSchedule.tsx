@@ -1,17 +1,22 @@
 import CyclePaymentControl from './CyclePaymentControl';
 import { CalendarClock, Eye, History, Plus } from 'lucide-react';
-import type { ClientServicePlan, ServiceCycle } from '../types';
+import type { ClientServicePlan, Deliverable, ServiceCycle } from '../types';
+import { getMonthHousekeeping } from '../lib/monthHousekeeping';
 import { useI18n } from './I18nProvider';
 import { formatLocalizedDate } from '../lib/i18n';
 import { getCurrentPlanCycle } from '../lib/dashboardData';
 import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
 import { Button, StatusChip } from './ui';
 
-const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upcomingPlan, onEditDetails, onCreateNextPlan, onViewNextPlan, onViewCycle, onViewHistory }: {
+const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManagePlans = false, canManageCycles = false, busy = false, upcomingPlan, onEditDetails, onCreateNextPlan, onViewNextPlan, onViewCycle, onViewHistory, onSetCycleStatus }: {
   plan: ClientServicePlan;
   cycles: ServiceCycle[];
+  deliverables?: Deliverable[];
   today: Date;
   canManagePlans?: boolean;
+  canManageCycles?: boolean;
+  busy?: boolean;
+  onSetCycleStatus?: (cycleId: string, status: ServiceCycle['status']) => void;
   upcomingPlan?: ClientServicePlan;
   onEditDetails?: () => void;
   onCreateNextPlan?: () => void;
@@ -40,6 +45,21 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
     : item.periodStart <= todayKey && todayKey <= item.periodEnd
       ? 'Active'
       : 'Ended';
+
+  // F3: ended months that still need a decision say so, with the PM's options.
+  const monthStatus = (item: ServiceCycle) => {
+    const housekeeping = getMonthHousekeeping(item, deliverables, todayKey);
+    const act = (status: ServiceCycle['status'], label: string) => canManageCycles && onSetCycleStatus
+      ? <Button variant="secondary" className="min-h-9 px-3 py-1.5" disabled={busy} aria-label={`${t(label)}: ${dateLabel(item.periodStart)}`} onClick={() => onSetCycleStatus(item.id, status)}>{t(label)}</Button>
+      : null;
+    if (housekeeping.kind === 'never-published') return <div className="flex flex-wrap items-center gap-2"><StatusChip tone="amber">{t('Never published')}</StatusChip>{act('Published', 'Publish late')}{act('Cancelled', 'Cancel month')}</div>;
+    if (housekeeping.kind === 'ready-to-close') return <div className="flex flex-wrap items-center gap-2"><StatusChip tone="emerald">{t('Ready to close')}</StatusChip>{act('Completed', 'Close month')}</div>;
+    if (housekeeping.kind === 'overdue') return <StatusChip tone="red">{t('Overdue: {count} not done', { count: housekeeping.notDone })}</StatusChip>;
+    if (item.status === 'Completed') return <StatusChip tone="slate">{t('Closed')}</StatusChip>;
+    if (item.status === 'Cancelled') return <StatusChip tone="slate">{t('Cancelled')}</StatusChip>;
+    const state = cycleState(item);
+    return <StatusChip tone={state === 'Active' ? 'emerald' : state === 'Upcoming' ? 'amber' : 'slate'}>{t(state)}</StatusChip>;
+  };
 
   return <section aria-label={t('Monthly update schedule')} className="rounded-panel border border-line bg-surface px-5 py-4">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -74,7 +94,7 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
       <h3 className="text-sm font-semibold text-ink">{t('Plan History')}</h3>
       <table className="mt-3 w-full min-w-[520px] text-left text-sm">
         <thead className="text-xs text-muted"><tr><th className="pb-2 font-medium">{t('Month')}</th><th className="pb-2 font-medium">{t('Period')}</th><th className="pb-2 font-medium">{t('Status')}</th><th className="pb-2 font-medium">{t('Payment')}</th><th className="pb-2 text-right font-medium">{t('Action')}</th></tr></thead>
-        <tbody className="divide-y divide-line/70">{history.map(item => <tr key={item.id}><td className="py-3 font-medium text-ink">{dateLabel(item.periodStart)}</td><td className="py-3 text-muted">{dateLabel(item.periodStart)} – {dateLabel(item.periodEnd)}</td><td className="py-3"><StatusChip tone={cycleState(item) === 'Active' ? 'emerald' : cycleState(item) === 'Upcoming' ? 'amber' : 'slate'}>{t(cycleState(item))}</StatusChip></td><td className="py-3"><CyclePaymentControl cycle={item} /></td><td className="py-3 text-right"><Button variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => onViewCycle?.(item.id)}>{t('View')}</Button></td></tr>)}</tbody>
+        <tbody className="divide-y divide-line/70">{history.map(item => <tr key={item.id}><td className="py-3 font-medium text-ink">{dateLabel(item.periodStart)}</td><td className="py-3 text-muted">{dateLabel(item.periodStart)} – {dateLabel(item.periodEnd)}</td><td className="py-3">{monthStatus(item)}</td><td className="py-3"><CyclePaymentControl cycle={item} /></td><td className="py-3 text-right"><Button variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => onViewCycle?.(item.id)}>{t('View')}</Button></td></tr>)}</tbody>
       </table>
     </div>}
   </section>;
