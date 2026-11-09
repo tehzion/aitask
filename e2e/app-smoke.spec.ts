@@ -1,4 +1,19 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+// Tests below rewrite the saved workspace and reload. Until that reload, stop
+// the running app from persisting its in-memory state over the rewrite: a
+// background update would otherwise restore the previous session.
+const reloadWithStoredWorkspace = async (page: Page) => {
+  await page.evaluate(() => {
+    const setItem = Storage.prototype.setItem;
+    Storage.prototype.setItem = function (key: string, value: string) {
+      if (key === 'market-task-storage') return;
+      setItem.call(this, key, value);
+    };
+  });
+  await page.reload();
+};
+
 
 const switchDemoAccount = async (page: import('@playwright/test').Page, username: string) => {
   await page.getByRole('button', { name: 'Logout' }).click();
@@ -518,7 +533,7 @@ test('first login reaches the app and critical responsive routes remain usable',
       resizedDue: toDateKey(resizedDue),
     };
   });
-  await page.reload();
+  await reloadWithStoredWorkspace(page);
   await expect(page.locator('[data-calendar-filter="all"]')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('[data-calendar-filter="open"]').click();
   await expect(page.locator('[data-calendar-filter="open"]')).toHaveAttribute('aria-pressed', 'true');
@@ -811,7 +826,7 @@ test('first login reaches the app and critical responsive routes remain usable',
     window.localStorage.setItem('market-task-storage', JSON.stringify(stored));
     window.sessionStorage.clear();
   });
-  await page.reload();
+  await reloadWithStoredWorkspace(page);
   await expect(page.getByRole('heading', { name: 'Access Denied' })).toBeVisible();
   const mobileNav = page.getByRole('navigation', { name: 'Mobile navigation' });
   await expect(mobileNav.getByText('Dashboard', { exact: true })).toHaveCount(0);
@@ -829,7 +844,7 @@ test('first login reaches the app and critical responsive routes remain usable',
     stored.state.currentUser.mustResetPassword = true;
     window.localStorage.setItem('market-task-storage', JSON.stringify(stored));
   });
-  await page.reload();
+  await reloadWithStoredWorkspace(page);
   await expect(page).toHaveURL(/\/settings$/);
   await expect(page.getByRole('heading', { name: 'Account Setup' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Profile' })).toHaveCount(0);
