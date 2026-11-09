@@ -27,11 +27,19 @@ for (const width of [320, 375, 390, 414, 768, 1024]) {
         tasks: [...state.tasks, { ...state.tasks[0], id: 'ux-context', clientId: 'ux-company', clientName: 'UX company', projectId: 'ux-project', assignedTo: actor.id, createdBy: actor.id, department: 'Designer' }],
       });
     }, role);
-    await page.locator('#main-content').getByRole('button', { name: 'New task', exact: true }).click();
+    // Non-Boss roles open tasks from inside a project; this test covers the form itself.
+    await expect(page.locator('#main-content').getByRole('button', { name: 'New task', exact: true })).toHaveCount(0);
+    await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.getState().setCreateTaskModalOpen(true); });
     const dialog = page.getByRole('dialog', { name: /^Create task$/i });
     await dialog.getByLabel(/Link to Company/).selectOption('ux-project');
     await dialog.getByLabel('Task Title').fill(`UX creation ${width}`);
     await dialog.getByLabel('Assign to Position/Department').selectOption('Designer');
+    if (role === 'Staff') {
+      // Staff do not create tasks; the form refuses even if it is opened directly.
+      await dialog.getByRole('button', { name: 'Create & open task', exact: true }).click();
+      await expect(dialog.getByRole('alert')).toContainText('You do not have permission to create tasks.');
+      return;
+    }
     await expect(dialog.getByLabel('Description', { exact: true })).toBeHidden();
     await dialog.getByText('Additional details', { exact: true }).click();
     await dialog.getByLabel('Description', { exact: true }).fill('Preserved brief');

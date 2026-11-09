@@ -23,6 +23,10 @@ import CreateClientProfileModal from './CreateClientProfileModal';
 import { useI18n } from './I18nProvider';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 
+// Decision D1 (9 Nov 2026): the PM approves every task; the HOD only assigns.
+// Saving a project (new or edited) applies this, so its tasks follow it.
+const FIXED_APPROVAL_MODE: ProjectApprovalMode = 'pm';
+
 interface Props {
   isOpen: boolean;
   onClose: () => void;
@@ -75,7 +79,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const [hodMemberIds, setHodMemberIds] = useState<string[]>([]);
   const [staffMemberIds, setStaffMemberIds] = useState<string[]>([]);
   const [memberResponsibilities, setMemberResponsibilities] = useState<Record<string, string>>({});
-  const [defaultApprovalMode, setDefaultApprovalMode] = useState<ProjectApprovalMode>('none');
+  const [defaultApprovalMode, setDefaultApprovalMode] = useState<ProjectApprovalMode>(FIXED_APPROVAL_MODE);
   const [requireClearClosureChecklist, setRequireClearClosureChecklist] = useState(false);
   const [customServices, setCustomServices] = useState<string[]>([]);
   const [customInput, setCustomInput]       = useState('');
@@ -157,7 +161,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       setHodMemberIds(project.hodMemberIds || []);
       setStaffMemberIds(project.staffMemberIds || []);
       setMemberResponsibilities(project.memberResponsibilities || {});
-      setDefaultApprovalMode(project.defaultApprovalMode || 'none');
+      setDefaultApprovalMode(FIXED_APPROVAL_MODE);
       setRequireClearClosureChecklist(Boolean(project.requireClearClosureChecklist));
     } else {
       setClientId(initialClientId || '');
@@ -169,7 +173,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       setHodMemberIds([]);
       setStaffMemberIds([]);
       setMemberResponsibilities({});
-      setDefaultApprovalMode('none');
+      setDefaultApprovalMode(FIXED_APPROVAL_MODE);
       setRequireClearClosureChecklist(false);
     }
   }, [clientOptions, currentUser, initialClientId, isOpen, project, users]);
@@ -182,7 +186,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setHodMemberIds(Array.isArray(value.hodMemberIds) ? value.hodMemberIds : []);
     setStaffMemberIds(Array.isArray(value.staffMemberIds) ? value.staffMemberIds : []);
     setMemberResponsibilities(value.memberResponsibilities && typeof value.memberResponsibilities === 'object' ? value.memberResponsibilities : {});
-    setDefaultApprovalMode(['none', 'hod', 'pm'].includes(value.defaultApprovalMode) ? value.defaultApprovalMode : 'none');
+    setDefaultApprovalMode(FIXED_APPROVAL_MODE);
     setRequireClearClosureChecklist(Boolean(value.requireClearClosureChecklist));
   };
   if (!isOpen) return null;
@@ -237,7 +241,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
     setProjectManagerIds([]);
     setHodMemberIds([]);
     setStaffMemberIds([]);
-    setDefaultApprovalMode('none');
+    setDefaultApprovalMode(FIXED_APPROVAL_MODE);
     setRequireClearClosureChecklist(false);
     setCustomServices([]);
     setCustomInput('');
@@ -573,15 +577,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
             )}
 
             <fieldset className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
-              <legend className="px-1 text-sm font-semibold text-slate-700">{t('Approval and closure defaults')}</legend>
-              <label className="block text-sm text-slate-700">{t('Default task approval')}
-                <select value={defaultApprovalMode} onChange={event => setDefaultApprovalMode(event.target.value as ProjectApprovalMode)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
-                  <option value="none">{t('No approval')}</option>
-                  <option value="hod">{t('HOD approval')}</option>
-                  <option value="pm">{t('PM approval')}</option>
-                </select>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">{t('Only tasks set to Follow project default use this setting.')}</span>
-              </label>
+              <legend className="px-1 text-sm font-semibold text-slate-700">{t('Closure defaults')}</legend>
               <label className="flex items-start gap-3 text-sm text-slate-700">
                 <input type="checkbox" checked={requireClearClosureChecklist} onChange={event => setRequireClearClosureChecklist(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500" />
                 <span>{t('Require all closure checklist warnings to be resolved before closing')}</span>

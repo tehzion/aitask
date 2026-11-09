@@ -53,6 +53,7 @@ import {
   formatMoney,
   getCycleServiceProgress,
   canSetDeliverableStatus,
+  isDeliverableWorkDone,
 } from "../lib/serviceManagement";
 import { getMonthlyCycleCloseout } from "../lib/monthlyCloseout";
 import { isTaskOpen } from "../lib/taskReporting";
@@ -307,9 +308,8 @@ const OperationsClientWorkspace = () => {
   const currentCycleDeliverables = currentCycle
     ? deliverables.filter((item) => item.cycleId === currentCycle.id)
     : [];
-  const currentDelivered = currentCycleDeliverables.filter(
-    (item) => item.status === "Delivered",
-  ).length;
+  const currentDelivered = currentCycleDeliverables.filter(isDeliverableWorkDone).length;
+  const currentConfirmed = currentCycleDeliverables.filter((item) => item.status === "Delivered").length;
 
 
   const saveAndCommit = async (
@@ -627,7 +627,7 @@ const OperationsClientWorkspace = () => {
         <div hidden={tab !== 'overview'} style={tab !== 'overview' ? { display: 'none' } : undefined} id={`${CLIENT_WORKSPACE_TABS_ID}-panel-overview`} role="tabpanel" aria-labelledby={`${CLIENT_WORKSPACE_TABS_ID}-tab-overview`} tabIndex={0} className="grid scroll-mt-36 gap-5 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
           <Surface variant="inset" className="p-6 sm:p-8">
             <p className="calm-eyebrow">{t('Delivery progress')}</p>
-            <DeliveryProgress published={Boolean(currentCycle)} total={currentCycleDeliverables.length} delivered={currentDelivered}
+            <DeliveryProgress published={Boolean(currentCycle)} total={currentCycleDeliverables.length} delivered={currentDelivered} confirmed={isClient ? undefined : currentConfirmed}
               draft={!isClient && allCycles.some(item => item.status === 'Draft' && parseOptionalDate(item.periodStart) && parseOptionalDate(item.periodEnd) && parseOptionalDate(item.periodStart)! <= today && today <= parseOptionalDate(item.periodEnd)!)} />
             {!isClient && <React.Suspense fallback={null}><DeliveryReviewPanel clientId={client.id} includeOpenTasks /></React.Suspense>}
           </Surface>

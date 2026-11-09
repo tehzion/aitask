@@ -34,7 +34,7 @@ const CUSTOM_SERVICE_VALUE = '__custom_service__';
 
 const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const { t } = useI18n();
-  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, rolePermissions, retryPendingSave, discardMutation, backend } = useStore(useShallow(state => ({
+  const { users, clients, currentUser, addTask, projects, tasks, createTaskInitialDate, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialServiceType, createTaskInitialCycleId, createTaskInitialDeliverableId, createTaskInitialProjectId, rolePermissions, retryPendingSave, discardMutation, backend } = useStore(useShallow(state => ({
     users: state.users,
     clients: state.clients,
     currentUser: state.currentUser,
@@ -48,6 +48,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     createTaskInitialServiceType: state.createTaskInitialServiceType,
     createTaskInitialCycleId: state.createTaskInitialCycleId,
     createTaskInitialDeliverableId: state.createTaskInitialDeliverableId,
+    createTaskInitialProjectId: state.createTaskInitialProjectId,
     rolePermissions: state.rolePermissions,
     retryPendingSave: state.retryPendingSave,
     discardMutation: state.discardMutation,
@@ -128,6 +129,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     : [];
   const linkedTaskContext = Boolean(createTaskInitialClientId || createTaskInitialClientName);
   const showCompanyLink = currentUser?.role !== 'Client' || linkedTaskContext;
+  // Opened from inside a project: company and project are fixed, so the long
+  // company/project dropdowns are not shown (team feedback, 9 Nov 2026).
+  const projectLocked = Boolean(createTaskInitialProjectId);
   const clientOptions = React.useMemo(() => {
     const visibilityScope = { clients, projects };
     const visibleKeys = new Set(
@@ -206,7 +210,11 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       setFormError('');
       setAssignmentError('');
       setAssignedTo(initialMember?.id || '');
-      if (createTaskInitialClientName) {
+      const lockedProject = createTaskInitialProjectId ? assignableProjects.find(project => project.id === createTaskInitialProjectId) : undefined;
+      if (lockedProject) {
+        setProjectId(lockedProject.id);
+        setClientName(lockedProject.clientName);
+      } else if (createTaskInitialClientName) {
         const initialProject = assignableProjects.find(project => project.clientId === createTaskInitialClientId || project.clientName.toLowerCase() === createTaskInitialClientName.toLowerCase());
         setProjectId(initialProject?.id || '');
         setClientName(createTaskInitialClientName);
@@ -219,7 +227,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
           : departmentChoices.length === 1 ? departmentChoices[0] : '')
       ));
     }
-  }, [assignableProjects, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialDate, createTaskInitialServiceType, departmentChoices, isOpen, users]);
+  }, [assignableProjects, createTaskInitialAssignee, createTaskInitialClientId, createTaskInitialClientName, createTaskInitialDate, createTaskInitialProjectId, createTaskInitialServiceType, departmentChoices, isOpen, users]);
 
 
 
@@ -393,7 +401,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       description: description.trim(),
       projectId: projectId || undefined,
       milestoneId: milestoneId || undefined,
-      approvalMode,
+      // Decision D1 (9 Nov 2026): the PM approves every task; HOD only assigns.
+      approvalMode: 'pm',
       clientId: createTaskInitialClientId || selectedProject?.clientId || selectedClient?.id,
       serviceCycleId: createTaskInitialCycleId,
       deliverableId: createTaskInitialDeliverableId,
@@ -470,7 +479,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-slate-900">{t('Task details')}</h3>
               
-              {showCompanyLink && (
+              {projectLocked && selectedProject ? (
+                <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm">
+                  <p className="text-xs font-medium text-slate-500">{t('Company / project')}</p>
+                  <p className="mt-0.5 font-semibold text-slate-900" data-i18n-skip>{selectedProject.clientName} · {selectedProject.projectName}</p>
+                </div>
+              ) : showCompanyLink && (
               <div>
                 <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                   <label htmlFor={projectSelectId} className="block text-sm font-medium text-slate-700">
@@ -503,20 +517,12 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               </div>
               )}
 
-              {selectedProject && (
-                <div className="grid gap-4 sm:grid-cols-2">
+              {selectedProject && (selectedProject.milestones || []).length > 0 && (
+                <div>
                   <label className="block text-sm font-medium text-slate-700">{t('Milestone')} {t('(Optional)')}
                     <select value={milestoneId} onChange={event => setMilestoneId(event.target.value)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
                       <option value="">{t('No milestone')}</option>
                       {(selectedProject.milestones || []).map(milestone => <option key={milestone.id} value={milestone.id} data-i18n-skip>{milestone.name}</option>)}
-                    </select>
-                  </label>
-                  <label className="block text-sm font-medium text-slate-700">{t('Approval workflow')}
-                    <select value={approvalMode} onChange={event => setApprovalMode(event.target.value as TaskApprovalMode)} className="mt-1 w-full rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm">
-                      <option value="inherit">{t('Follow project default')}</option>
-                      <option value="none">{t('No approval')}</option>
-                      <option value="hod">{t('HOD approval')}</option>
-                      <option value="pm">{t('PM approval')}</option>
                     </select>
                   </label>
                 </div>

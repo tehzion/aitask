@@ -8,10 +8,10 @@ test.use({ reducedMotion: 'reduce' });
 const settledPageStylePath = fileURLToPath(new URL('./visual-reference.css', import.meta.url));
 
 const routes = [
-  { path: '/', heading: 'Dashboard' },
+  { path: '/', heading: 'Portfolio' },
   { path: '/projects', heading: 'Companies' },
   { path: '/clients', heading: 'Delivery tracker' },
-  { path: '/tasks', heading: 'Portfolio work' },
+  { path: '/tasks', heading: 'Portfolio' },
   { path: '/clients/demo-service-client-urban', heading: 'UrbanEats' },
   { path: '/settings', heading: /Settings|Account Setup/ },
 ] as const;
@@ -22,14 +22,14 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.waitForURL(url => ['/', '/settings'].includes(url.pathname));
+  await page.waitForURL(url => ['/', '/tasks', '/settings'].includes(url.pathname));
   if (/\/settings$/.test(page.url())) {
     await page.getByRole('button', { name: 'Continue for now' }).click();
   }
   const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
-  await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
 };
 
 const setTheme = async (page: import('@playwright/test').Page, theme: 'Light' | 'Dark') => {

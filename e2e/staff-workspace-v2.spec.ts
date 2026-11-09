@@ -111,9 +111,8 @@ test('staff mobile keeps focus, task actions and secondary creation reachable', 
 
   await page.goto('/');
   await page.getByRole('button', { name: 'Open more destinations' }).click();
-  await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'New task' })).toBeVisible();
-  await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'New task' }).click();
-  await expect(page.getByRole('heading', { name: 'Create task' })).toBeVisible();
+  // Staff do not create tasks (decision C1, 9 Nov 2026); tasks are opened from projects.
+  await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'New task' })).toHaveCount(0);
 });
 
 test('staff v2 remains readable in Chinese dark mode', async ({ page }) => {

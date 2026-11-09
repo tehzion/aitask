@@ -19,7 +19,6 @@ export default function TaskReviewSettings({ task }: { task: Task }) {
   const [lead, setLead] = React.useState(task.accountableLeadId || '');
   const savedApprovalMode: TaskApprovalMode = task.approvalMode || (task.requiresInternalApproval === false ? 'none' : 'hod');
   const [approvalMode, setApprovalMode] = React.useState<TaskApprovalMode>(savedApprovalMode);
-  const approvalHintId = React.useId();
   const [reviewer, setReviewer] = React.useState(task.reviewCover?.reviewerId || '');
   const [until, setUntil] = React.useState(task.reviewCover?.expiresAt ? getTodayInputDate(new Date(task.reviewCover.expiresAt)) : getTodayInputDate(new Date(Date.now() + 7 * 86400000)));
   const [reason, setReason] = React.useState('');
@@ -56,15 +55,7 @@ export default function TaskReviewSettings({ task }: { task: Task }) {
   };
   return <section aria-label={t('Review responsibility')} className="space-y-3">
     <h3 className="text-sm font-semibold text-ink">{t('Review responsibility')}</h3>
-    <label className="block text-sm font-medium text-ink">{t('Approval workflow')}
-      <select value={approvalMode} onChange={event => setApprovalMode(event.target.value as TaskApprovalMode)} disabled={locked || task.workflowStepKind === 'internal_review' || ['Completed', 'Cancelled'].includes(task.status)} aria-describedby={approvalHintId} className="mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3">
-        <option value="inherit">{t('Follow project default')}</option>
-        <option value="none">{t('No approval')}</option>
-        <option value="hod">{t('HOD approval')}</option>
-        <option value="pm">{t('PM approval')}</option>
-      </select>
-      <span id={approvalHintId} className="mt-1 block text-xs leading-5 text-muted">{t(task.workflowStepKind === 'internal_review' ? 'Internal review workflow steps always require approval.' : 'Existing tasks keep their saved workflow until you explicitly choose project inheritance.')}</span>
-    </label>
+    {/* Approval workflow is fixed to PM approval (decision D1, 9 Nov 2026); no per-task choice. */}
     <p className="text-xs leading-5 text-muted">{t('The accountable lead stays with the task after delegation. Temporary cover expires automatically.')}</p>
     <label className="block text-sm text-ink">{t('Accountable lead')}<select value={lead} onChange={event => setLead(event.target.value)} disabled={locked} className="mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3"><option value="">{t('Keep the current lead')}</option>{candidates.map(user => <option key={user.id} value={user.id} data-i18n-skip>{user.name}</option>)}</select></label>
     <label className="block text-sm text-ink">{t('Temporary review cover')}<select value={reviewer} onChange={event => setReviewer(event.target.value)} disabled={locked} className="mt-1 min-h-11 w-full rounded-control border border-line bg-surface px-3"><option value="">{t('Use the independent department reviewer')}</option>{candidates.filter(user => isIndependentTaskReviewer(user, task)).map(user => <option key={user.id} value={user.id} data-i18n-skip>{user.name}</option>)}</select></label>

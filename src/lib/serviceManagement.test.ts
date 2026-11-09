@@ -80,7 +80,8 @@ describe('service management calculations', () => {
       createdAt: '2026-08-15T00:00:00.000Z', updatedAt: '2026-08-15T00:00:00.000Z',
     };
     expect(getCycleServiceProgress(cycle, [{ ...deliverable, status: 'Delivered' }, { ...deliverable, id: 'deliverable-2', sequence: 2, status: 'Ready' }])).toEqual([
-      { serviceItemId: 'item-1', name: 'Video', included: 2, completed: 1, remaining: 1 },
+      // Ready (all required tasks complete) counts as done, same as Delivered.
+      { serviceItemId: 'item-1', name: 'Video', included: 2, completed: 2, remaining: 0 },
     ]);
     expect(getCycleServiceProgress(cycle, [
       { ...deliverable, status: 'Delivered' },

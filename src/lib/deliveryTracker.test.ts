@@ -247,12 +247,12 @@ describe('matching tracker records', () => {
       tasks: [task({ id: 'work', clientName: 'Acme', clientId: output.clientId, status: 'Waiting Approval' })] });
     expect(summary).toMatchObject({ progress: 100, delivered: 1, included: 1, completed: 0 });
   });
-  it('keeps finished but unconfirmed delivery work below 100%', () => {
+  it('counts finished but unconfirmed delivery work as done', () => {
     const output = deliverable({ id: 'output', status: 'Ready', taskIds: ['work'] });
     const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [cycle], deliverables: [output],
       period: 'all', range: getDeliveryPeriodRange('all', new Date()),
       tasks: [task({ id: 'work', clientName: 'Acme', clientId: output.clientId, status: 'Completed', isCompleted: true })] });
-    expect(summary).toMatchObject({ progress: 90, delivered: 0, included: 1, completed: 1 });
+    expect(summary).toMatchObject({ progress: 100, delivered: 0, included: 1, completed: 1 });
   });
   it('recomputes task statistics and hides unrelated rows for a task search', () => {
     const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [], deliverables: [],

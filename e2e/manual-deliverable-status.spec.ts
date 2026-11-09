@@ -37,7 +37,7 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
   await expect(status).toHaveValue('Planned');
   await status.selectOption('In Progress');
   await expect(status).toHaveValue('In Progress');
-  await expect(cycle.getByText(locale === 'zh' ? '已交付 0/1' : 'Delivered 0/1', { exact: true })).toBeVisible();
+  await expect(cycle.getByText(locale === 'zh' ? '已完成 0/1' : 'Done 0/1', { exact: true })).toBeVisible();
   await expect(page.getByText('Deliverable status must match the progress of its required tasks.', { exact: true })).toHaveCount(0);
 
   await page.reload();
@@ -47,7 +47,7 @@ for (const locale of ['en', 'zh']) test(`a task-free management fee can be put i
   await expect(status).toHaveValue('Ready');
   await status.selectOption('Delivered');
   await expect(status).toHaveValue('Delivered');
-  await expect(cycle.getByText(locale === 'zh' ? '已交付 1/1' : 'Delivered 1/1', { exact: true })).toBeVisible();
+  await expect(cycle.getByText(locale === 'zh' ? '已完成 1/1' : 'Done 1/1', { exact: true })).toBeVisible();
 });
 
 test('a frozen workflow exposes only statuses allowed by its required task progress', async ({ page }) => {

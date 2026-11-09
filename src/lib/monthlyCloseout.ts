@@ -1,5 +1,6 @@
 import type { Deliverable, ServiceCycle, Task } from '../types';
 import { isTaskOpen, isTaskOverdue } from './taskReporting';
+import { isDeliverableWorkDone } from './serviceManagement';
 
 export interface MonthlyCycleCloseout {
   deliverables: number;
@@ -34,9 +35,10 @@ export const getMonthlyCycleCloseout = (
   const open = cycleTasks.filter(isTaskOpen);
   const overdueTasks = open.filter(task => isTaskOverdue(task, today)).length;
   const waitingApproval = open.filter(task => task.status === 'Waiting Approval').length;
+  const done = cycleDeliverables.filter(isDeliverableWorkDone).length;
   const completionPercent = cycleDeliverables.length === 0
     ? 0
-    : Math.round((delivered / cycleDeliverables.length) * 100);
+    : Math.round((done / cycleDeliverables.length) * 100);
   return {
     deliverables: cycleDeliverables.length,
     delivered,

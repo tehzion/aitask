@@ -1,4 +1,5 @@
 import { DeliveryProgress } from './DeliveryProgress';
+import { isDeliverableWorkDone } from '../lib/serviceManagement';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getCurrentPlanCycle, isAwaitingPublication } from '../lib/dashboardData';
 import { ArrowRight, CalendarDays, CheckCircle2, Clock3, FileCheck2, MessageSquareText, TimerReset } from 'lucide-react';
@@ -53,7 +54,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
   const activePlan = getClientServicePlan(clientPlans, client?.id);
   const currentCycle = activePlan ? getCurrentPlanCycle(activePlan, serviceCycles, today) : undefined;
   const cycleDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
-  const deliveredCount = cycleDeliverables.filter(item => item.status === 'Delivered').length;
+  const deliveredCount = cycleDeliverables.filter(isDeliverableWorkDone).length;
   const groups = groupClientDeliveries(tasks, today);
   const focusTask = getClientFocusTask(tasks, today);
   const focusStage = focusTask ? getClientDeliveryStage(focusTask) : null;

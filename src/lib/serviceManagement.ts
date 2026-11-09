@@ -195,6 +195,15 @@ export const canSetDeliverableStatus = (
 ) => (canonicalProgress && ['Ready', 'Delivered'].includes(deliverable.status) && ['Ready', 'Delivered'].includes(status))
   || resolveDeliverableStatus({ ...deliverable, status }, tasks, cycles) === status;
 
+/**
+ * Progress counts completed work: a deliverable whose required tasks are all
+ * complete (Ready) counts the same as one the PM has confirmed (Delivered).
+ * Delivered stays the separate "sent to the client" confirmation.
+ */
+export const isDeliverableWorkDone = (deliverable: Pick<Deliverable, 'status'>) => (
+  deliverable.status === 'Ready' || deliverable.status === 'Delivered'
+);
+
 export const getCycleServiceProgress = (cycle: ServiceCycle, deliverables: Deliverable[]) => cycle.serviceItems.map(item => {
   // A cycle id is unique to one client, so the clientId comparison is only a
   // defensive cross-check. Keep legacy/edge deliverables that omit clientId
@@ -202,7 +211,7 @@ export const getCycleServiceProgress = (cycle: ServiceCycle, deliverables: Deliv
   const slots = deliverables.filter(deliverable => deliverable.cycleId === cycle.id
     && (!deliverable.clientId || !cycle.clientId || deliverable.clientId === cycle.clientId)
     && deliverable.serviceItemId === item.id);
-  const completed = slots.filter(deliverable => deliverable.status === 'Delivered').length;
+  const completed = slots.filter(isDeliverableWorkDone).length;
   return { serviceItemId: item.id, name: item.name, included: slots.length, completed, remaining: Math.max(0, slots.length - completed) };
 });
 

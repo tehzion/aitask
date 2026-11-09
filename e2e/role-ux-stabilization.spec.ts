@@ -108,7 +108,8 @@ test('Staff collapsed navigation is labelled and mobile layout remains accessibl
   await expect(openMenu).toContainText('Menu');
   const moreTrigger = page.getByRole('button', { name: 'Open more destinations' });
   await moreTrigger.click();
-  await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'New task' })).toBeVisible();
+  // Staff/HOD create tasks from inside a project, not from the sidebar (9 Nov 2026).
+  await expect(page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('button', { name: 'New task' })).toHaveCount(0);
   const closeMenu = page.getByRole('button', { name: 'Close navigation menu' }).last();
   await expect(closeMenu).toBeVisible();
   await closeMenu.click();

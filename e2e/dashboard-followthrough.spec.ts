@@ -180,13 +180,13 @@ test('company operations keeps current draft planning separate from confirmed pr
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ serviceCycles: useStore.getState().serviceCycles.map(cycle => cycle.id === 'followup-current-cycle' ? { ...cycle, status: 'Published' } : cycle) });
   });
-  await expect(page.getByText('Delivered 0/3', { exact: true })).toBeVisible();
+  await expect(page.getByText('Done 0/3', { exact: true })).toBeVisible();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(cycle => cycle.id !== 'followup-current-cycle') });
   });
   await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
-  await expect(page.getByText('Delivered 2/4', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Done 2/4', { exact: true })).toHaveCount(0);
 });
 
 test('company operations progresses to the next dated cycle at midnight', async ({ page }) => {
@@ -201,8 +201,8 @@ test('company operations progresses to the next dated cycle at midnight', async 
   });
   await page.goto('/clients/followup-company');
   await page.clock.runFor(500);
-  await expect(page.getByText('Delivered 0/3', { exact: true })).toBeVisible();
+  await expect(page.getByText('Done 0/3', { exact: true })).toBeVisible();
   await page.clock.fastForward(11_000);
-  await expect(page.getByText('Delivered 2/4', { exact: true })).toBeVisible();
-  await expect(page.getByText('Delivered 0/3', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Done 2/4', { exact: true })).toBeVisible();
+  await expect(page.getByText('Done 0/3', { exact: true })).toHaveCount(0);
 });

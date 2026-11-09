@@ -355,7 +355,10 @@ export interface StoreState {
   createTaskInitialServiceType?: string;
   createTaskInitialCycleId?: string;
   createTaskInitialDeliverableId?: string;
+  createTaskInitialProjectId?: string;
   openCreateTaskForDeliverable: (data: { clientId: string; clientName: string; serviceType: string; cycleId: string; deliverableId: string }) => void;
+  /** Opens task creation inside a project: company and project are prefilled and locked. */
+  openCreateTaskForProject: (data: { projectId: string; clientId?: string; clientName: string }) => void;
 
   initializeBackend: () => Promise<void>;
   syncBackendNow: (commandType?: SecureCommandType) => Promise<void>;
@@ -1150,6 +1153,7 @@ export const useStore = create<StoreState>()(
         createTaskInitialServiceType: open ? state.createTaskInitialServiceType : undefined,
         createTaskInitialCycleId: open ? state.createTaskInitialCycleId : undefined,
         createTaskInitialDeliverableId: open ? state.createTaskInitialDeliverableId : undefined,
+        createTaskInitialProjectId: open ? state.createTaskInitialProjectId : undefined,
       })),
       createTaskInitialDate: undefined,
       createTaskInitialAssignee: undefined,
@@ -1158,6 +1162,13 @@ export const useStore = create<StoreState>()(
       createTaskInitialServiceType: undefined,
       createTaskInitialCycleId: undefined,
       createTaskInitialDeliverableId: undefined,
+      createTaskInitialProjectId: undefined,
+      openCreateTaskForProject: (data) => set({
+        isCreateTaskModalOpen: true,
+        createTaskInitialProjectId: data.projectId,
+        createTaskInitialClientId: data.clientId,
+        createTaskInitialClientName: data.clientName,
+      }),
       openCreateTaskForDeliverable: (data) => set({
         isCreateTaskModalOpen: true,
         createTaskInitialClientId: data.clientId,
@@ -1165,6 +1176,7 @@ export const useStore = create<StoreState>()(
         createTaskInitialServiceType: data.serviceType,
         createTaskInitialCycleId: data.cycleId,
         createTaskInitialDeliverableId: data.deliverableId,
+        createTaskInitialProjectId: undefined,
       }),
       notifications: [],
       notificationUnreadCount: 0,
@@ -1435,6 +1447,7 @@ export const useStore = create<StoreState>()(
         if (get().backend.isPulling) return;
         if (get().backend.isSaving && !options.force) return;
         if (!options.force && isPullBlockedByPendingChange(get())) return;
+        const statusBeforePull = get().backend.status;
 
         apply((state) => ({
           backend: {
@@ -1539,6 +1552,29 @@ export const useStore = create<StoreState>()(
                 },
               }));
               if (get().backend.hasLocalChanges || get().backend.pendingMutations > 0) {
+                queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(); });
+              }
+              return;
+            }
+            if (options.silent
+              && (latest.backend.hasLocalChanges || latest.backend.pendingMutations > 0)
+              && !['conflict', 'retry_required', 'offline', 'refresh_required'].includes(statusBeforePull)) {
+              // A background refresh (realtime echo of the user's own save, the
+              // 15 s poll) finished while that save is still in flight. This is
+              // not a conflict: keep the local change, let the auto-sync finish,
+              // and re-pull afterwards (hasRemoteUpdate triggers that pull once
+              // the save succeeds). Showing the amber banner here made routine
+              // saves look like failures.
+              apply((state) => ({
+                backend: {
+                  ...state.backend,
+                  status: state.backend.isSaving ? 'saving' : 'live',
+                  isPulling: false,
+                  lastPulledAt: pulledAt,
+                  hasRemoteUpdate: true,
+                },
+              }));
+              if (!get().backend.isSaving) {
                 queueMicrotask(() => { if (isWorkspaceSessionCurrent(sessionToken)) void get().syncBackendNow(); });
               }
               return;

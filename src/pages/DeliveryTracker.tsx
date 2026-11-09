@@ -17,7 +17,7 @@ import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { useI18n } from '../components/I18nProvider';
-import { canCreateTasks, getClientKey, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { getClientKey, getVisibleClientNames, getVisibleTasks, canCreateTasksFromAnywhere } from '../lib/access';
 import { getClientDeliveryStageLabel, getClientDeliveryStageTone } from '../lib/clientPortal';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import {
@@ -201,7 +201,7 @@ const DeliveryTracker: React.FC = () => {
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2">
             <ContextualTutorialLink tutorialId="track-delivery-progress" label={t('How do I track delivery progress?')} />
-            {canCreateTasks(currentUser, rolePermissions) && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+            {canCreateTasksFromAnywhere(currentUser, rolePermissions) && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
           </div>
         )}
       />

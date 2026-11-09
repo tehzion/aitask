@@ -15,7 +15,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { Badge, Button, PageHeader } from '../components/ui';
 import { cardBase, inputBase, pageShell, tableShell } from '../components/uiTokens';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
-import { canAssignTasksToOthers, canCreateTasks, canEditTask as canEditTaskByRole, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import { canAssignTasksToOthers, canEditTask as canEditTaskByRole, getVisibleProjects, getVisibleTasks, isBossKoo, canCreateTasksFromAnywhere } from '../lib/access';
 import { SkeletonTableRow, SkeletonMobileCard } from '../components/SkeletonCard';
 import { safeHttpsUrl } from '../lib/security';
 import { DEPARTMENTS } from '../lib/departments';
@@ -479,7 +479,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
         onboardingTarget="tasks-overview"
         hideDescriptionOnMobile
         meta={viewsSlot}
-        action={canCreateTasks(currentUser, rolePermissions) ? (
+        action={canCreateTasksFromAnywhere(currentUser, rolePermissions) ? (
           <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
             <Plus className="h-4 w-4" />
             {t('New task')}

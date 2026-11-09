@@ -4,7 +4,7 @@ import { Bell, CheckSquare, Languages, Moon, Search, Sun, UserPlus, Keyboard, X 
 import ModalShell from './ModalShell';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
-import { canAccessPath, canCreateTasks, isBossKoo } from '../lib/access';
+import { canAccessPath, isBossKoo, canCreateTasksFromAnywhere } from '../lib/access';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { useI18n } from './I18nProvider';
 import { cn } from '../lib/utils';
@@ -57,7 +57,7 @@ const CommandPalette: React.FC<CommandPaletteProps> = ({ isOpen, onClose, onOpen
     navigation.forEach(({ path, label, icon: Icon }) => {
       actions.push({ id: `nav:${path}`, label: t(label), icon: Icon, run: () => { navigate(path); onClose(); } });
     });
-    if (canCreateTasks(currentUser, rolePermissions)) {
+    if (canCreateTasksFromAnywhere(currentUser, rolePermissions)) {
       actions.push({ id: 'action:create-task', label: t('New task'), icon: CheckSquare, run: () => { setCreateTaskModalOpen(true); onClose(); } });
     }
     if (isBossKoo(currentUser)) {

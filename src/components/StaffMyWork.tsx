@@ -6,7 +6,7 @@ import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChec
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
-import { canCreateTasks, getDashboardPersona, getVisibleTasks, isDepartmentScopedUser, isHodUser } from '../lib/access';
+import { getDashboardPersona, getVisibleTasks, isDepartmentScopedUser, isHodUser, canCreateTasksFromAnywhere } from '../lib/access';
 import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, getUnavailableTaskDependencyCount, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, isStaffGuidedActionEnabled, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getMemberDepartments, isMemberInDepartment } from '../lib/departments';
 import { getTeamWorkloadSummaries, isTaskOpen } from '../lib/taskReporting';
@@ -41,7 +41,7 @@ const StaffMyWork: React.FC = () => {
     deliverables: state.deliverables,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
-  const canCreateTask = canCreateTasks(currentUser, rolePermissions);
+  const canCreateTask = canCreateTasksFromAnywhere(currentUser, rolePermissions);
   const todayDate = useLocalToday();
   const today = getTodayInputDate(todayDate);
   const isHod = isHodUser(currentUser, rolePermissions);

@@ -1,4 +1,5 @@
 import SystemMessage from './SystemMessage';
+import { isDeliverableWorkDone } from '../lib/serviceManagement';
 import { DeliveryProgress } from './DeliveryProgress';
 import { useBillingToday } from '../hooks/useBillingToday';
 import { resolveMonthlyRecord } from '../lib/monthlyRecords';
@@ -76,7 +77,7 @@ const ClientServiceWorkspace = () => {
   const selectMonth = (id: string | null) => setSearchParams(current => { const query = new URLSearchParams(current); if (id) query.set('cycleId', id); else query.delete('cycleId'); return query; });
   const deliverables = store.deliverables.filter(item => item.clientId === client.id);
   const currentDeliverables = currentCycle ? deliverables.filter(item => item.cycleId === currentCycle.id) : [];
-  const deliveredCount = currentDeliverables.filter(item => item.status === 'Delivered').length;
+  const deliveredCount = currentDeliverables.filter(isDeliverableWorkDone).length;
   const contractEndDate = parseOptionalDate(activePlan?.contractEndDate);
   const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }).filter(task => task.clientName.trim().toLowerCase() === client.clientName.trim().toLowerCase() && Boolean(currentCycle) && (task.serviceCycleId === currentCycle?.id || currentDeliverables.some(item => item.taskIds.includes(task.id) || item.id === task.deliverableId)));
   const taskGroups = groupClientDeliveries(tasks, today);

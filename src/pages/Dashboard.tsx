@@ -10,10 +10,10 @@ import { isSameDay } from 'date-fns/isSameDay';
 import { isWithinInterval } from 'date-fns/isWithinInterval';
 import { isBefore } from 'date-fns/isBefore';
 import { ArrowRight, Plus, FolderKanban } from 'lucide-react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
 import { cardBase, pageShell } from '../components/uiTokens';
-import { canCreateTasks, getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
+import { getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo, isPortfolioHomeUser, canCreateTasksFromAnywhere } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
@@ -106,7 +106,7 @@ const Dashboard: React.FC = () => {
     const closedIds = new Set(projects.filter(project => projectStatus(project) === 'Closed').map(project => project.id));
     return tasks.filter(task => !task.projectId || !closedIds.has(task.projectId));
   }, [projects, tasks]);
-  const canCreateTask = canCreateTasks(currentUser, rolePermissions);
+  const canCreateTask = canCreateTasksFromAnywhere(currentUser, rolePermissions);
   const companiesDashboardAction = getCompaniesDashboardAction(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
   const showBossOperations = isBossKoo(currentUser);
@@ -334,31 +334,9 @@ const Dashboard: React.FC = () => {
 
   if (showStaffOperations) return <StaffMyWork />;
 
-  if (currentUser?.role === 'Project Manager' && !isBossKoo(currentUser)) return (
-    <div className={pageShell}>
-      <PageHeader
-        title={t('Dashboard')}
-        description={t('What needs your attention today across your projects.')}
-        onboardingTarget="dashboard-overview"
-        action={(
-          <div className="flex flex-wrap items-center justify-end gap-2.5">
-            <BackendFreshness />
-            <Link to="/tasks" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-control border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink transition hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-              {t('Portfolio work')}
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-            {canCreateTask && (
-              <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
-                <Plus className="h-4 w-4" />
-                {t('New task')}
-              </Button>
-            )}
-          </div>
-        )}
-      />
-      <div className="mt-6"><ServiceRoleDashboard /></div>
-    </div>
-  );
+  // The PM's home is the Portfolio list; this dashboard repeated the same tasks.
+  // Its overview panels now sit on top of Portfolio (StaffAllWork).
+  if (isPortfolioHomeUser(currentUser)) return <Navigate to="/tasks" replace />;
 
   const analyticsSection = hasTaskData ? (
 <section className="space-y-6" aria-labelledby="workspace-analytics-title">

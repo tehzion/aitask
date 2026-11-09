@@ -181,7 +181,7 @@ const ServiceRoleDashboard = () => {
       ...getPlanDeliverySummary(plan, store.serviceCycles, store.deliverables, visibleTasks, now),
       taskActivity: getCompanyTaskActivity(plan.clientId, visibleTasks, store.users, now),
     };
-  }).map(item => ({ ...item, pace: item.currentCycle ? getCyclePace(item.currentCycle, item.delivered, item.total, now) : undefined })),
+  }).map(item => ({ ...item, pace: item.currentCycle ? getCyclePace(item.currentCycle, item.delivered + item.ready, item.total, now) : undefined })),
   [activePlans, store.deliverables, store.serviceCycles, visibleTasks, store.users, now]);
   const plansAtRisk = activeCompanies.filter(item => item.pace === 'atRisk' || item.pace === 'missed');
   const renewingSoon = renewalPlans
@@ -353,7 +353,7 @@ const ServiceRoleDashboard = () => {
             <div className="min-w-0">
               {item.currentCycle && item.total > 0 ? <>
               {item.pace && <div className="mb-1.5"><PaceChip pace={item.pace} /></div>}
-              <ProgressBar className="mb-1.5" label={`${t('Deliverables')} ${item.delivered}/${item.total}`} value={item.delivered} max={Math.max(item.total, 1)} />
+              <ProgressBar className="mb-1.5" label={`${t('Done')} ${item.delivered + item.ready}/${item.total}`} value={item.delivered + item.ready} max={Math.max(item.total, 1)} />
               <div className="flex flex-wrap gap-1.5 text-[11px] text-muted">
                 <StatusChip tone="emerald">{item.delivered} {t('Delivered')}</StatusChip>
                 <StatusChip tone="blue">{item.ready} {t('Ready')}</StatusChip>
@@ -365,7 +365,7 @@ const ServiceRoleDashboard = () => {
                 : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
               <CompanyTaskActivity activity={item.taskActivity} />
               {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
-                {t('Progress counts confirmed deliveries, not completed tasks.')}
+                {t('Progress counts completed work.')}
               </p>}
             </div>
           </div>

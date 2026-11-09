@@ -46,7 +46,7 @@ import {
   shiftCalendarTaskRange,
   type CalendarRangeSegment,
 } from '../lib/calendarRanges';
-import { canCreateTasks, canEditTask as canEditTaskByRole, getVisibleTasks } from '../lib/access';
+import { canEditTask as canEditTaskByRole, getVisibleTasks, canCreateTasksFromAnywhere } from '../lib/access';
 import { getHolidaysForDate, HOLIDAY_COLORS, type MalaysiaHoliday } from '../lib/malaysiaHolidays';
 import { getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { getWorkWeekRange } from '../lib/workWeek';
@@ -785,7 +785,7 @@ const Calendar: React.FC = () => {
             <Flag className="h-4 w-4" aria-hidden="true" /> {t('MY Holidays')}
           </button>
 
-          {canCreateTasks(currentUser, rolePermissions) && (
+          {canCreateTasksFromAnywhere(currentUser, rolePermissions) && (
             <Button onClick={() => handleAddTaskForDate(selectedDate)} className="shrink-0">
               <Plus className="h-4 w-4" aria-hidden="true" /> {t('Assign Task')}
             </Button>
@@ -954,7 +954,7 @@ const Calendar: React.FC = () => {
                                 <Flag className={clsx('h-3 w-3', HOLIDAY_COLORS[primaryHoliday.category].text)} aria-hidden="true" />
                               </span>
                             )}
-                            {canCreateTasks(currentUser, rolePermissions) && inMonth && (
+                            {canCreateTasksFromAnywhere(currentUser, rolePermissions) && inMonth && (
                               <button
                                 type="button"
                                 onClick={event => {
@@ -1123,7 +1123,7 @@ const Calendar: React.FC = () => {
                 {formatLocalizedWeekdayDate(selectedDate, locale, true)}
               </h2>
             </div>
-            {canCreateTasks(currentUser, rolePermissions) && (
+            {canCreateTasksFromAnywhere(currentUser, rolePermissions) && (
               <button
                 type="button"
                 onClick={() => handleAddTaskForDate(selectedDate)}
@@ -1198,7 +1198,7 @@ const Calendar: React.FC = () => {
                   <p className="mb-1 text-xs text-muted">
                     {calendarFilter === 'all' ? t('Choose another day or assign a task') : t('Try Overall to see every visible task.')}
                   </p>
-                  {canCreateTasks(currentUser, rolePermissions) && (
+                  {canCreateTasksFromAnywhere(currentUser, rolePermissions) && (
                     <Button
                       onClick={() => handleAddTaskForDate(selectedDate)}
                       variant="secondary"

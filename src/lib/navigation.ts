@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { CustomRole, User } from '../types';
-import { canAccessPath, getVisibleNavigation, isBossKoo, isDepartmentScopedUser } from './access';
+import { canAccessPath, getVisibleNavigation, isBossKoo, isDepartmentScopedUser, isPortfolioHomeUser } from './access';
 
 export type NavigationItem = {
   path: string;
@@ -143,8 +143,10 @@ export const getNavigationSections = (
     // page as their portfolio list instead of the workspace-wide management view.
     primary: isBossKoo(user)
       ? [{ path: '/tasks', label: 'Tasks', icon: CheckSquare }, ...generalPrimary]
-      : user?.role === 'Project Manager'
-        ? [{ path: '/tasks', label: 'Portfolio work', icon: CheckSquare }, ...generalPrimary]
+      : isPortfolioHomeUser(user)
+        // Portfolio replaces the PM dashboard (team feedback, 9 Nov 2026): the
+        // two pages listed the same tasks, so the PM keeps one home.
+        ? [{ path: '/tasks', label: 'Portfolio', icon: CheckSquare }, ...generalPrimary.filter(item => item.path !== '/')]
         : generalPrimary,
     secondary: [],
     footer: filterVisible(user, rolePermissions, [
@@ -162,7 +164,9 @@ export const getMobileNavigation = (
   const sections = getNavigationSections(user, rolePermissions, clientProfilePath);
   const items = user?.role === 'Staff' || user?.role === 'HOD' || user?.role === 'Client'
     ? sections.mobilePrimary || sections.primary
-    : filterVisible(user, rolePermissions, generalMobilePrimary);
+    : filterVisible(user, rolePermissions, isPortfolioHomeUser(user)
+      ? generalMobilePrimary.map(item => item.path === '/' ? { path: '/tasks', label: 'Portfolio', icon: CheckSquare } : item)
+      : generalMobilePrimary);
   // The bottom bar has no room for "Delivery tracker" at 320px.
   return items.map(item => item.label === 'Delivery tracker' ? { ...item, label: 'Deliveries' } : item);
 };
