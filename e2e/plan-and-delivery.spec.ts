@@ -117,6 +117,11 @@ test('plan history includes the current month and links to its delivery details'
   }, clientId);
   await expect(history.getByRole('row')).toHaveCount(7); // header plus six months
   await expect(current).toHaveCount(1);
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ serviceCycles: state.serviceCycles.map(item => item.clientId === id && item.status === 'Published' ? { ...item, status: 'Completed' as const } : item) }));
+  }, clientId);
+  await expect(current.getByText('Closed', { exact: true })).toBeVisible();
   await current.getByRole('button', { name: 'View', exact: true }).click();
   await expect(page).toHaveURL(/cycleId=/);
 });
