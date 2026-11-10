@@ -34,7 +34,7 @@ test('monthly plans roll over on their billing date and retain previous months a
 
   await page.clock.setFixedTime(new Date('2026-10-09T04:00:00Z'));
   await page.evaluate(() => window.dispatchEvent(new Event('focus')));
-  await expect(schedule.getByText('9 Oct 2026 – 8 Nov 2026', { exact: true })).toBeVisible();
+  await expect(schedule.getByRole('definition').filter({ hasText: '9 Oct 2026 – 8 Nov 2026' })).toBeVisible();
   await expect(schedule.getByText('9 Nov 2026', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   await expect(page.getByRole('heading', { name: '9 Oct 2026 – 8 Nov 2026', exact: true })).toBeVisible();
@@ -50,7 +50,7 @@ test('monthly plans roll over on their billing date and retain previous months a
   await expect(page.getByText('Transition cycle').locator('..')).toContainText('2026-11-09 – 2026-11-19');
   await page.getByRole('button', { name: 'Save dates', exact: true }).click();
   await expect(schedule.getByText('Day 20', { exact: true })).toBeVisible();
-  await expect(schedule.getByText('9 Oct 2026 – 8 Nov 2026', { exact: true })).toBeVisible();
+  await expect(schedule.getByRole('definition').filter({ hasText: '9 Oct 2026 – 8 Nov 2026' })).toBeVisible();
   await page.screenshot({ path: 'tmp/monthly-update-desktop.png', fullPage: true, animations: 'disabled' });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
