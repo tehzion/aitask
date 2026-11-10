@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-10T06:41:32Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "PENDING APPROVAL: 20261110062504_hod_staff_workload_summary has not been applied to production.",
+  "status": "APPLIED 2026-11-10: production records 20261110071019_hod_staff_workload_summary (HOD cross-department Staff workload totals, counts only; approved by Y.L). Repository and production migration history are identical (146/146).",
   "validatedMigrationTail": [
     "20261023154255_bind_service_command_entity_types",
     "20261028120000_pm_no_hod_assignment_fallback",
@@ -29,21 +29,19 @@
     "20261109141920_r3_s1_project_approval_pm",
     "20261109193707_aitask_client_events",
     "20261110015703_release_notice_everyday_saves",
-    "20261110062504_hod_staff_workload_summary"
+    "20261110071019_hod_staff_workload_summary"
   ],
-  "pendingProductionMigrations": [
-    "20261110062504_hod_staff_workload_summary"
-  ],
+  "pendingProductionMigrations": [],
   "productionVerification": {
-    "historyAligned": false,
-    "historyThrough": "20261110015703_release_notice_everyday_saves",
-    "latestAppliedMigration": "20261110015703_release_notice_everyday_saves"
+    "historyAligned": true,
+    "historyThrough": "20261110071019_hod_staff_workload_summary",
+    "latestAppliedMigration": "20261110071019_hod_staff_workload_summary"
   },
   "changeSummary": {
-    "20261110062504_hod_staff_workload_summary": "Adds a read-only, HOD-authorized staff workload aggregate across departments. It returns member names, departments and counts, not task records, and does not alter existing task visibility."
+    "20261110071019_hod_staff_workload_summary": "Adds a read-only, HOD-authorized staff workload aggregate across departments. It returns member names, departments and counts, not task records, and does not alter existing task visibility."
   },
   "qualityGates": {
     "localDatabase": "PASS: clean replay of all 146 migrations and the full repository database rollout checks; 12 targeted pgTAP assertions; authenticated local HOD API and browser integration; local security advisor reported no warnings.",
-    "productionApply": "PENDING OWNER APPROVAL. Do not apply to production without explicit authorization."
+    "productionApply": "APPLIED 2026-11-10 via the Supabase connector; local pgTAP hod_staff_workload 12/12 first; anon cannot execute; a call without an HOD session returns FORBIDDEN; advisors show no new findings."
   }
 }
