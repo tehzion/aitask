@@ -4772,7 +4772,7 @@ export const useStore = create<StoreState>()(
         const source = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
         if (!source || source.status !== 'Active') return { ok: false, error: 'Resume the plan before scheduling a revision.' };
         const next = nextRevisionBoundary(source, getBillingToday());
-        if (next !== effectiveDate) return { ok: false, error: 'The billing date changed. Refresh and review the next cycle before scheduling.' };
+        if (next !== effectiveDate) return { ok: false, error: 'The billing date changed. Refresh and review the next month before scheduling.' };
         const error = validateRevisionItems(plan.serviceItems);
         if (error) return { ok: false, error };
         set({ clientPlans: state.clientPlans.map(item => item.id === plan.id ? { ...item, revisionScheduleStatus: 'scheduled', startDate: next, effectiveFromCycleStart: next, updatedAt: new Date().toISOString() } : item) });

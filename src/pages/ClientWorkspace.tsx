@@ -337,7 +337,7 @@ const OperationsClientWorkspace = () => {
     if (pendingActivity.current) { await retryActivitySave(); return; }
     const cycle = cycles.find(item => item.id === activityCycleId);
     if (!cycle)
-      return setActivityFeedback({ tone: "error", text: canManageCycles ? "Create a service cycle before adding activity." : "No month is available for this activity. Ask your project manager to start one." });
+      return setActivityFeedback({ tone: "error", text: canManageCycles ? "Create a month before adding activity." : "No month is available for this activity. Ask your project manager to start one." });
     if (file && file.size > SERVICE_FILE_MAX_BYTES) {
       setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller."), action: pendingActivity.current ? "save" : undefined });
       return;

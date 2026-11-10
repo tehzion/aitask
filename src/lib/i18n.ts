@@ -2017,7 +2017,7 @@ const zhCopyCoverage: Record<string, string> = {
   'Only a draft revision can be scheduled.': '只有草稿修订可以排期。',
   'Return this scheduled plan to draft before editing.': '编辑前请先将此已排期方案返回草稿。',
   'Review and schedule this revision for next month.': '检查并将此修订安排在下个月生效。',
-  'The billing date changed. Refresh and review the next cycle before scheduling.': '结算日期已更改。请刷新并查看下一个周期后再排期。',
+  'The billing date changed. Refresh and review the next month before scheduling.': '结算日期已更改。请刷新并查看下个月后再排期。',
   'This revision is already in use. Create a new revision for next month.': '此修订已在使用中。请为下个月创建新的修订。',
   'Unable to assign owner.': '无法分配负责人。',
 

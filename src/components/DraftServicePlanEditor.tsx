@@ -202,7 +202,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   };
 
   const schedule = () => {
-    if (!review || review.fingerprint !== JSON.stringify(plan) || review.date !== effectiveDate || dirty) return error('The billing date changed. Refresh and review the next cycle before scheduling.');
+    if (!review || review.fingerprint !== JSON.stringify(plan) || review.date !== effectiveDate || dirty) return error('The billing date changed. Refresh and review the next month before scheduling.');
     if (source.status === 'Ended') {
       // A deliberately ended plan has no active source for the hosted cycle
       // scheduler. Activation creates the reviewed next-month snapshot and
