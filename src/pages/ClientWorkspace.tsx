@@ -601,7 +601,7 @@ const OperationsClientWorkspace = () => {
         <h2 id={activationTitleId} className="font-semibold text-ink">{t(activationPublishesNow ? "Start plan and this month" : "Start plan")}</h2>
         <p className="mt-2 text-sm text-muted">{activationPublishesNow
           ? t("This starts the plan and this month. The team can begin work, and the client will see this month's deliverables.")
-          : t("This starts the plan. Its first month begins on {date}.", { date: formatLocalizedDate(parseOptionalDate(planToActivate.startDate)!, locale) })}</p>
+          : t("This starts the plan. Its first month begins on {date}.").replace("{date}", formatLocalizedDate(parseOptionalDate(planToActivate.startDate)!, locale))}</p>
         <ul className="mt-4 divide-y divide-line/70 rounded-control border border-line text-sm">
           {planToActivate.serviceItems.map(item => <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2"><span data-i18n-skip className="font-medium text-ink">{item.name}</span><span className="text-muted">{item.quantity} <span data-i18n-skip>{item.unit}</span></span></li>)}
           {planToActivate.serviceItems.length === 0 && <li className="px-3 py-2 text-muted">{t("No services in this plan yet.")}</li>}
