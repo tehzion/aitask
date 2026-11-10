@@ -126,6 +126,9 @@ jobs:
       - name: Docker diagnostics
         run: docker info
 
+      - name: Test disposable stack startup retries
+        run: node --test scripts/supabase-start-retry.test.mjs
+
       - name: Validate migrations, pgTAP, lint, advisors, and postflight
         run: pnpm verify:supabase:rollout 2>&1 | tee supabase-rollout.log
 
