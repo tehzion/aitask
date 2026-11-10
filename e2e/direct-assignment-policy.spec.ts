@@ -15,7 +15,7 @@ test('PM assignees follow the selected department and assigned HODs can accept w
     ].map(user => ({ ...user, department: user.departments[0], username: user.id, email: `${user.id}@aitask.local`, hasLogin: true, customRoleId: undefined, permissions: undefined, isSuperAdmin: false, mustResetPassword: false }));
     for (const user of users) {
       enablePasswordResetBypass(user.id);
-      localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${user.id}`, 'acknowledged');
+      localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${user.id}`, 'acknowledged');
     }
     localStorage.setItem('aitask:onboarding:v1', JSON.stringify(Object.fromEntries(users.map(user => [user.id, {status: 'skipped', updatedAt: new Date().toISOString()}]))));
     localStorage.setItem('aitask:locale', 'en');
@@ -53,7 +53,7 @@ test('new-task assignee options follow department and changing it clears the pre
     const hod = { ...base, id: 'department-hod', name: 'Department HOD', role: 'HOD', department: 'Video Shooting', departments: ['Video Shooting', 'Video Editor'], customRoleId: undefined, permissions: undefined, hasLogin: true };
     const staff = { ...base, id: 'department-staff', name: 'Design Staff', role: 'Staff', department: 'Designer', departments: ['Designer'], customRoleId: undefined, permissions: undefined, hasLogin: true };
     enablePasswordResetBypass(pm.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${pm.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${pm.id}`, 'acknowledged');
     useStore.setState({ currentUser: pm, users: [pm, hod, staff], rolePermissions: [], tasks: [], projects: [], notifications: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   });
   await page.goto('/tasks');

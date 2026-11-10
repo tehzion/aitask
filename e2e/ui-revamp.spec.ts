@@ -24,7 +24,7 @@ const seed = async (page: Page, actor: Actor, locale: 'en' | 'zh' = 'en') => {
     const state = useStore.getState();
     const actor = state.users.find(user => user.id === actorId)!;
     enablePasswordResetBypass(actor.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${actor.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${actor.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', locale);
     const day = (offset: number) => {
       const date = new Date();

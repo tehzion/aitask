@@ -61,7 +61,7 @@ test('role-relevant catalogue search and the compact tutorial overlay remain usa
 
   const search = page.getByRole('textbox', { name: 'Search tutorials' });
   await search.fill('submit work');
-  const submitTutorial = page.locator('button').filter({ hasText: 'How to submit work for approval' }).last();
+  const submitTutorial = page.locator('button').filter({ hasText: 'How to send work for review' }).last();
   await expect(submitTutorial).toBeVisible();
   await submitTutorial.click();
   const detail = page.locator('aside[aria-labelledby="selected-tutorial-title"]');

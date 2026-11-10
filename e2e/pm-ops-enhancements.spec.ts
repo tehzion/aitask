@@ -22,7 +22,7 @@ const signInAs = async (page: Page, who: 'boss' | 'pm') => page.evaluate(async r
     ? state.users.find(item => item.isSuperAdmin)!
     : state.users.find(item => item.role === 'Project Manager' && !item.isSuperAdmin)!;
   enablePasswordResetBypass(user.id);
-  localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${user.id}`, 'acknowledged');
+  localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${user.id}`, 'acknowledged');
   useStore.setState({ currentUser: { ...user, mustResetPassword: false }, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   return user.id;
 }, who);

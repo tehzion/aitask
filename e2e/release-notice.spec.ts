@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const noticeId = '2026-08-service-operations';
+const noticeId = '2026-11-everyday-saves';
 
 const openAdminWorkspace = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
@@ -23,13 +23,13 @@ const switchDemoUser = async (page: import('@playwright/test').Page, userId: str
   await page.goto('/');
 };
 
-test('each account receives the service operations update once', async ({ page }) => {
+test('each account receives the release update once', async ({ page }) => {
   await openAdminWorkspace(page);
 
-  const dialog = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
+  const dialog = page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('Build client plans your way')).toBeVisible();
-  await expect(dialog.getByText('Run monthly delivery with clarity')).toBeVisible();
+  await expect(dialog.getByText('Approve several at once')).toBeVisible();
+  await expect(dialog.getByText('Changes save on their own')).toBeVisible();
   await expect(page.locator('#root')).toHaveAttribute('inert', '');
   await expect(dialog.getByRole('button', { name: 'Happy working' })).toBeFocused();
 
@@ -45,7 +45,7 @@ test('each account receives the service operations update once', async ({ page }
 
 test('dismissal survives a reload before persistent acknowledgement and remains scoped to the account', async ({ page }) => {
   await openAdminWorkspace(page);
-  const dialog = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
+  const dialog = page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' });
   await expect(dialog).toBeVisible();
   const userId = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -56,35 +56,31 @@ test('dismissal survives a reload before persistent acknowledgement and remains 
   await page.reload();
   await expect(dialog).toHaveCount(0);
 
-  await switchDemoUser(page, 'u-operation-demo-local');
-  await expect(page.getByRole('dialog', { name: 'A clearer way to run client delivery' })).toBeVisible();
+  await switchDemoUser(page, 'u-staff-demo-local');
+  await expect(page.getByRole('dialog', { name: 'Your list now starts with what to do today' })).toBeVisible();
 });
 
-test('release notice content follows the existing role workbench rules', async ({ page }) => {
+test('each role hears only what changed for them', async ({ page }) => {
   await openAdminWorkspace(page);
   await page.getByRole('button', { name: 'Happy working' }).click();
 
   await switchDemoUser(page, 'u-boss');
-  await expect(page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' })).toContainText('Keep every agreement intact');
+  await expect(page.getByRole('dialog', { name: 'Dependable saves and a clearer view of staffing' })).toContainText('Staffing gaps lead to the team');
+  await page.getByRole('button', { name: 'Happy working' }).click();
+
+  await switchDemoUser(page, 'u-hod-demo-local');
+  await expect(page.getByRole('dialog', { name: 'See what waits on you and hand it out faster' })).toContainText('Assign from the list');
   await page.getByRole('button', { name: 'Happy working' }).click();
 
   await switchDemoUser(page, 'u-operation-demo-local');
-  await expect(page.getByRole('dialog', { name: 'A clearer way to run client delivery' })).toContainText('Generate per-service task chains');
-  await expect(page.getByRole('dialog')).not.toContainText(/price|pricing/i);
-  await page.getByRole('button', { name: 'Happy working' }).click();
-
-  await switchDemoUser(page, 'u-staff-demo-local');
-  await expect(page.getByRole('dialog', { name: 'Your production work is easier to follow' })).toContainText('Keep dependencies visible');
-  await page.getByRole('button', { name: 'Happy working' }).click();
-
-  await switchDemoUser(page, 'u-account-demo-local');
-  await expect(page.getByRole('dialog', { name: 'A clearer account view of client service' })).toContainText('Plan ahead for renewals');
+  await expect(page.getByRole('dialog', { name: 'Your list now starts with what to do today' })).toContainText('Today first');
+  await expect(page.getByRole('dialog')).not.toContainText(/price|pricing|Approve several/i);
   await page.getByRole('button', { name: 'Happy working' }).click();
 
   await switchDemoUser(page, 'u-client-urban');
-  const clientDialog = page.getByRole('dialog', { name: 'Your client workspace is easier to follow' });
-  await expect(clientDialog).toContainText('Follow published monthly delivery');
-  await expect(clientDialog).not.toContainText(/price|pricing|internal task/i);
+  const clientDialog = page.getByRole('dialog', { name: 'Your progress is easier to read' });
+  await expect(clientDialog).toContainText('This month by service');
+  await expect(clientDialog).not.toContainText(/price|pricing|internal task|Staff/i);
 });
 
 test('the notice is Chinese, dark-mode readable, and usable on mobile', async ({ page }) => {
@@ -104,7 +100,7 @@ test('the notice is Chinese, dark-mode readable, and usable on mobile', async ({
     await page.getByRole('button', { name: '暂时继续' }).click();
   }
 
-  const dialog = page.getByRole('dialog', { name: '客户服务运营现已集中在一个清晰的工作区' });
+  const dialog = page.getByRole('dialog', { name: '更快审批，不再担心保存' });
   await expect(dialog).toBeVisible();
   await expect(page.locator('html')).toHaveClass(/dark/);
   await expect(dialog.getByRole('button', { name: '开始工作吧' })).toBeFocused();

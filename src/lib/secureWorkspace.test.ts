@@ -1145,16 +1145,16 @@ describe('secure release notice acknowledgement transport', () => {
 
   it('checks the fixed notice for the current secure workspace', async () => {
     rpc.mockResolvedValueOnce({
-      data: { ok: true, noticeId: '2026-08-service-operations', acknowledged: false },
+      data: { ok: true, noticeId: '2026-11-everyday-saves', acknowledged: false },
       error: null,
     });
 
-    const result = await getSecureReleaseNoticeAcknowledgement('2026-08-service-operations');
+    const result = await getSecureReleaseNoticeAcknowledgement('2026-11-everyday-saves');
 
     expect(result).toEqual({ ok: true, acknowledged: false });
     expect(rpc).toHaveBeenCalledWith('aitask_get_release_notice_acknowledgement', {
       p_workspace_id: 'aitask-main',
-      p_notice_id: '2026-08-service-operations',
+      p_notice_id: '2026-11-everyday-saves',
     });
   });
 
@@ -1162,18 +1162,18 @@ describe('secure release notice acknowledgement transport', () => {
     rpc
       .mockResolvedValueOnce({ data: null, error: { code: 'PGRST301', message: 'JWT expired' } })
       .mockResolvedValueOnce({
-        data: { ok: true, noticeId: '2026-08-service-operations', acknowledged: true },
+        data: { ok: true, noticeId: '2026-11-everyday-saves', acknowledged: true },
         error: null,
       });
     refreshSession.mockResolvedValueOnce({ data: { session: { access_token: 'refreshed' } }, error: null });
 
-    const result = await acknowledgeSecureReleaseNotice('2026-08-service-operations');
+    const result = await acknowledgeSecureReleaseNotice('2026-11-everyday-saves');
 
     expect(result).toEqual({ ok: true, acknowledged: true });
     expect(rpc).toHaveBeenCalledTimes(2);
     expect(rpc).toHaveBeenLastCalledWith('aitask_acknowledge_release_notice', {
       p_workspace_id: 'aitask-main',
-      p_notice_id: '2026-08-service-operations',
+      p_notice_id: '2026-11-everyday-saves',
     });
   });
 
@@ -1183,7 +1183,7 @@ describe('secure release notice acknowledgement transport', () => {
       error: null,
     });
 
-    await expect(acknowledgeSecureReleaseNotice('2026-08-service-operations')).resolves.toMatchObject({
+    await expect(acknowledgeSecureReleaseNotice('2026-11-everyday-saves')).resolves.toMatchObject({
       ok: false,
       code: 'VALIDATION',
     });

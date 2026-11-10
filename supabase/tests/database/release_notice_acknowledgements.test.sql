@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 
-select plan(25);
+select plan(26);
 
 select has_table(
   'public',
@@ -69,6 +69,12 @@ select is(
   (public.aitask_get_release_notice_acknowledgement('aitask-main', '2026-08-service-operations') ->> 'code'),
   'FORBIDDEN',
   'status RPC rejects requests without an authenticated member'
+);
+select ok(
+  position('2026-11-everyday-saves' in pg_get_functiondef('public.aitask_acknowledge_release_notice(text,text)'::regprocedure)) > 0
+  and position('2026-08-service-operations' in pg_get_functiondef('public.aitask_acknowledge_release_notice(text,text)'::regprocedure)) > 0
+  and position('2026-11-everyday-saves' in pg_get_functiondef('public.aitask_get_release_notice_acknowledgement(text,text)'::regprocedure)) > 0,
+  'the current and earlier release notices are both accepted'
 );
 select ok(
   position('p_member_id' in pg_get_functiondef('public.aitask_acknowledge_release_notice(text,text)'::regprocedure)) = 0

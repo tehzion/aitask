@@ -2,6 +2,7 @@ import '../lib/pageCopy';
 import TaskOutputFiles, { type OutputUploadState } from './TaskOutputFiles';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
+import TaskSaveNote from './TaskSaveNote';
 import { acknowledgeActionFeedback, canRetrySave, dismissActionFeedback } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
 import SessionRecoveryButton from './SessionRecoveryButton';
@@ -702,6 +703,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                   <span className={`inline-flex min-h-11 items-center text-sm px-3 py-1 rounded-md font-semibold ${getStatusColor(task.status)}`}>
                     {currentUser?.role === 'Client' ? t(task.status) : getLocalizedTaskStatus(task.status, locale)}
                   </span>
+                  <TaskSaveNote taskId={task.id} className="ml-3" />
                 </div>
                 <div className="text-right">
                   {isClientTaskViewer

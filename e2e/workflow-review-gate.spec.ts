@@ -32,7 +32,7 @@ const seed = async (page: Page, role: 'Staff' | 'HOD', ready = true, legacy = fa
     if (legacy) useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === ids[1] ? { ...task, status: 'Completed', isCompleted: true, internalReview: undefined } : task) }));
     const actor = role === 'Staff' ? worker : hod;
     enablePasswordResetBypass(actor.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${actor.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${actor.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', 'en');
     useStore.setState({ currentUser: actor });
     return { workId: ids[0], reviewId: ids[1], publishId: ids[2], reviewTitle: useStore.getState().tasks.find(task => task.id === ids[1])!.title, workTitle: useStore.getState().tasks.find(task => task.id === ids[0])!.title };

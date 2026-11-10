@@ -8,7 +8,7 @@ test('the Boss sees departments and projects with staffing gaps', async ({ page 
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
@@ -50,7 +50,7 @@ test('a PM does not see the staffing gaps panel', async ({ page }) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const pm = state.users.find(user => user.role === 'Project Manager' && !user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${pm.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${pm.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...pm, mustResetPassword: false }, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   });
   await page.goto('/');

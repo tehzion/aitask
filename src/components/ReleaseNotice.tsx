@@ -32,6 +32,7 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
   const [isOpen, setIsOpen] = React.useState(false);
   const dismissedThisSession = React.useRef(new Set<string>());
   const upgradeRequired = useStore(state => state.backend.upgradeRequired === true);
+  const rolePermissions = useStore(state => state.rolePermissions);
 
   React.useEffect(() => {
     const requiresPasswordSetup = Boolean(
@@ -90,7 +91,7 @@ const ReleaseNotice: React.FC<ReleaseNoticeProps> = ({ currentUser, isReady }) =
   }, [currentUser, upgradeRequired]);
 
   if (!currentUser || !isOpen) return null;
-  const copy = getReleaseNoticeCopy(currentUser, locale);
+  const copy = getReleaseNoticeCopy(currentUser, locale, rolePermissions);
 
   return (
     <ModalShell

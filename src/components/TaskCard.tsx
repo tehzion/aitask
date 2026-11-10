@@ -14,6 +14,7 @@ import { useTaskNextStep } from '../hooks/useTaskNextStep';
 import { useQuickTaskAction } from '../hooks/useQuickTaskAction';
 import { useQuickAssign } from '../hooks/useQuickAssign';
 import { StatusChip } from './ui';
+import TaskSaveNote from './TaskSaveNote';
 import { useI18n } from './I18nProvider';
 
 const statusTone = (task: Pick<Task, 'status' | 'isCompleted'>) => {
@@ -29,6 +30,7 @@ export const TaskStatusBadges: React.FC<{ task: Task; overdue?: boolean; classNa
   return <span className={cn('inline-flex flex-wrap items-center gap-x-3 gap-y-1', className)}>
     <StatusChip tone={statusTone(task)}>{getLocalizedTaskStatus(task.status, locale)}</StatusChip>
     {overdue && <StatusChip tone="red">{t('Overdue')}</StatusChip>}
+    <TaskSaveNote taskId={task.id} />
   </span>;
 };
 

@@ -12,7 +12,7 @@ const seedReview = async (page: import('@playwright/test').Page, locale: string)
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     const client = { ...state.clients[0], id: 'review-client', clientName: 'Review Company', createdBy: boss.id };
     const plan = { ...state.clientPlans[0], id: 'review-plan', clientId: client.id, clientName: client.clientName, name: 'Review Plan', status: 'Active' as const, revision: 1 };
     const cycle = { ...state.serviceCycles[0], id: 'review-cycle', planId: plan.id, clientId: client.id, clientName: client.clientName, status: 'Draft' as const, periodStart: '2026-10-01', periodEnd: '2026-10-31', serviceItems: [] };

@@ -12,7 +12,7 @@ const seed = async (page: Page, route = '/calendar') => {
     const state = useStore.getState();
     const staff = state.users.find(user => user.name === 'Staff Demo')!;
     enablePasswordResetBypass(staff.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${staff.id}`, 'acknowledged');
     const today = new Date();
     const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     useStore.setState({ currentUser: { ...staff, mustResetPassword: false },

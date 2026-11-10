@@ -19,7 +19,7 @@ const seedPanels = async (page: Page, theme: 'light' | 'dark') => {
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
     enablePasswordResetBypass(boss.id);
     localStorage.setItem('aitask-color-theme', selectedTheme);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     const now = new Date();
     const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
