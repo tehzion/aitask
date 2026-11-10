@@ -706,7 +706,7 @@ registerUiTranslations({
   'Planned deliverables': '计划交付物',
   'Review task links': '检查任务关联',
   'Task without a deliverable link': '任务尚未关联交付物',
-  'No eligible deliverable. Review the company service cycle.': '暂无可关联的交付物，请检查公司的服务周期。',
+  'No eligible deliverable. Review this company’s current month.': '暂无可关联的交付物，请检查该公司的当前月份。',
   'Link task': '关联任务',
   'Completed task without a deliverable link': '已完成任务尚未关联交付物',
   'Retry pending save': '重试待保存更改',

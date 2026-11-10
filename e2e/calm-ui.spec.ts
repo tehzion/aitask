@@ -26,7 +26,7 @@ const openDemoWorkspace = async (page: import('@playwright/test').Page) => {
   if (/\/settings$/.test(page.url())) {
     await page.getByRole('button', { name: 'Continue for now' }).click();
   }
-  const releaseNotice = page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' });
+  const releaseNotice = page.getByRole('dialog', { name: 'Clearer words for plans and months' });
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
   await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();

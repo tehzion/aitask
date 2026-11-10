@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 const dismissReleaseNotice = async (page: import('@playwright/test').Page) => {
-  const releaseNotice = page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' });
+  const releaseNotice = page.getByRole('dialog', { name: 'Clearer words for plans and months' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
   if (await releaseNotice.isVisible()) {
     await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
@@ -58,7 +58,7 @@ test('user-authored task content stays exactly as typed in Chinese mode', async 
     await expect(continueButton).toBeVisible();
     await continueButton.click();
   }
-  await page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' })
+  await page.getByRole('dialog', { name: 'Clearer words for plans and months' })
     .getByRole('button', { name: 'Happy working' }).click();
 
   // Seed a task whose title collides with UI dictionary keys, plus a client named "Settings".
@@ -118,7 +118,7 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
     await expect(continueButton).toBeVisible();
     await continueButton.click();
   }
-  await page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' })
+  await page.getByRole('dialog', { name: 'Clearer words for plans and months' })
     .getByRole('button', { name: 'Happy working' }).click();
 
   const seeded = await page.evaluate(async () => {
@@ -206,7 +206,7 @@ test('client delivery search preserves Chinese IME composition without repeating
   await page.waitForURL(/\/(?:settings)?$/);
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   if (/\/settings$/.test(page.url())) await continueButton.click();
-  await page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' })
+  await page.getByRole('dialog', { name: 'Clearer words for plans and months' })
     .getByRole('button', { name: 'Happy working' }).click();
 
   await page.evaluate(() => localStorage.setItem('aitask:release-notice:2026-11-start-wording:client-ime', 'acknowledged'));
