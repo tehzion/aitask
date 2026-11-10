@@ -273,7 +273,9 @@ const ServiceRoleDashboard = () => {
         <h2 id="pm-day-title" className="text-lg font-semibold text-ink">{t('My day')}</h2>
         <TaskQueue title={t('Awaiting your review')} tasks={personal.mine} empty={t('Nothing is waiting for your review.')} />
         <BulkApprovePanel tasks={personal.mine} />
+        <TaskQueue title={t('Ready to finalize')} tasks={personal.completion} empty={t('No tasks awaiting final completion.')} />
         <TaskQueue title={t('Overdue')} tasks={overdue} empty={t('No overdue tasks.')} />
+        <TaskQueue title={t('Due today')} tasks={dueToday} empty={t('No tasks due today.')} />
         <Surface className="overflow-hidden"><div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Months to publish')}</h3></div>
           <ul className="divide-y divide-line/60">{monthsToPublish.map(cycle => <li key={cycle.id} className="px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=delivery&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`} className="font-medium text-accent hover:underline"><span data-i18n-skip>{cycle.clientName}</span> · {t('Awaiting publication')}</Link></li>)}</ul>
           {monthsToPublish.length === 0 && <p className="px-5 py-4 text-sm text-muted">{t('No months to publish.')}</p>}

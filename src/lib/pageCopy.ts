@@ -1594,6 +1594,7 @@ registerUiTranslations({
   'Suggested deliverable': '建议关联的交付项',
   'No clear suggestion': '暂无明确建议',
   'No unlinked work this month.': '本月没有未关联的工作。',
+  'No tasks due today.': '今天没有到期任务。',
   'No overdue tasks.': '没有逾期任务。',
   'Monthly contract value at risk': '有风险的月合同金额',
   'Weekly company health': '每周客户健康状况',
