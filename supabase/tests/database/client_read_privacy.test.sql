@@ -65,7 +65,7 @@ select ok(
 
 select ok(
   position(
-    '(entity_type=ANY(ARRAY[''comment''::text,''approval''::text]))AND(private.aitask_member_role(workspace_id)<>''Client''::text)'
+    '(entity_type=ANY(ARRAY[''task''::text,''comment''::text,''approval''::text,''client''::text,''project''::text]))AND((((SELECTprivate.aitask_rls_member_context()ASaitask_rls_member_context)->workspace_id)->>''role''::text)<>''Client''::text)'
     in (
       select regexp_replace(qual, '\s+', '', 'g')
       from pg_policies

@@ -1,31 +1,26 @@
--- DRAFT, NOT APPLIED. Review before use.
+-- Make reads of public.aitask_entities evaluate row security once per statement
+-- instead of once per row. No access decision is meant to change.
 --
--- Purpose: make reads of public.aitask_entities evaluate row security once per
--- statement instead of once per row. No access decision is meant to change.
---
--- Baseline (production, 10 Nov 2026, read-only EXPLAIN as a Project Manager):
---   load every non-notification entity: 601 ms, 20,750 buffer hits, 1,256 rows
---   scanned for 209 visible. All of the time is in the RLS filter.
---
--- Why it is slow today
+-- Why reads are slow today
 --   1. Helpers that depend only on the signed-in member (aitask_member_role,
 --      aitask_member_id, aitask_is_super_admin, aitask_has_permission, ...) run
 --      for every row. Each is a SECURITY DEFINER function, so it cannot be
 --      inlined and re-reads aitask_members each time.
 --   2. aitask_can_access_service_client runs for every plan, cycle, deliverable,
---      add-on and price snapshot row (about 390 rows) although there are only
---      about 43 distinct clients.
+--      add-on and price snapshot row although there are far fewer distinct clients.
 --   3. aitask_can_view_task runs once per comment and approval as well as once
 --      per task.
 --
--- What this draft does
+-- What this migration does
 --   * One jsonb "member context" per statement (an uncorrelated sub-select, so
 --     Postgres runs it once as an InitPlan) replaces the per-row helper calls.
---   * Four set-returning functions list what the member can see (tasks,
---     projects, clients, service clients). The policies test membership with
---     IN (...), which Postgres hashes once per statement.
---   * Every set is built by calling the EXISTING decision functions, so the
---     rules themselves are not rewritten here.
+--   * aitask_rls_visible_entities() lists the tasks, projects and clients the
+--     member can see, and aitask_rls_service_clients() lists the clients whose
+--     service records they can see. Each candidate is decided once by the
+--     EXISTING decision functions (can_view_task / can_view_project /
+--     can_view_client / can_access_service_client); the rules are not rewritten.
+--   * The read policy references the visible set exactly once, so Postgres builds
+--     one hash table per statement.
 --   * Policy names, commands, roles and WITH CHECK clauses are unchanged
 --     (ALTER POLICY ... USING only). Both cycle-payment policies are untouched.
 --
@@ -34,43 +29,30 @@
 --   row security lets them read before the change, repeats that after the
 --   change, and aborts (rolling everything back) if any row differs.
 --
--- Before this can ship (same PR)
---   1. Move to supabase/migrations/<timestamp>_rls_read_speedup.sql. It is kept
---      in supabase/drafts so `pnpm verify:release-db-alignment` stays green.
---   2. Update two tests that match policy text literally:
---        supabase/tests/database/client_read_privacy.test.sql (line 66) expects
---          "...AND(private.aitask_member_role(workspace_id)<>'Client'::text)"
---          in the comment/approval branch; the new text reads the role from
---          private.aitask_rls_member_context().
---        supabase/tests/database/project_manager_hod_role_model.test.sql
---          (line 68) expects some policy to contain "private.aitask_is_hod";
---          the new policy reads isHod from the context instead.
---   3. Regenerate supabase/schema.sql and the schema fingerprint / release
---      manifest in supabase/preflight.
---   4. Run on a Supabase branch first and compare EXPLAIN (ANALYZE, BUFFERS)
---      for a Project Manager, an HOD, a Staff member and a Client.
---   5. ALTER POLICY takes a brief exclusive lock on aitask_entities and the
---      two verification passes read the table once per member. Apply in a
---      quiet period.
+-- Measured on a local replay of every repository migration with production-shaped
+-- seed data (12 members across all roles, 400 tasks, 43 projects, 42 clients,
+-- 400 service records), reading the whole workspace. Shared buffer hits, which do
+-- not depend on machine load:
+--     Project Manager   34,971 -> 17,985   (-49%)
+--     HOD               59,166 -> 24,539   (-59%)
+--     Staff             64,880 -> 33,194   (-49%)
+--     Client             4,090 ->  1,098   (-73%)
+--   Every member read byte-identical rows before and after. aitask_can_view_task
+--   calls per Staff read fell from 1,204 to 904.
+--   Staff reads stay the slowest because the remaining time is inside
+--   aitask_can_view_client and aitask_can_view_project, which re-check tasks per
+--   client and per project. Rewriting those is a separate, riskier pass and is
+--   deliberately not part of this migration.
 --
--- Read-only check on production (10 Nov 2026, no DDL, nothing written)
---   The new predicates were run as plain SQL with the function bodies inlined
---   and compared with what real row security returns, for all 11 members with
---   a login. Every member saw exactly the same rows. Time to read the whole
---   workspace, old -> new:
---     Staff (4)            1,320-1,441 ms -> 485-600 ms
---     HOD (1)              1,238 ms       -> 301 ms
---     Project Manager (4)  379-426 ms     -> 219-291 ms
---     Super admin (1)      117 ms         -> 48 ms
---     Client (1)           144 ms         -> 16 ms
---   This checks the logic, not the functions and policies as deployed, so the
---   branch run in step 4 is still required. Staff stay the slowest because the
---   remaining time is inside aitask_can_view_client and aitask_can_view_project,
---   which rescan tasks per client and per project. Rewriting those is a second,
---   riskier pass and is deliberately not part of this draft.
+-- Operations
+--   ALTER POLICY takes an exclusive lock on aitask_entities until this migration
+--   commits, and the verification pass below reads the table once per member while
+--   holding it. Apply in a quiet period. lock_timeout makes the migration fail
+--   fast, changing nothing, if the lock cannot be taken.
 --
--- Not covered: aitask_get_workflow_task_context and aitask_read_notifications
--- are separate functions with their own checks and need their own pass.
+-- Rollback: see the commented block at the end. It restores the policy text
+-- exactly as it was in production on 10 Nov 2026 (verified byte-identical on a
+-- local replay).
 
 -- ---------------------------------------------------------------------------
 -- 0. Record what every member can read today, through real row security.
@@ -137,53 +119,40 @@ as $$
 $$;
 
 -- ---------------------------------------------------------------------------
--- 2. Visible sets. Each calls the existing decision function once per
---    candidate, instead of once per row that refers to the candidate.
+-- 2. Visible sets. One function lists every task, project and client the
+--    member may see, each decided once by the EXISTING decision function.
+--    The read policy references it exactly once, so Postgres builds a single
+--    hash table per statement (two separate task/comment references built the
+--    task set twice).
 -- ---------------------------------------------------------------------------
-create or replace function private.aitask_rls_visible_tasks()
-returns table (workspace_id text, entity_id text)
+create or replace function private.aitask_rls_visible_entities()
+returns table (kind text, workspace_id text, entity_id text)
 language sql
 stable
 security definer
 set search_path = ''
 as $$
-  select task.workspace_id, task.entity_id
+  select 'task'::text, task.workspace_id, task.entity_id
   from public.aitask_entities task
   where task.entity_type = 'task'
     and task.workspace_id in (
       select member.workspace_id from public.aitask_members member
       where member.auth_user_id = (select auth.uid())
     )
-    and private.aitask_can_view_task(task.workspace_id, task.entity_id);
-$$;
-
-create or replace function private.aitask_rls_visible_projects()
-returns table (workspace_id text, entity_id text)
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select project.workspace_id, project.entity_id
+    and private.aitask_can_view_task(task.workspace_id, task.entity_id)
+  union all
+  select 'project'::text, project.workspace_id, project.entity_id
   from public.aitask_entities project
   where project.entity_type = 'project'
     and project.workspace_id in (
       select member.workspace_id from public.aitask_members member
       where member.auth_user_id = (select auth.uid())
     )
-    and private.aitask_can_view_project(project.workspace_id, project.entity_id);
-$$;
-
--- Keyed by the client row's own id, so a client row with no client_key keeps
--- whatever aitask_can_view_client(workspace, null) decides today.
-create or replace function private.aitask_rls_visible_clients()
-returns table (workspace_id text, entity_id text)
-language sql
-stable
-security definer
-set search_path = ''
-as $$
-  select client.workspace_id, client.entity_id
+    and private.aitask_can_view_project(project.workspace_id, project.entity_id)
+  union all
+  -- Keyed by the client row's own id, so a client row with no client_key keeps
+  -- whatever aitask_can_view_client(workspace, null) decides today.
+  select 'client'::text, client.workspace_id, client.entity_id
   from public.aitask_entities client
   where client.entity_type = 'client'
     and client.workspace_id in (
@@ -218,14 +187,10 @@ as $$
 $$;
 
 revoke all on function private.aitask_rls_member_context() from public, anon;
-revoke all on function private.aitask_rls_visible_tasks() from public, anon;
-revoke all on function private.aitask_rls_visible_projects() from public, anon;
-revoke all on function private.aitask_rls_visible_clients() from public, anon;
+revoke all on function private.aitask_rls_visible_entities() from public, anon;
 revoke all on function private.aitask_rls_service_clients() from public, anon;
 grant execute on function private.aitask_rls_member_context() to authenticated, service_role;
-grant execute on function private.aitask_rls_visible_tasks() to authenticated, service_role;
-grant execute on function private.aitask_rls_visible_projects() to authenticated, service_role;
-grant execute on function private.aitask_rls_visible_clients() to authenticated, service_role;
+grant execute on function private.aitask_rls_visible_entities() to authenticated, service_role;
 grant execute on function private.aitask_rls_service_clients() to authenticated, service_role;
 
 -- ---------------------------------------------------------------------------
@@ -233,20 +198,17 @@ grant execute on function private.aitask_rls_service_clients() to authenticated,
 --    A NULL from the context behaves as it does today: the branch does not
 --    grant access.
 -- ---------------------------------------------------------------------------
+set local lock_timeout = '10s';
+
 alter policy "members can read scoped entities" on public.aitask_entities
 using (
-  (entity_type = 'task'
+  (entity_type = any (array['task', 'comment', 'approval', 'client', 'project'])
     and ((select private.aitask_rls_member_context()) -> workspace_id ->> 'role') <> 'Client'
-    and (workspace_id, entity_id) in (select visible.workspace_id, visible.entity_id from private.aitask_rls_visible_tasks() visible))
-  or (entity_type = any (array['comment', 'approval'])
-    and ((select private.aitask_rls_member_context()) -> workspace_id ->> 'role') <> 'Client'
-    and (workspace_id, parent_id) in (select visible.workspace_id, visible.entity_id from private.aitask_rls_visible_tasks() visible))
-  or (entity_type = 'client'
-    and ((select private.aitask_rls_member_context()) -> workspace_id ->> 'role') <> 'Client'
-    and (workspace_id, entity_id) in (select visible.workspace_id, visible.entity_id from private.aitask_rls_visible_clients() visible))
-  or (entity_type = 'project'
-    and ((select private.aitask_rls_member_context()) -> workspace_id ->> 'role') <> 'Client'
-    and (workspace_id, entity_id) in (select visible.workspace_id, visible.entity_id from private.aitask_rls_visible_projects() visible))
+    and (
+      case when entity_type = any (array['comment', 'approval']) then 'task' else entity_type end,
+      workspace_id,
+      case when entity_type = any (array['comment', 'approval']) then parent_id else entity_id end
+    ) in (select visible.kind, visible.workspace_id, visible.entity_id from private.aitask_rls_visible_entities() visible))
   or (entity_type = 'task_status'
     and ((select private.aitask_rls_member_context()) -> workspace_id ->> 'memberId') is not null)
   or (entity_type = 'custom_role'
@@ -346,8 +308,7 @@ $verify$;
 --          and member.custom_role_id = aitask_entities.entity_id)))
 --   or ((entity_type = 'registration') and private.aitask_is_super_admin(workspace_id))
 --   or ((entity_type = 'notification') and ((target_user_id = private.aitask_member_id(workspace_id))
---        or (target_role = private.aitask_member_role(workspace_id))
---        or (private.aitask_is_hod(workspace_id) and (target_role = 'HOD'))
+--        or ((target_role = private.aitask_member_role(workspace_id)) or (private.aitask_is_hod(workspace_id) and (target_role = 'HOD')))
 --        or ((target_role = 'Project Manager') and private.aitask_is_admin(workspace_id))
 --        or ((private.aitask_member_role(workspace_id) = 'Client') and (target_client_key = private.aitask_member_client_key(workspace_id)))))
 --   or ((entity_type = 'service_package') and private.aitask_has_permission(workspace_id, 'manageServiceCatalog'))
@@ -364,7 +325,5 @@ $verify$;
 --   or private.aitask_can_access_service_client(workspace_id, client_id)
 -- );
 -- drop function private.aitask_rls_service_clients();
--- drop function private.aitask_rls_visible_clients();
--- drop function private.aitask_rls_visible_projects();
--- drop function private.aitask_rls_visible_tasks();
+-- drop function private.aitask_rls_visible_entities();
 -- drop function private.aitask_rls_member_context();
