@@ -32,7 +32,7 @@ const seedPM = async (page: Page) => {
     stopBackendAutoSync();
   });
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: 'Requires your action', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'My day', exact: true })).toBeVisible();
 };
 const queue = (page: Page, title: string) => page.getByRole('heading', { name: title, exact: true }).locator('../..');
 

@@ -70,6 +70,8 @@ const seed = async (page: Page, actor: Actor, locale: 'en' | 'zh' = 'en') => {
 const main = (page: Page) => page.locator('main');
 // Tables keep a hidden mobile card for each row; only the rendered copy counts.
 const visibleText = (page: Page, text: string) => main(page).getByText(text, { exact: true }).filter({ visible: true });
+// The PM portfolio panels on /tasks (e.g. Unlinked work this month) can list the same task, so stage checks look only at the task list.
+const taskListText = (page: Page, text: string) => main(page).locator(`xpath=.//*[not(ancestor-or-self::section[@aria-labelledby="portfolio-workbench-title"])][normalize-space(text())="${text}"]`).filter({ visible: true });
 const queue = (page: Page, title: string) => page.getByRole('heading', { name: title, exact: true }).locator('../..');
 const metric = (page: Page, label: string) => main(page).getByRole('definition').locator('..').filter({ hasText: label }).getByRole('definition');
 
@@ -157,10 +159,10 @@ test.describe('review queues show only decisions the user can take', () => {
     await page.goto('/tasks');
     await expect(page.getByRole('heading', { name: 'Portfolio', exact: true })).toBeVisible();
     await expect(page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^Active work \d+$/ })).toHaveAttribute('aria-pressed', 'true');
-    await expect(visibleText(page, 'RV approved poster')).toHaveCount(0);
+    await expect(taskListText(page, 'RV approved poster')).toHaveCount(0);
     await page.getByRole('group', { name: 'Task stages' }).getByRole('button', { name: /^Completed \d+$/ }).click();
-    await expect(visibleText(page, 'RV approved poster')).toBeVisible();
-    await expect(visibleText(page, 'RV finished logo')).toBeVisible();
+    await expect(taskListText(page, 'RV approved poster')).toBeVisible();
+    await expect(taskListText(page, 'RV finished logo')).toBeVisible();
   });
 
   test('HOD acts on department reviews only and keeps finished work under Done', async ({ page }) => {
@@ -274,6 +276,6 @@ test('task scope and dashboard labels are translated into Simplified Chinese', a
   await expect(filters.getByRole('button', { name: '全部任务' })).toBeVisible();
   await seed(page, 'pm', 'zh');
   await page.goto('/');
-  await expect(page.getByRole('heading', { name: '需要您处理' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '我的一天' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '部门审核中' })).toBeVisible();
 });
