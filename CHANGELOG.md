@@ -24,6 +24,10 @@ number remain uniquely identifiable.
 
 ### Changed
 
+- A draft revision's start date can now be changed. Pick any later billing date of the
+  current plan, up to 12 months ahead; the revision starts on that date and not
+  before it. Dates that are not one of the plan's billing dates are refused. The
+  monthly billing day was already editable and applies from the new start.
 - The client dashboard now lists every deliverable waiting on the client under
   "Waiting on you", and each opens its review in place.
 - Workspace reads check access once per read instead of once per row, which cuts

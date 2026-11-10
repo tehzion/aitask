@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ClientServicePlan, Deliverable, ServiceItem, Task } from '../types';
-import { applyPricingSnapshot, calculatePlanTotalMinor, clampBillingDate, cyclePeriodEnd, getCycleServiceProgress, makeCycleRecords, makePricingSnapshot, nextBillingDate, nextRevisionBoundary, resolveDeliverableStatus, SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow, stripServiceItemPrices } from './serviceManagement';
+import { applyPricingSnapshot, calculatePlanTotalMinor, clampBillingDate, cyclePeriodEnd, getCycleServiceProgress, makeCycleRecords, makePricingSnapshot, isRevisionStartBoundary, nextBillingDate, nextRevisionBoundary, resolveRevisionStart, resolveDeliverableStatus, SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow, stripServiceItemPrices } from './serviceManagement';
 
 const items: ServiceItem[] = [{ id: 'item-1', name: 'Video', platforms: ['TikTok'], unit: 'video', quantity: 3, unitPriceMinor: 12500 }];
 
@@ -115,5 +115,35 @@ describe('nextRevisionBoundary', () => {
     expect(nextRevisionBoundary({ nextCycleStart: '2026-10-16', billingDay: 16 }, '2026-11-04')).toBe('2026-11-16');
     expect(nextRevisionBoundary({ nextCycleStart: '2026-11-04', billingDay: 4 }, '2026-11-04')).toBe('2026-12-04');
     expect(nextRevisionBoundary({ billingDay: 31 }, '2026-11-04')).toBe('2026-11-30');
+  });
+});
+
+describe('revision start dates', () => {
+  const source = { nextCycleStart: '2026-11-16', billingDay: 16 };
+
+  it('accepts only the plan’s billing dates, from the next boundary up to a year ahead', () => {
+    expect(isRevisionStartBoundary(source, '2026-11-16', '2026-11-04')).toBe(true);
+    expect(isRevisionStartBoundary(source, '2026-12-16', '2026-11-04')).toBe(true);
+    expect(isRevisionStartBoundary(source, '2027-11-16', '2026-11-04')).toBe(true);
+    expect(isRevisionStartBoundary(source, '2027-12-16', '2026-11-04')).toBe(false);
+    expect(isRevisionStartBoundary(source, '2026-11-15', '2026-11-04')).toBe(false);
+    expect(isRevisionStartBoundary(source, '2026-10-16', '2026-11-04')).toBe(false);
+    expect(isRevisionStartBoundary(source, 'not a date', '2026-11-04')).toBe(false);
+  });
+
+  it('follows short months for late billing days', () => {
+    const late = { billingDay: 31 };
+    expect(isRevisionStartBoundary(late, '2026-01-31', '2026-01-10')).toBe(true);
+    expect(isRevisionStartBoundary(late, '2026-02-28', '2026-01-10')).toBe(true);
+    expect(isRevisionStartBoundary(late, '2026-03-31', '2026-01-10')).toBe(true);
+    expect(isRevisionStartBoundary(late, '2026-02-27', '2026-01-10')).toBe(false);
+  });
+
+  it('uses the chosen later date, and otherwise rolls forward to the next boundary', () => {
+    expect(resolveRevisionStart(source, '2026-12-16', '2026-11-04')).toBe('2026-12-16');
+    expect(resolveRevisionStart(source, '2026-11-16', '2026-11-04')).toBe('2026-11-16');
+    expect(resolveRevisionStart(source, '2026-10-16', '2026-11-04')).toBe('2026-11-16');
+    expect(resolveRevisionStart(source, '2026-12-20', '2026-11-04')).toBe('2026-11-16');
+    expect(resolveRevisionStart(source, undefined, '2026-11-04')).toBe('2026-11-16');
   });
 });

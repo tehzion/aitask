@@ -164,7 +164,8 @@ import {
   makeCycleRecords,
   makePricingSnapshot,
   nextBillingDate,
-  nextRevisionBoundary,
+  isRevisionStartBoundary,
+  resolveRevisionStart,
   resolveDeliverableStatus,
   canSetDeliverableStatus,
   getPlanContractStartDate,
@@ -4781,7 +4782,9 @@ export const useStore = create<StoreState>()(
         if (expectedVersion !== undefined && plan.version !== expectedVersion) return { ok: false, error: 'This revision changed elsewhere. Review the saved revision before saving.' };
         const source = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
         if (!source || source.status !== 'Active') return { ok: false, error: 'Resume the active plan before scheduling a revision.' };
-        const next = nextRevisionBoundary(source, getBillingToday());
+        // The chosen start date counts only while it is still a valid boundary; a
+        // date that has passed rolls forward to the next one (see resolveRevisionStart).
+        const next = resolveRevisionStart(source, plan.startDate, getBillingToday());
         if (next !== effectiveDate) return { ok: false, error: 'The billing date changed. Refresh and review the next cycle before scheduling.' };
         const error = validateRevisionItems(plan.serviceItems);
         if (error) return { ok: false, error };
@@ -4825,6 +4828,12 @@ export const useStore = create<StoreState>()(
         const nextStartDate = data.startDate !== undefined
           ? (isValidIsoDate(data.startDate) ? data.startDate : plan.startDate)
           : plan.startDate;
+        if (plan.supersedesPlanId && nextStartDate !== plan.startDate) {
+          const revisionSource = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
+          if (revisionSource?.status === 'Active' && !isRevisionStartBoundary(revisionSource, nextStartDate, getBillingToday())) {
+            return { ok: false, error: 'Start date must be one of this plan’s billing dates, within the next 12 months.' };
+          }
+        }
         const nextBillingDay = data.billingDay !== undefined
           ? Math.min(31, Math.max(1, Math.trunc(data.billingDay)))
           : plan.billingDay;
