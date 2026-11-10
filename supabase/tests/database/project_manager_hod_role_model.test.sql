@@ -70,8 +70,11 @@ select ok(
     select 1
     from pg_policies
     where schemaname = 'public'
-      and coalesce(qual, '') like '%private.aitask_is_hod%'
-  ),
+      and policyname = 'members can read scoped entities'
+      and coalesce(qual, '') like '%''isHod''%'
+      and coalesce(qual, '') like '%target_role = ''HOD''%'
+  )
+  and position('private.aitask_is_hod' in pg_get_functiondef('private.aitask_rls_member_context()'::regprocedure)) > 0,
   'notification RLS includes direct HOD targeting'
 );
 select is(

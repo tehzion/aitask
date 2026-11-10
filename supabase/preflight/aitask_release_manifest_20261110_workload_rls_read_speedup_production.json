@@ -1,0 +1,54 @@
+{
+  "manifestVersion": "2026-11-10.4",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261110_workload_production.json",
+  "immutable": false,
+  "capturedAt": "2026-11-10T07:33:48Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "PENDING APPROVAL: 20261110062504_hod_staff_workload_summary and 20261110170000_rls_read_speedup have not been applied to production.",
+  "validatedMigrationTail": [
+    "20261023154255_bind_service_command_entity_types",
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover",
+    "20261102120000_plan_activation_entity_types",
+    "20261102130000_hod_assignee_output_files",
+    "20261102140000_addon_save_entity_types",
+    "20261102150000_task_assigned_at_format",
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign",
+    "20261103125940_hod_department_delegation_disable_staff_creation",
+    "20261103125949_pm_direct_internal_assignment",
+    "20261103143949_service_cycle_payments",
+    "20261104053237_restore_hod_handoff_and_codify_live_grants",
+    "20261104062406_block_project_delete_with_linked_tasks",
+    "20261106041228_optimize_pm_service_access",
+    "20261109141920_r3_s1_project_approval_pm",
+    "20261109193707_aitask_client_events",
+    "20261110015703_release_notice_everyday_saves",
+    "20261110062504_hod_staff_workload_summary",
+    "20261110170000_rls_read_speedup"
+  ],
+  "pendingProductionMigrations": [
+    "20261110062504_hod_staff_workload_summary",
+    "20261110170000_rls_read_speedup"
+  ],
+  "productionVerification": {
+    "historyAligned": false,
+    "historyThrough": "20261110015703_release_notice_everyday_saves",
+    "latestAppliedMigration": "20261110015703_release_notice_everyday_saves"
+  },
+  "changeSummary": {
+    "20261110062504_hod_staff_workload_summary": "Adds a read-only, HOD-authorized staff workload aggregate across departments. It returns member names, departments and counts, not task records, and does not alter existing task visibility.",
+    "20261110170000_rls_read_speedup": "Speeds up reads of aitask_entities by evaluating row security once per statement instead of once per row. Adds three private helper functions (aitask_rls_member_context, aitask_rls_visible_entities, aitask_rls_service_clients) and alters only the USING clause of the two read policies 'members can read scoped entities' and 'PM service records stay in portfolio'. Access rules are unchanged: the existing decision functions still make every decision. The migration records what each login can read before and after and aborts if any row differs."
+  },
+  "qualityGates": {
+    "localDatabase": "PASS: clean replay of all 147 migrations; full pgTAP suite 91 files / 1,280 assertions with 0 failures (baseline before this migration: 90 files / 1,263; 17 new assertions in rls_read_speedup.test.sql, which compare every role's RLS read with the previous per-row rule); mutation check: deliberately broken policies fail 7 and 2 of those assertions; supabase db lint and advisors report nothing on the new functions.",
+    "performance": "Local replay with production-shaped seed data (12 logins across all roles, 400 tasks, 43 projects, 42 clients, 400 service records), full workspace read, shared buffer hits: Project Manager 34,971 -> 17,985; HOD 59,166 -> 24,539; Staff 64,880 -> 33,194; Client 4,090 -> 1,098. Every login read byte-identical rows. Not yet measured on production data; Staff reads remain the slowest because can_view_client and can_view_project re-check tasks.",
+    "rollback": "The commented rollback block in the migration was executed locally and restored both policies byte-identical to production's (md5 of the deparsed USING text matches) and removed the helper functions.",
+    "productionApply": "PENDING OWNER APPROVAL. Do not apply to production without explicit authorization. Apply in a quiet period: ALTER POLICY holds an exclusive lock on aitask_entities until the migration commits (lock_timeout is 10s)."
+  }
+}
