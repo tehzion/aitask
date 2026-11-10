@@ -38,6 +38,30 @@ Suggested next step: resolve the actor once per call and pass it down, and compu
 
 **Review of `b6f4e7a`:** no blocking defects. Money figure reuses the existing `contractedMonthly` lookup and price gate; currency is typed `'MYR'`. Type check, lint, i18n (0 findings), 1,119 unit tests and `verify:bundle` (271.8 KiB gzip of 300) pass. Minor, not fixed: the client "View all N" link counts all review tasks while the list counts only those the client may review; the company health card is titled "Weekly" and "updated daily" but is computed live and lists every client including zero-issue rows; "Unlinked work this month" is not memoised and loops tasks by deliverables on every render. E2E: 7 of 8 specs pass. `client-workspace-v2.spec.ts:5` fails, but it fails identically at `4c560cf` (before that commit), where the app stays on "Loading AiTask…" after the test seeds its state.
 
+**Measure before the next change (stats reset 2026-11-10 11:45 UTC)**
+
+Decision: do not touch `aitask_get_workflow_task_context` until real traffic shows whether it still matters. Check after a day or two of normal use. Baseline before the reset (cumulative since 10 June, so it includes older code):
+
+| Statement | Calls | Mean | Worst |
+| --- | --- | --- | --- |
+| Main `aitask_entities` workspace read | 55,229 | 433 ms | 7,984 ms |
+| `aitask_get_workflow_task_context` | 3,038 | 2,016 ms | 7,978 ms |
+| `aitask_read_notifications` | 5,179 | 543 ms | 5,076 ms |
+
+Read-only query (production, via the Supabase connector):
+
+```sql
+select (select stats_reset from extensions.pg_stat_statements_info) as stats_since,
+  left(regexp_replace(query, '\s+', ' ', 'g'), 70) as q, calls,
+  round(mean_exec_time::numeric) as mean_ms, round(max_exec_time::numeric) as max_ms
+from extensions.pg_stat_statements
+where query ilike '%aitask_get_workflow_task_context%' or query ilike '%aitask_read_notifications%'
+   or query ilike '%aitask_entities%'
+order by mean_exec_time * calls desc limit 8;
+```
+
+Expectation: the workspace read and notifications well below the baseline; the workflow context function roughly unchanged. If its mean stays above about 1 s or its worst case approaches the 8 s statement timeout, do the safe dedupe first (compute the review input links and files once per task), then consider the full redesign with an equivalence test covering review gates and stored files.
+
 **Still needs the owner**
 
 - **Applied, verified live.** A Project Manager's full read went from 20,750 to 6,727 shared buffer hits (about 601 ms to 343 ms). Still to do with owner approval: reset query statistics (`pg_stat_statements`) so averages reflect the new code. Until then they still include old code. Rollback for the RLS change is the commented block in its migration.
