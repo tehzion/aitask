@@ -9,7 +9,6 @@ import UnavailableWork from '../components/UnavailableWork';
 import SystemMessage from '../components/SystemMessage';
 import { DeliveryProgress } from '../components/DeliveryProgress';
 import { useSaveAction } from '../hooks/useSaveAction';
-import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import React from "react";
@@ -32,7 +31,6 @@ import {
 import { Link, Navigate, useParams, useSearchParams, useLocation } from "react-router-dom";
 import { isPendingMutationResolution, useStore } from "../store";
 import type {
-  AddonBillingMode,
   AttachmentRef,
   CommentVisibility,
   DeliverableStatus,
@@ -101,7 +99,7 @@ import MonthlyPlanSchedule from "../components/MonthlyPlanSchedule";
 import CorrectDeliverableName from "../components/CorrectDeliverableName";
 import ContextualTutorialLink from "../components/ContextualTutorialLink";
 
-// Team feedback B (9 Nov 2026): Plan, Cycles, Add-ons and Overview are one tab.
+// Team feedback B (9 Nov 2026): Plan, Cycles and Overview are one tab.
 type Tab = "delivery" | "activity";
 const DeliveryReviewPanel = React.lazy(() => import('../components/DeliveryReviewPanel'));
 
@@ -153,11 +151,9 @@ const OperationsClientWorkspace = () => {
   const setMessage = (value: string | MessageDescriptor, tone: UiFeedback['tone'] = 'error') => setFeedback(value ? { message: value, tone } : null);
   const [downloadingFileId, setDownloadingFileId] = React.useState<string | null>(null);
   const [activityFeedback, setActivityFeedback] = React.useState<ActivityFeedback | null>(null);
-  const [addonSheetOpen, setAddonSheetOpen] = React.useState(false);
   const [generatingAll, setGeneratingAll] = React.useState(false);
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
-  const { busy: addonSaving, run: runServiceAction } = useSaveAction(clientId);
-  const pendingAddon = React.useRef<(typeof store.addons)[number] | null>(null);
+  const { busy: serviceSaving, run: runServiceAction } = useSaveAction(clientId);
   const [activitySaving, setActivitySaving] = React.useState(false);
   const [carryPending, setCarryPending] = React.useState<string | null>(null);
   const [carrySavePending, setCarrySavePending] = React.useState(false);
@@ -190,24 +186,10 @@ const OperationsClientWorkspace = () => {
   };
   const [planAction, setPlanAction] = React.useState<"pause" | "end" | null>(null);
   const planConfirmationTitleId = React.useId();
-  const [addonEndDates, setAddonEndDates] = React.useState<
-    Record<string, string>
-  >({});
-  const [addonDefaultDate] = React.useState(() => getTodayInputDate());
-  const [addon, setAddon] = React.useState({
-    name: "",
-    platforms: "",
-    quantity: 1,
-    unitPrice: 0,
-    billingMode: "one_off" as AddonBillingMode,
-    effectiveFrom: addonDefaultDate,
-    targetCycleId: "",
-  });
   React.useEffect(() => {
-    pendingAddon.current = null; setAddonSheetOpen(false); setPlanAction(null); setPlanSavePending(false); setCarrySavePending(false); setMessage(''); setDownloadingFileId(null);
-    setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: addonDefaultDate, targetCycleId: '' });
-  }, [clientId, store.currentUser?.id, addonDefaultDate]);
-  useUnsavedChanges(addonSaving || Boolean(addon.name.trim() || addon.platforms.trim() || addon.quantity !== 1 || addon.unitPrice !== 0 || addon.billingMode !== 'one_off' || addon.targetCycleId || addon.effectiveFrom !== addonDefaultDate));
+    setPlanAction(null); setPlanSavePending(false); setCarrySavePending(false); setMessage(''); setDownloadingFileId(null);
+  }, [clientId, store.currentUser?.id]);
+  useUnsavedChanges(serviceSaving);
 
   const [detailsPlanId, setDetailsPlanId] = React.useState<string | null>(null);
   const [activationConfirmOpen, setActivationConfirmOpen] = React.useState(false);
@@ -309,7 +291,6 @@ const OperationsClientWorkspace = () => {
       item.clientId === client.id &&
       (!isClient || item.visibility === "client-visible") && item.cycleId === selectedCycle?.id,
   );
-  const addons = store.addons.filter((item) => item.clientId === client.id);
   const tasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects }).filter(
     (item) =>
       item.clientId === client.id &&
@@ -342,7 +323,7 @@ const OperationsClientWorkspace = () => {
     return saved.ok;
   };
   const confirmPlanAction = async () => {
-    if (!activePlan || !planAction || addonSaving) return;
+    if (!activePlan || !planAction || serviceSaving) return;
     const saved = await saveAndCommit(
       store.setClientPlanStatus(activePlan.id, planAction === "pause" ? "Paused" : "Ended"),
       "client_plan.manage",
@@ -456,39 +437,6 @@ const OperationsClientWorkspace = () => {
     }
   };
 
-  const addAddon = async (event: React.FormEvent) => {
-    event.preventDefault();
-    if (!activePlan || addonSaving) return;
-    const retry = Boolean(pendingAddon.current);
-    if (!retry) {
-      if (addon.quantity < 1 || !Number.isInteger(addon.quantity) || addon.unitPrice < 0 || !Number.isFinite(addon.unitPrice)) {
-        setMessage("Enter a whole quantity of at least one and a valid non-negative price."); return;
-      }
-      if (addon.billingMode === "one_off" && !addon.targetCycleId) {
-        setMessage("Choose a service cycle for this one-off add-on."); return;
-      }
-      const result = store.addAddon({ clientId: client.id, clientName: client.clientName, planId: activePlan.id,
-        name: addon.name, platforms: addon.platforms.split(',').map(value => value.trim()).filter(Boolean),
-        quantity: addon.quantity, unitPriceMinor: Math.round(addon.unitPrice * 100), billingMode: addon.billingMode,
-        targetCycleId: addon.billingMode === 'one_off' ? addon.targetCycleId || undefined : undefined,
-        effectiveFrom: addon.effectiveFrom, isActive: true });
-      if (!result.ok) { setMessage(result.error || 'Unable to save this change.'); return; }
-      pendingAddon.current = useStore.getState().addons.find(item => item.id === result.id) || null;
-    }
-    const submitted = pendingAddon.current;
-    const saved = await runServiceAction(() => retry && shouldUseSecureSupabase() ? store.retryPendingSave('addon.manage') : store.commitPendingMutation('addon.manage'));
-    if (!saved) return;
-    if (!saved.ok) { setMessage(saved.error || 'The change is waiting to be saved.'); return; }
-    const latest = useStore.getState().addons.find(item => item.id === submitted?.id);
-    pendingAddon.current = null;
-    if (!submitted || !latest || ['name', 'platforms', 'quantity', 'unitPriceMinor', 'billingMode', 'targetCycleId', 'effectiveFrom'].some(key => JSON.stringify(latest[key as keyof typeof latest]) !== JSON.stringify(submitted[key as keyof typeof submitted]))) {
-      setMessage('The pending add-on is no longer available. Review your draft before saving again.'); return;
-    }
-    setMessage(msg('feedback.addonAdded'), 'success');
-    setAddon({ name: '', platforms: '', quantity: 1, unitPrice: 0, billingMode: 'one_off', effectiveFrom: addonDefaultDate, targetCycleId: '' });
-    setAddonSheetOpen(false);
-  };
-
   // Team feedback H: one action. A plan that starts this month (or earlier) is
   // activated and its month published in one confirmed step; a later start is
   // activated only, and that month shows Publish when it is due.
@@ -498,7 +446,7 @@ const OperationsClientWorkspace = () => {
     ? planToActivate.serviceItems.reduce((sum, item) => sum + item.quantity * (item.workflow?.steps.length || 0), 0)
     : 0;
   const activatePlan = async () => {
-    if (!planToActivate || addonSaving) return;
+    if (!planToActivate || serviceSaving) return;
     const result = store.activateClientPlan(planToActivate.id);
     if (!(await saveAndCommit(result, "client_plan.manage"))) return;
     if (activationPublishesNow && result.cycleId) {
@@ -516,7 +464,7 @@ const OperationsClientWorkspace = () => {
     if (await saveAndCommit(result, 'client_plan.manage')) setDetailsPlanId(result.planId || null);
   };
   const createRevision = async () => {
-    if (!renewalSourcePlan || addonSaving) return;
+    if (!renewalSourcePlan || serviceSaving) return;
     const result = store.createClientPlanRevision(renewalSourcePlan.id);
     const saved = await saveAndCommit(result, "client_plan.manage");
     if (saved) requestAnimationFrame(() => document.getElementById('next-month-plan')?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
@@ -529,19 +477,19 @@ const OperationsClientWorkspace = () => {
     setMessage(saved.ok ? msg('feedback.changesSaved') : saved.error || 'The change is waiting to be saved.', saved.ok ? 'success' : 'error');
   };
   const linkExistingTask = async (taskId: string, cycleId: string, deliverableId: string) => {
-    if (addonSaving || !taskId) return;
+    if (serviceSaving || !taskId) return;
     const saved = await saveAndCommit(store.linkTaskToDeliverable(taskId, cycleId, deliverableId), "task.update");
     if (saved) setMessage(msg('feedback.changesSaved'), 'success');
   };
   // F3: publish late, cancel or close a month that has ended.
   const setMonthStatus = async (cycleId: string, status: ServiceCycle["status"]) => {
-    if (addonSaving) return;
+    if (serviceSaving) return;
     await saveAndCommit(store.setServiceCycleStatus(cycleId, status), "service_cycle.manage");
   };
   // F6: correct a deliverable name in a published month, with a reason kept
   // as an internal note on that month.
   const correctDeliverableName = async (deliverableId: string, cycleId: string, title: string, reason: string) => {
-    if (addonSaving) return false;
+    if (serviceSaving) return false;
     const result = store.correctDeliverableName(deliverableId, title);
     const renamed = await saveAndCommit(result, "deliverable.manage");
     if (!renamed || !result.ok) return false;
@@ -554,14 +502,14 @@ const OperationsClientWorkspace = () => {
     return true;
   };
   const generateTaskChain = async (deliverableId: string) => {
-    if (addonSaving) return;
+    if (serviceSaving) return;
     const result = store.generateDeliverableTaskChain(deliverableId);
     await saveAndCommit(result, "deliverable.workflow.generate");
   };
   // One deliverable at a time: each chain is confirmed before the next starts,
   // and the run stops at the first failure so nothing is left half-saved.
   const generateAllTaskChains = async (deliverableIds: string[]) => {
-    if (addonSaving || generatingAll) return;
+    if (serviceSaving || generatingAll) return;
     setGeneratingAll(true);
     try {
       for (const deliverableId of deliverableIds) {
@@ -573,7 +521,7 @@ const OperationsClientWorkspace = () => {
     }
   };
   const carryForward = async (taskId: string, targetCycleId: string, targetDeliverableId?: string) => {
-    if (addonSaving || carryPending) return;
+    if (serviceSaving || carryPending) return;
     setCarryPending(taskId);
     try {
       const result = store.carryForwardTaskToCycle(taskId, targetCycleId, targetDeliverableId);
@@ -598,13 +546,6 @@ const OperationsClientWorkspace = () => {
     } finally {
       setCarryPending(null);
     }
-  };
-  const changeAddonState = async (addonId: string, isActive: boolean) => {
-    if (addonSaving) return;
-    await saveAndCommit(
-      store.setAddonActive(addonId, isActive, addonEndDates[addonId]),
-      "addon.manage",
-    );
   };
   const download = async (attachment: AttachmentRef) => {
     if (downloadingFileId) return;
@@ -655,7 +596,7 @@ const OperationsClientWorkspace = () => {
           ) : null
         }
       />
-      {activationConfirmOpen && planToActivate && <ModalShell labelledBy={activationTitleId} onClose={() => { if (!addonSaving) setActivationConfirmOpen(false); }} panelClassName="max-w-lg"><div className="p-5">
+      {activationConfirmOpen && planToActivate && <ModalShell labelledBy={activationTitleId} onClose={() => { if (!serviceSaving) setActivationConfirmOpen(false); }} panelClassName="max-w-lg"><div className="p-5">
         <h2 id={activationTitleId} className="font-semibold text-ink">{t(activationPublishesNow ? "Activate & publish this month" : "Activate plan")}</h2>
         <p className="mt-2 text-sm text-muted">{activationPublishesNow
           ? t("This activates the plan and publishes this month, so the team can start work.")
@@ -666,8 +607,8 @@ const OperationsClientWorkspace = () => {
         </ul>
         {activationPublishesNow && activationTaskCount > 0 && <p className="mt-3 text-sm text-muted">{t("{count} workflow tasks can then be generated from this month.", { count: activationTaskCount })}</p>}
         <div className="mt-5 flex justify-end gap-2">
-          <Button variant="secondary" disabled={addonSaving} onClick={() => setActivationConfirmOpen(false)}>{t("Cancel")}</Button>
-          <Button disabled={addonSaving} onClick={() => void activatePlan()}><Play className="h-4 w-4" />{t(activationPublishesNow ? "Activate & publish" : "Activate plan")}</Button>
+          <Button variant="secondary" disabled={serviceSaving} onClick={() => setActivationConfirmOpen(false)}>{t("Cancel")}</Button>
+          <Button disabled={serviceSaving} onClick={() => void activatePlan()}><Play className="h-4 w-4" />{t(activationPublishesNow ? "Activate & publish" : "Activate plan")}</Button>
         </div>
       </div></ModalShell>}
       {detailsPlan && canManagePlans && <ModalShell labelledBy="plan-details-title" onClose={() => setDetailsPlanId(null)} panelClassName="max-w-4xl"><div className="p-4"><h2 id="plan-details-title" className="mb-4 font-semibold">{t('Edit details')}</h2><DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${detailsPlan.id}`} plan={detailsPlan} source={store.clientPlans.find(item => item.id === detailsPlan.supersedesPlanId) || detailsPlan} /><Button variant="secondary" className="mt-4" onClick={() => setDetailsPlanId(null)}>{t('Close')}</Button></div></ModalShell>}
@@ -679,7 +620,7 @@ const OperationsClientWorkspace = () => {
       </div>
       <MonthlyRecordPicker records={monthly.available} selected={selectedCycle} current={monthly.current} unavailable={monthly.unavailable} onChange={selectMonth} />
       {canManagePlans && <RevisionRecoveryNotice plans={plans} activePlan={activePlan} />}
-      {message && !addonSheetOpen && (
+      {message && (
         <div
           className="rounded-control border border-line bg-inset px-4 py-3 text-sm font-medium text-ink"
           role={feedback?.tone === 'error' ? 'alert' : 'status'}
@@ -702,7 +643,7 @@ const OperationsClientWorkspace = () => {
           </Surface>
             {!isClient && <ClientSpecialNotes client={client} />}
           </div>
-          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} deliverables={store.deliverables} today={today} canManagePlans={canManagePlans} canManageCycles={!isClient && canManageCycles} busy={addonSaving} onSetCycleStatus={(id, status) => void setMonthStatus(id, status)} onEditDetails={() => void editDetails()} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => selectMonth(null)} />}
+          {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} deliverables={store.deliverables} today={today} canManagePlans={canManagePlans} canManageCycles={!isClient && canManageCycles} busy={serviceSaving} onSetCycleStatus={(id, status) => void setMonthStatus(id, status)} onEditDetails={() => void editDetails()} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => selectMonth(null)} />}
           {(selectedCycle ? [selectedCycle] : []).map((cycle) => {
             const cycleDeliverables = deliverables.filter(
               (item) => item.cycleId === cycle.id,
@@ -923,7 +864,7 @@ const OperationsClientWorkspace = () => {
                                   <Button
                                     variant="secondary"
                                     className="min-h-10 max-w-full"
-                                    disabled={addonSaving}
+                                    disabled={serviceSaving}
                                     aria-label={`${t("Link suggested task")}: ${ranked.suggestion.title} → ${deliverable.title}`}
                                     onClick={() => void linkExistingTask(ranked.suggestion!.id, cycle.id, deliverable.id)}
                                   >
@@ -933,7 +874,7 @@ const OperationsClientWorkspace = () => {
                                 <select
                                   aria-label={`${t("Link a task")}: ${deliverable.title}`}
                                   value=""
-                                  disabled={addonSaving}
+                                  disabled={serviceSaving}
                                   onChange={event => void linkExistingTask(event.target.value, cycle.id, deliverable.id)}
                                   className="min-h-10 max-w-full rounded-control border border-line bg-surface px-3 text-sm text-ink"
                                 >
@@ -945,7 +886,7 @@ const OperationsClientWorkspace = () => {
                             {!isClient && canManageCycles && (cycle.status === "Published" || cycle.status === "Completed") && (
                               <CorrectDeliverableName
                                 deliverable={deliverable}
-                                disabled={addonSaving}
+                                disabled={serviceSaving}
                                 onSave={(title, reason) => correctDeliverableName(deliverable.id, cycle.id, title, reason)}
                               />
                             )}
@@ -1067,7 +1008,6 @@ const OperationsClientWorkspace = () => {
                 </div>
               </div>
             )}
-            {selectedCycle && selectedCycle.addonSnapshots.length > 0 && <div className="border-t border-line px-5 py-4"><h3 className="text-sm font-semibold text-ink">{t('Add-ons in this period')}</h3>{selectedCycle.addonSnapshots.map(item => <p key={item.id} data-i18n-skip className="mt-2 text-sm text-muted">{item.name} · {item.quantity}{canSeePrices ? ` · ${formatMoney(item.unitPriceMinor, 'MYR', locale)}` : ''}</p>)}</div>}
             {canManagePlans && activePlan && ['Active', 'Paused'].includes(activePlan.status) && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4"><p className="text-sm text-muted">{t('Plan settings apply to future billing cycles.')}</p><Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button></div>}
             {canManagePlans && activeOrPausedPlan?.status === "Active" && (
               <div className="flex flex-wrap justify-end gap-2 border-t p-4">
@@ -1112,76 +1052,6 @@ const OperationsClientWorkspace = () => {
               </div>
             )}
           </section>
-          {canManagePlans && (
-        <section aria-labelledby="client-addons-title" className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3"><div><h2 id="client-addons-title" className="font-semibold text-ink">{t("Service add-ons")}</h2><p className="mt-1 text-sm text-muted">{t("One-off and recurring scope changes remain visible in the history.")}</p></div><div className="flex flex-wrap gap-2"><Button onClick={() => setAddonSheetOpen(true)}><Plus className="h-4 w-4" />{t("Add service add-on")}</Button></div></div>
-          <section className={cn(cardBase, "divide-y divide-line/70")}>
-            {addons.map((item) => (
-              <div
-                key={item.id}
-                className="flex flex-wrap items-center justify-between gap-4 p-5"
-              >
-                <div>
-                  <div className="flex items-center gap-2">
-                    <p className="font-semibold text-ink">{item.name}</p>
-                    <Badge tone={item.isActive ? "emerald" : "slate"}>
-                      {t(item.isActive ? "Active" : "Stopped")}
-                    </Badge>
-                  </div>
-                  <p className="mt-1 text-sm text-muted">
-                    {item.billingMode} ·{" "}
-                    {item.platforms.join(", ") || t("No platform")}
-                    {item.effectiveUntil
-                      ? ` · ${t('through')} ${item.effectiveUntil}`
-                      : ""}
-                  </p>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {canSeePrices && (
-                    <p className="mr-2 font-semibold text-ink">
-                        {formatMoney(item.quantity * item.unitPriceMinor, 'MYR', locale)}
-                    </p>
-                  )}
-                  {item.billingMode === "monthly" && item.isActive && (
-                    <>
-                      <input
-                        aria-label={t('End date')}
-                        type="date"
-                        min={item.effectiveFrom}
-                        className={cn(inputBase, "w-auto px-3 py-2")}
-                        value={addonEndDates[item.id] || ""}
-                        onChange={(e) =>
-                          setAddonEndDates((current) => ({
-                            ...current,
-                            [item.id]: e.target.value,
-                          }))
-                        }
-                      />
-                      <Button
-                        variant="secondary"
-                        onClick={() => void changeAddonState(item.id, false)}
-                      >
-                        {t("Stop future cycles")}
-                      </Button>
-                    </>
-                  )}
-                  {!item.isActive && (
-                    <Button
-                      variant="secondary"
-                      onClick={() => void changeAddonState(item.id, true)}
-                    >
-                      {t("Reactivate")}
-                    </Button>
-                  )}
-                </div>
-              </div>
-            ))}
-            {addons.length === 0 && (
-              <EmptyState title={t("No add-ons yet")} description={t("Add one-off or monthly scope when this client needs work outside the active plan.")} className="m-4" />
-            )}
-          </section>
-        </section>
-          )}
           {canManagePlans && scheduledRevision && revisionSource && (
             <DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${scheduledRevision.id}`} plan={scheduledRevision} source={revisionSource} />
           )}
@@ -1230,32 +1100,6 @@ const OperationsClientWorkspace = () => {
 
       {planModalOpen && <CreateClientPlanModal client={client} onClose={() => setPlanModalOpen(false)} />}
       {planDatesOpen && activePlan && <EditClientPlanDatesModal plan={activePlan} onClose={() => setPlanDatesOpen(false)} />}
-
-      <SideSheet
-        isOpen={addonSheetOpen}
-        onClose={() => { if (!addonSaving) setAddonSheetOpen(false); }}
-        title={t("Add service add-on")}
-        description={t("Add one-off work to a cycle or recurring work from an effective date. Prices remain internal.")}
-        footer={<div className="flex justify-end gap-2"><Button variant="secondary" onClick={() => setAddonSheetOpen(false)} disabled={addonSaving}>{t("Cancel")}</Button><Button type="submit" form="add-addon-form" disabled={addonSaving}><Plus className="h-4 w-4" />{addonSaving ? t("Saving…") : pendingAddon.current ? t("Retry save") : t("Add add-on")}</Button></div>}
-      >
-        <form id="add-addon-form" onSubmit={addAddon} className="space-y-5">
-          {message && addonSheetOpen && <p role={feedback?.tone === 'error' ? 'alert' : 'status'}><SystemMessage message={message} /></p>}
-          <fieldset disabled={addonSaving || Boolean(pendingAddon.current)} className="min-w-0 border-0 p-0 space-y-5">
-          <label className="block text-sm font-medium text-ink">{t("Add-on name")}<input data-i18n-skip required className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.name} onChange={(e) => setAddon({ ...addon, name: e.target.value })} /></label>
-          <label className="block text-sm font-medium text-ink">{t("Platforms")}<input data-i18n-skip placeholder={t("Instagram, TikTok")} className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.platforms} onChange={(e) => setAddon({ ...addon, platforms: e.target.value })} /></label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="text-sm font-medium text-ink">{t("Quantity")}<input type="number" min="1" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.quantity} onChange={(e) => setAddon({ ...addon, quantity: Number(e.target.value) })} /></label>
-            <label className="text-sm font-medium text-ink">{t("Unit price")}<input type="number" min="0" step="0.01" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.unitPrice} onChange={(e) => setAddon({ ...addon, unitPrice: Number(e.target.value) })} /></label>
-          </div>
-          <label className="block text-sm font-medium text-ink">{t("Billing mode")}<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.billingMode} onChange={(e) => setAddon({ ...addon, billingMode: e.target.value as AddonBillingMode })}><option value="one_off">{t("One-off")}</option><option value="monthly">{t("Monthly")}</option></select></label>
-          {addon.billingMode === "one_off" ? (
-            <label className="block text-sm font-medium text-ink">{t("Service cycle")}<select className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.targetCycleId} onChange={(e) => setAddon({ ...addon, targetCycleId: e.target.value })}><option value="">{t("Choose cycle")}</option>{allCycles.map((cycle) => <option key={cycle.id} id={`cycle-${cycle.id}`} value={cycle.id}>{cycle.periodStart}</option>)}</select></label>
-          ) : (
-            <label className="block text-sm font-medium text-ink">{t("Effective from")}<input type="date" className={cn(inputBase, "mt-1.5 px-3 py-2.5")} value={addon.effectiveFrom} onChange={(e) => setAddon({ ...addon, effectiveFrom: e.target.value })} /></label>
-          )}
-          </fieldset>
-        </form>
-      </SideSheet>
 
         <SideSheet
         isOpen={activitySheetOpen && !isClient}

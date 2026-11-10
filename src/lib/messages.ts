@@ -9,7 +9,6 @@ export type MessageValues = Record<string, MessageValue>;
  */
 export const enMessages = {
   "feedback.activityAdded": "Activity added.",
-  "feedback.addonAdded": "Add-on added.",
   "feedback.profileSaved": "Profile saved.",
 
   "feedback.changesSaved": "Changes saved.",
@@ -376,7 +375,6 @@ export const enMessages = {
 
 export const zhMessages: Record<keyof typeof enMessages, string> = {
   "feedback.activityAdded": "动态已添加。",
-  "feedback.addonAdded": "附加项目已添加。",
   "feedback.profileSaved": "个人资料已保存。",
 
   "feedback.changesSaved": "更改已保存。",

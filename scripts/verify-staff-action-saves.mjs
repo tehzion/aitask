@@ -49,7 +49,7 @@ try {
   insert('project', { id: 'curated', clientId: 'client', clientName: 'Save QA', projectName: 'Curated', createdBy: 'boss', projectManagerIds: ['pm'], hodMemberIds: ['hod'], staffMemberIds: ['staff', 'other'], departments: ['Designer'], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   insert('task', baseTask);
   insert('task', { ...baseTask, id: 'delegate', title: 'HOD assigned work', assignedTo: 'hod', serviceCycleId: undefined, deliverableId: undefined });
-  insert('service_cycle', { id: 'cycle', clientId: 'client', clientName: 'Save QA', planId: 'plan', planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', publishedAt: '2026-10-01', currency: 'MYR', serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' });
+  insert('service_cycle', { id: 'cycle', clientId: 'client', clientName: 'Save QA', planId: 'plan', planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', publishedAt: '2026-10-01', currency: 'MYR', serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   insert('deliverable', { id: 'deliverable', clientId: 'client', clientName: 'Save QA', planId: 'plan', cycleId: 'cycle', serviceItemId: 'service', title: 'Artwork', sequence: 1, status: 'Planned', taskIds: ['task'], attachments: [], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   process.env.VITE_SUPABASE_URL = url;
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = process.env.AITASK_LOCAL_TEST_PUBLIC;

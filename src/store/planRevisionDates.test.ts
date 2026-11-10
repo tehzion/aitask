@@ -5,7 +5,7 @@ import { useStore } from './index';
 const initial = useStore.getState();
 const actor: User = { id: 'revision-date-pm', name: 'Revision PM', role: 'Project Manager', departments: ['Management'], isSuperAdmin: true };
 beforeEach(() => useStore.setState({ ...initial, currentUser: actor, users: [actor], clients: [], projects: [], tasks: [],
-  clientPlans: [], serviceCycles: [], deliverables: [], servicePricingSnapshots: [], addons: [], rolePermissions: [],
+  clientPlans: [], serviceCycles: [], deliverables: [], servicePricingSnapshots: [], rolePermissions: [],
   backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
 }, true));
 afterEach(() => useStore.setState(initial, true));

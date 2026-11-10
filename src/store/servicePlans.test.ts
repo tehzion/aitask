@@ -9,7 +9,7 @@ const admin: User = { id: 'admin-service', name: 'Service Project Manager', role
 describe('client service plan store', () => {
   beforeEach(() => {
     useStore.setState({
-      ...initialState, currentUser: admin, users: [admin], clients: [], projects: [], tasks: [], servicePackages: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], serviceWorkflowTemplates: [structuredClone(SHORT_VIDEO_WORKFLOW_TEMPLATE)], servicePricingSnapshots: [],
+      ...initialState, currentUser: admin, users: [admin], clients: [], projects: [], tasks: [], servicePackages: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], serviceWorkflowTemplates: [structuredClone(SHORT_VIDEO_WORKFLOW_TEMPLATE)], servicePricingSnapshots: [],
       backend: { ...initialState.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     }, true);
   });

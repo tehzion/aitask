@@ -7,7 +7,6 @@ import type {
   ServiceCycle,
   Deliverable,
   CycleComment,
-  Addon,
   ServiceWorkflowTemplate,
   ServicePricingSnapshot,
   ClientApprovalStatus,
@@ -64,7 +63,6 @@ export interface SafeWorkspaceState {
   serviceCyclePayments: ServiceCyclePayment[];
   deliverables: Deliverable[];
   cycleComments: CycleComment[];
-  addons: Addon[];
   serviceWorkflowTemplates: ServiceWorkflowTemplate[];
   servicePricingSnapshots: ServicePricingSnapshot[];
 }
@@ -589,7 +587,6 @@ export const parseWorkspaceSnapshot = (value: unknown): SafeWorkspaceState => {
     serviceCyclePayments: parseIdentifiedRecords<ServiceCyclePayment>(record.serviceCyclePayments),
     deliverables: parseIdentifiedRecords<Deliverable>(record.deliverables),
     cycleComments: parseIdentifiedRecords<CycleComment>(record.cycleComments),
-    addons: parseIdentifiedRecords<Addon>(record.addons),
     serviceWorkflowTemplates: parseIdentifiedRecords<ServiceWorkflowTemplate>(record.serviceWorkflowTemplates),
     servicePricingSnapshots: parseIdentifiedRecords<ServicePricingSnapshot>(record.servicePricingSnapshots),
   };

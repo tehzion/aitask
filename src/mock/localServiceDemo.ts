@@ -1,5 +1,4 @@
 import type {
-  Addon,
   AttachmentRef,
   ClientProfile,
   ClientServicePlan,
@@ -70,7 +69,6 @@ const cloneItem = (item: ServiceItem): ServiceItem => ({
     : undefined,
 });
 
-const cloneAddon = (addon: Addon): Addon => ({ ...addon, platforms: [...addon.platforms] });
 
 const cloneTemplate = (template: ServiceWorkflowTemplate): ServiceWorkflowTemplate => ({
   ...template,
@@ -105,7 +103,6 @@ export interface LocalServiceDemoFixture {
   deliverables: Deliverable[];
   tasks: Task[];
   cycleComments: CycleComment[];
-  addons: Addon[];
   serviceWorkflowTemplates: ServiceWorkflowTemplate[];
   servicePricingSnapshots: ServicePricingSnapshot[];
 }
@@ -298,39 +295,6 @@ export const createLocalServiceDemoFixture = (
     updatedAt: now,
   };
 
-  const monthlyAddon: Addon = {
-    id: 'demo-service-addon-urban-monthly',
-    clientId: urbanPlan.clientId,
-    clientName: urbanPlan.clientName,
-    planId: urbanPlan.id,
-    name: 'Community Management',
-    platforms: ['Instagram'],
-    quantity: 1,
-    unitPriceMinor: 45000,
-    description: 'Monthly community-management coverage for campaign posts.',
-    billingMode: 'monthly',
-    effectiveFrom: currentStart,
-    isActive: true,
-    createdAt: now,
-    updatedAt: now,
-  };
-  const oneOffAddon: Addon = {
-    id: 'demo-service-addon-urban-oneoff',
-    clientId: urbanPlan.clientId,
-    clientName: urbanPlan.clientName,
-    planId: urbanPlan.id,
-    name: 'Menu Launch Cutdown',
-    platforms: ['TikTok'],
-    quantity: 1,
-    unitPriceMinor: 28000,
-    description: 'A one-off 10-second launch cutdown for this cycle only.',
-    billingMode: 'one_off',
-    targetCycleId: 'demo-service-cycle-urban-current',
-    effectiveFrom: currentStart,
-    isActive: true,
-    createdAt: now,
-    updatedAt: now,
-  };
 
   const currentUrbanCycle: ServiceCycle = {
     id: 'demo-service-cycle-urban-current',
@@ -343,7 +307,6 @@ export const createLocalServiceDemoFixture = (
     status: 'Published',
     currency: 'MYR',
     serviceItems: urbanPlan.serviceItems.map(cloneItem),
-    addonSnapshots: [cloneAddon(monthlyAddon), cloneAddon(oneOffAddon)],
     discountType: urbanPlan.discountType,
     discountValue: urbanPlan.discountValue,
     taxRateBps: urbanPlan.taxRateBps,
@@ -358,7 +321,6 @@ export const createLocalServiceDemoFixture = (
     periodStart: previousStart,
     periodEnd: previousEnd,
     status: 'Completed',
-    addonSnapshots: [],
     pricingSnapshotId: 'demo-service-price-urban-cycle-previous',
   };
   const currentTechCycle: ServiceCycle = {
@@ -372,7 +334,6 @@ export const createLocalServiceDemoFixture = (
     status: 'Draft',
     currency: 'MYR',
     serviceItems: techPlan.serviceItems.map(cloneItem),
-    addonSnapshots: [],
     discountType: techPlan.discountType,
     discountValue: techPlan.discountValue,
     taxRateBps: techPlan.taxRateBps,
@@ -591,16 +552,12 @@ export const createLocalServiceDemoFixture = (
 
   const pricing = [
     makePricingSnapshot({ id: 'demo-service-price-urban-plan', clientId: urbanPlan.clientId, parentType: 'client_plan', parentId: urbanPlan.id, items: urbanPlan.serviceItems, now }),
-    makePricingSnapshot({ id: 'demo-service-price-urban-cycle-current', clientId: urbanPlan.clientId, parentType: 'service_cycle', parentId: currentUrbanCycle.id, items: currentUrbanCycle.serviceItems, addonUnitPriceMinor: monthlyAddon.unitPriceMinor + oneOffAddon.unitPriceMinor, now }),
+    makePricingSnapshot({ id: 'demo-service-price-urban-cycle-current', clientId: urbanPlan.clientId, parentType: 'service_cycle', parentId: currentUrbanCycle.id, items: currentUrbanCycle.serviceItems, now }),
     makePricingSnapshot({ id: 'demo-service-price-urban-cycle-previous', clientId: urbanPlan.clientId, parentType: 'service_cycle', parentId: previousUrbanCycle.id, items: previousUrbanCycle.serviceItems, now }),
-    makePricingSnapshot({ id: 'demo-service-price-urban-addon-monthly', clientId: urbanPlan.clientId, parentType: 'addon', parentId: monthlyAddon.id, addonUnitPriceMinor: monthlyAddon.unitPriceMinor, addonQuantity: monthlyAddon.quantity, now }),
-    makePricingSnapshot({ id: 'demo-service-price-urban-addon-oneoff', clientId: urbanPlan.clientId, parentType: 'addon', parentId: oneOffAddon.id, addonUnitPriceMinor: oneOffAddon.unitPriceMinor, addonQuantity: oneOffAddon.quantity, now }),
     makePricingSnapshot({ id: 'demo-service-price-technova-plan', clientId: techPlan.clientId, parentType: 'client_plan', parentId: techPlan.id, items: techPlan.serviceItems, discountType: techPlan.discountType, discountValue: techPlan.discountValue, now }),
     makePricingSnapshot({ id: 'demo-service-price-technova-revision', clientId: techRevision.clientId, parentType: 'client_plan', parentId: techRevision.id, items: techRevision.serviceItems, discountType: techRevision.discountType, discountValue: techRevision.discountValue, now }),
     makePricingSnapshot({ id: 'demo-service-price-technova-cycle-current', clientId: techPlan.clientId, parentType: 'service_cycle', parentId: currentTechCycle.id, items: currentTechCycle.serviceItems, discountType: currentTechCycle.discountType, discountValue: currentTechCycle.discountValue, now }),
   ];
-  monthlyAddon.pricingSnapshotId = 'demo-service-price-urban-addon-monthly';
-  oneOffAddon.pricingSnapshotId = 'demo-service-price-urban-addon-oneoff';
 
   const users: User[] = [
     {
@@ -638,7 +595,6 @@ export const createLocalServiceDemoFixture = (
     deliverables: [...urbanDeliverables, ...previousUrbanDeliverables, ...techDeliverables],
     tasks,
     cycleComments,
-    addons: [monthlyAddon, oneOffAddon],
     serviceWorkflowTemplates: [cloneTemplate(SHORT_VIDEO_WORKFLOW_TEMPLATE)],
     servicePricingSnapshots: pricing,
   };

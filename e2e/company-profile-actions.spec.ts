@@ -16,7 +16,7 @@ const seedCompany = async (page: Page) => {
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
       clients: [], projects: [], tasks: [], notifications: [], clientPlans: [], serviceCycles: [],
-      deliverables: [], cycleComments: [], addons: [], servicePricingSnapshots: [],
+      deliverables: [], cycleComments: [], servicePricingSnapshots: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
     const created = useStore.getState().createClientWithPlan({

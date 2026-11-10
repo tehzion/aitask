@@ -12,7 +12,6 @@ import type {
   ServiceCycle,
   Deliverable,
   CycleComment,
-  Addon,
   ServiceWorkflowTemplate,
   ServicePricingSnapshot,
   CustomRole,
@@ -53,7 +52,7 @@ const WORKSPACE_PAGE_SIZE = 500;
 export const WORKSPACE_ENTITY_TYPES = [
   'task', 'project', 'client', 'comment', 'approval', 'task_status', 'custom_role',
   'registration', 'service_package', 'client_plan', 'service_cycle', 'deliverable',
-  'service_cycle_payment', 'cycle_comment', 'addon', 'service_workflow_template', 'service_pricing_snapshot',
+  'service_cycle_payment', 'cycle_comment', 'service_workflow_template', 'service_pricing_snapshot',
 ] as const;
 const PENDING_COMMAND_STORAGE_VERSION = 1;
 const PENDING_COMMAND_STORAGE_PREFIX = 'aitask:secure-pending-command';
@@ -91,7 +90,6 @@ export const SECURE_COMMAND_TYPES = [
   'service_cycle_payment.void',
   'deliverable.manage',
   'cycle_comment.manage',
-  'addon.manage',
   'service_workflow.manage',
   'deliverable.workflow.generate',
 ] as const;
@@ -797,6 +795,12 @@ const memberData = (user: WorkspaceMember): Record<string, unknown> => {
   };
 };
 
+const omitRemovedAddonSnapshots = (cycle: ServiceCycle) => {
+  const copy: Record<string, unknown> = { ...cycle };
+  delete copy.addonSnapshots;
+  return copy as unknown as ServiceCycle;
+};
+
 const stateToRows = (state: PersistedWorkspaceState) => {
   const rows: BaselineRow[] = [];
   const push = (
@@ -881,17 +885,17 @@ const stateToRows = (state: PersistedWorkspaceState) => {
     discountValue: 0,
     taxRateBps: 0,
   } as unknown as Record<string, unknown>, item.version, item.clientId));
+  // Add-ons were removed (10 Nov 2026); a cycle read before the cleanup may
+  // still carry the old addonSnapshots key, which is not written back.
   state.serviceCycles?.forEach(item => push('entity', 'service_cycle', item.id, {
-    ...item,
+    ...omitRemovedAddonSnapshots(item),
     serviceItems: stripServiceItemPrices(item.serviceItems),
-    addonSnapshots: (item.addonSnapshots || []).map(addon => ({ ...addon, unitPriceMinor: 0 })),
     discountValue: 0,
     taxRateBps: 0,
   } as unknown as Record<string, unknown>, item.version, item.planId));
   state.serviceCyclePayments?.forEach(item => push('entity', 'service_cycle_payment', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
   state.deliverables?.forEach(item => push('entity', 'deliverable', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
   state.cycleComments?.forEach(item => push('entity', 'cycle_comment', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
-  state.addons?.forEach(item => push('entity', 'addon', item.id, { ...item, unitPriceMinor: 0 } as unknown as Record<string, unknown>, item.version, item.planId));
   state.serviceWorkflowTemplates?.forEach(item => push('entity', 'service_workflow_template', item.id, item as unknown as Record<string, unknown>, item.version));
   state.servicePricingSnapshots?.forEach(item => push('entity', 'service_pricing_snapshot', item.id, item as unknown as Record<string, unknown>, item.version, item.parentId));
   return rows;
@@ -940,7 +944,7 @@ const superAdminOnlyEntityTypes = new Set(['custom_role', 'task_status', 'regist
 // handles too.
 const serviceEntityTypes = new Set([
   'service_package', 'service_workflow_template', 'service_pricing_snapshot',
-  'client_plan', 'service_cycle', 'service_cycle_payment', 'deliverable', 'cycle_comment', 'addon',
+  'client_plan', 'service_cycle', 'service_cycle_payment', 'deliverable', 'cycle_comment',
 ]);
 
 // Command types handled by the service RPC. The generic RPC rejects service
@@ -948,7 +952,7 @@ const serviceEntityTypes = new Set([
 const serviceCommandTypes = new Set<SecureCommandType>([
   'service_package.manage', 'client_plan.manage', 'service_cycle.manage',
   'service_cycle_payment.record', 'service_cycle_payment.void',
-  'deliverable.manage', 'cycle_comment.manage', 'addon.manage',
+  'deliverable.manage', 'cycle_comment.manage',
   'service_workflow.manage', 'deliverable.workflow.generate',
 ]);
 
@@ -1062,7 +1066,6 @@ export const inferSecureCommandType = (
     if (entityTypes.has('service_cycle')) return 'service_cycle.manage';
     if (entityTypes.has('cycle_comment')) return 'cycle_comment.manage';
     if (entityTypes.has('client_plan')) return 'client_plan.manage';
-    if (entityTypes.has('addon')) return 'addon.manage';
     if (entityTypes.has('service_workflow_template')) return 'service_workflow.manage';
     return 'service_package.manage';
   }
@@ -1122,8 +1125,8 @@ const serviceCommandGroups = (
     const type = inferSecureCommandType(remaining, { selfMemberId });
     // The server binds each service command to the entity types it owns. An
     // update-only diff across several types (a company rename touching its
-    // plans, cycles, deliverables and add-ons) is sent as one command per owner;
-    // diffs that create rows (plan activation, a new add-on) stay together.
+    // plans, cycles and deliverables) is sent as one command per owner;
+    // diffs that create rows (plan activation) stay together.
     const unowned = remaining.some(operation => !serviceCommandOwnsEntity(type, operation.entityType));
     if (unowned && remaining.every(operation => operation.action === 'update')) {
       const byOwner = new Map<SecureCommandType, WorkspaceOperation[]>();
@@ -1134,12 +1137,11 @@ const serviceCommandGroups = (
       byOwner.forEach((operations, owner) => groups.push({ type: owner, operations }));
     } else {
       // A diff that creates rows belongs to the command that may create them:
-      // plan activation (client_plan.manage) or a new add-on (addon.manage).
+      // plan activation (client_plan.manage).
       const entityTypes = new Set(remaining.map(operation => operation.entityType));
       const creator = !unowned ? type
         : entityTypes.has('client_plan') ? 'client_plan.manage'
-          : entityTypes.has('addon') ? 'addon.manage'
-            : type;
+          : type;
       groups.push({ type: creator, operations: remaining });
     }
   }
@@ -1153,7 +1155,6 @@ const serviceEntityOwner: Record<string, SecureCommandType> = {
   service_cycle: 'service_cycle.manage',
   deliverable: 'deliverable.manage',
   cycle_comment: 'cycle_comment.manage',
-  addon: 'addon.manage',
 };
 const serviceCommandOwnsEntity = (type: SecureCommandType, entityType: string) => {
   switch (entityType) {
@@ -1161,7 +1162,6 @@ const serviceCommandOwnsEntity = (type: SecureCommandType, entityType: string) =
     case 'service_cycle': return type === 'service_cycle.manage' || type === 'deliverable.manage';
     case 'deliverable': return type === 'deliverable.manage' || type === 'deliverable.workflow.generate';
     case 'cycle_comment': return type === 'cycle_comment.manage';
-    case 'addon': return type === 'addon.manage';
     default: return true;
   }
 };
@@ -1419,7 +1419,6 @@ export const overlayRetainedWorkspaceEntities = (
     serviceCyclePayments: overlayList(remote.serviceCyclePayments, local.serviceCyclePayments, 'service_cycle_payment'),
     deliverables: overlayList(remote.deliverables, local.deliverables, 'deliverable'),
     cycleComments: overlayList(remote.cycleComments, local.cycleComments, 'cycle_comment'),
-    addons: overlayList(remote.addons, local.addons, 'addon'),
     serviceWorkflowTemplates: overlayList(remote.serviceWorkflowTemplates, local.serviceWorkflowTemplates, 'service_workflow_template'),
     servicePricingSnapshots: overlayList(remote.servicePricingSnapshots, local.servicePricingSnapshots, 'service_pricing_snapshot'),
   };
@@ -1982,7 +1981,6 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: WorkspaceLoa
     serviceCyclePayments: dataFor<ServiceCyclePayment>('service_cycle_payment'),
     deliverables: dataFor<Deliverable>('deliverable'),
     cycleComments: dataFor<CycleComment>('cycle_comment'),
-    addons: dataFor<Addon>('addon'),
     serviceWorkflowTemplates: dataFor<ServiceWorkflowTemplate>('service_workflow_template'),
     servicePricingSnapshots: dataFor<ServicePricingSnapshot>('service_pricing_snapshot'),
   };

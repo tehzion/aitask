@@ -5,7 +5,7 @@ import { resolveMonthlyRecord } from './monthlyRecords';
 const cycle = (overrides: Partial<ServiceCycle>): ServiceCycle => ({
   id: 'c1', clientId: 'client-1', clientName: 'Acme', planId: 'plan-1', planRevision: 1,
   periodStart: '2026-09-01', periodEnd: '2026-09-30', status: 'Published', currency: 'MYR',
-  serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
+  serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
   createdAt: '', updatedAt: '', ...overrides,
 });
 

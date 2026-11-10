@@ -38,8 +38,7 @@ describe('local service demo reset', () => {
       serviceCycles: [],
       deliverables: [],
       cycleComments: [],
-      addons: [],
-      servicePricingSnapshots: [],
+            servicePricingSnapshots: [],
     });
   });
 

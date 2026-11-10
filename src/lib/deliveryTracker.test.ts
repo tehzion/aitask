@@ -31,7 +31,7 @@ const task = (data: Partial<Task> & Pick<Task, 'id' | 'clientName'>): Task => ({
 const cycle: ServiceCycle = {
   id: 'cycle-1', clientId: 'client-1', clientName: 'Acme', planId: 'plan-1', planRevision: 1,
   periodStart: '2026-09-01', periodEnd: '2026-09-30', status: 'Published', currency: 'MYR',
-  serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
+  serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
   createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z',
 };
 

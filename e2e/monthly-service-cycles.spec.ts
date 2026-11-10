@@ -12,7 +12,7 @@ test('monthly plans roll over on their billing date and retain previous months a
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
-    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [], addons: [], servicePricingSnapshots: [],
+    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [], servicePricingSnapshots: [],
       backend: { ...state.backend, mode: 'local', status: 'local', isLoading: false, hasLocalChanges: false, pendingMutations: 0 } });
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Monthly Update Co', planName: 'Video and Ads Management', origin: 'custom',

@@ -82,8 +82,7 @@ describe('plan wizard degraded-sync recovery', () => {
       serviceCycles: [],
       deliverables: [],
       cycleComments: [],
-      addons: [],
-      serviceWorkflowTemplates: [],
+            serviceWorkflowTemplates: [],
       servicePricingSnapshots: [],
       backend: {
         ...initialState.backend,
@@ -150,8 +149,7 @@ describe('retryPendingSave', () => {
       serviceCycles: [],
       deliverables: [],
       cycleComments: [],
-      addons: [],
-      serviceWorkflowTemplates: [],
+            serviceWorkflowTemplates: [],
       servicePricingSnapshots: [],
       backend: {
         ...initialState.backend,

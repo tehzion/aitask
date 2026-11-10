@@ -87,8 +87,7 @@ const cycle = (id: string, clientId: string, periodEnd: string): ServiceCycle =>
   status: 'Published',
   currency: 'MYR',
   serviceItems: [],
-  addonSnapshots: [],
-  discountType: 'none',
+    discountType: 'none',
   discountValue: 0,
   taxRateBps: 0,
   createdAt: '2026-10-01T00:00:00.000Z',
@@ -224,7 +223,7 @@ describe('management intelligence', () => {
 
 describe('past deliverables needing the Project Manager', () => {
   const now = new Date(2026, 10, 2);
-  const cycle = (status: 'Draft' | 'Published') => ({ id: `c-${status}`, clientId: 'co', clientName: 'Co', planId: 'p', planRevision: 1, periodStart: '2026-09-01', periodEnd: '2026-09-30', status, currency: 'MYR', serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '', updatedAt: '' }) as ServiceCycle;
+  const cycle = (status: 'Draft' | 'Published') => ({ id: `c-${status}`, clientId: 'co', clientName: 'Co', planId: 'p', planRevision: 1, periodStart: '2026-09-01', periodEnd: '2026-09-30', status, currency: 'MYR', serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '', updatedAt: '' }) as ServiceCycle;
   const deliverable = (cycleId: string, extra: Partial<Deliverable> = {}) => ({ id: `d-${cycleId}`, clientId: 'co', clientName: 'Co', planId: 'p', cycleId, serviceItemId: 'i', sequence: 1, title: 'Video 1', status: 'Planned', taskIds: [], createdAt: '', updatedAt: '', ...extra }) as Deliverable;
   const task = (extra: Partial<Task>) => ({ id: 't', title: 'Work', clientId: 'co', clientName: 'Co', status: 'Completed', isCompleted: true, completedAt: '2026-09-20T03:00:00Z', startDate: '2026-09-01', ...extra }) as Task;
 

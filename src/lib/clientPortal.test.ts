@@ -156,8 +156,7 @@ describe('Client portal reporting', () => {
 const makeCycle = (overrides: Partial<ServiceCycle> = {}): ServiceCycle => ({
   id: 'current', clientId: 'acme', clientName: 'Acme', planId: 'plan',
   planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31',
-  status: 'Published', currency: 'MYR', serviceItems: [], addonSnapshots: [],
-  discountType: 'none', discountValue: 0, taxRateBps: 0,
+  status: 'Published', currency: 'MYR', serviceItems: [],   discountType: 'none', discountValue: 0, taxRateBps: 0,
   createdAt: '2026-10-01T00:00:00Z', updatedAt: '2026-10-01T00:00:00Z',
   ...overrides,
 });

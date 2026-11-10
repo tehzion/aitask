@@ -22,7 +22,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
     localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
-      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], tasks: [],
+      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], tasks: [],
       servicePricingSnapshots: [], serviceWorkflowTemplates: [structuredClone(SHORT_VIDEO_WORKFLOW_TEMPLATE)],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
@@ -46,7 +46,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   expect(seeded.taskIds).toHaveLength(10);
   await page.goto(`/clients/${seeded.clientId}`);
   await expect(page.getByRole('heading', { name: 'Customized Co', level: 1 })).toBeVisible();
-  // Plan, cycles, add-ons and progress share one tab (team feedback B).
+  // Plan, cycles and progress share one tab (team feedback B).
   const deliveryTab = page.getByRole('tab', { name: 'Plan & delivery', exact: true });
   await expect(page.getByRole('tablist', { name: 'Client workspace' }).getByRole('tab')).toHaveCount(2);
   await deliveryTab.focus();
@@ -80,20 +80,8 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByText('Invoice', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Outstanding', { exact: true })).toHaveCount(0);
 
-  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
-  const openAddon = page.getByRole('button', { name: 'Add service add-on' });
-  await openAddon.click();
-  const addonDialog = page.getByRole('dialog', { name: 'Add service add-on' });
-  await expect(addonDialog).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(addonDialog).toBeHidden();
-  await expect(openAddon).toBeFocused();
-  await openAddon.click();
-  await addonDialog.getByLabel('Add-on name').fill('Launch cutdown');
-  await addonDialog.getByLabel('Service cycle').selectOption(seeded.cycleId);
-  await addonDialog.getByRole('button', { name: 'Add add-on' }).click();
-  await expect(addonDialog).toBeHidden();
-  await expect(page.getByText('Launch cutdown')).toBeVisible();
+  // Add-ons were removed (10 Nov 2026).
+  await expect(page.getByRole('button', { name: 'Add service add-on' })).toHaveCount(0);
 
   await page.getByRole('tab', { name: 'Activity / Files' }).click();
   const openActivity = page.getByRole('button', { name: 'Add activity' });

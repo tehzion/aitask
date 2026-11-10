@@ -149,7 +149,7 @@ const seedCompanyCycles = async (page: Page) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const plan = { id: 'followup-plan', clientId: 'followup-company', clientName: 'Followup Company', name: 'Followup Plan', revision: 1, status: 'Active', currency: 'MYR', origin: 'custom', serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0, startDate: '2026-10-01', billingDay: 1, createdBy: state.currentUser!.id, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
-    const cycle = { id: 'followup-current-cycle', clientId: plan.clientId, clientName: plan.clientName, planId: plan.id, planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Draft', currency: 'MYR', serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
+    const cycle = { id: 'followup-current-cycle', clientId: plan.clientId, clientName: plan.clientName, planId: plan.id, planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Draft', currency: 'MYR', serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
     const deliveries = (cycleId: string, quantity: number, delivered: number) => Array.from({ length: quantity }, (_, i) => ({ id: `${cycleId}-${i}`, clientId: plan.clientId, clientName: plan.clientName, planId: plan.id, cycleId, serviceItemId: 'followup-item', taskIds: [], name: `Output ${i}`, status: i < delivered ? 'Delivered' : 'Planned', createdAt: '2026-10-01', updatedAt: '2026-10-01' }));
     useStore.setState({
       clientPlans: [plan],

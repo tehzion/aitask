@@ -11,7 +11,7 @@ const seedPlan = async (page: Page) => {
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
     localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
-    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], tasks: [], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], servicePricingSnapshots: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], tasks: [], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], servicePricingSnapshots: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     const created = useStore.getState().createClientWithPlan({ clientName: 'Audit Client', planName: 'Original', origin: 'custom', serviceItems: [{ id: 'audit-item', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 100 }], startDate: '2026-08-15', billingDay: 15, discountType: 'none', discountValue: 0, taxRateBps: 0 });
     useStore.getState().activateClientPlan(created.planId!);
     const revision = useStore.getState().createClientPlanRevision(created.planId!);

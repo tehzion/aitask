@@ -16,8 +16,7 @@ const seedAdminAndPackage = async (page: Page) => {
       serviceCycles: [],
       deliverables: [],
       cycleComments: [],
-      addons: [],
-      servicePricingSnapshots: [],
+            servicePricingSnapshots: [],
       servicePackages: [{
         id: 'PKG-growth-e2e',
         name: 'Growth Plan',
@@ -54,8 +53,7 @@ const seedProjectManager = async (page: Page) => {
       serviceCycles: [],
       deliverables: [],
       cycleComments: [],
-      addons: [],
-      servicePricingSnapshots: [],
+            servicePricingSnapshots: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
   });

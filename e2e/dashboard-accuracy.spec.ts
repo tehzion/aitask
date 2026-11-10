@@ -22,7 +22,7 @@ const seedDashboard = async (page: Page, time = '2026-10-07T07:00:00Z') => {
     localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', 'en');
     const task = { ...state.tasks[0], clientId: 'accuracy-company', clientName: 'Accuracy Company', assignedTo: staff.id, department: 'Designer', status: 'In Progress', isCompleted: false, completedAt: undefined, dueDate: '2026-10-07', comments: [], approvalHistory: [] };
-    const cycle = { id: 'accuracy-current', clientId: 'accuracy-company', clientName: 'Accuracy Company', planId: 'accuracy-plan', planRevision: 1, periodStart: '2026-10-07', periodEnd: '2026-10-07', status: 'Completed', currency: 'MYR', serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
+    const cycle = { id: 'accuracy-current', clientId: 'accuracy-company', clientName: 'Accuracy Company', planId: 'accuracy-plan', planRevision: 1, periodStart: '2026-10-07', periodEnd: '2026-10-07', status: 'Completed', currency: 'MYR', serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false }, users: [boss, staff],
       clients: [{ id: 'accuracy-company', clientName: 'Accuracy Company', createdBy: boss.id, createdAt: '2026-10-01', updatedAt: '2026-10-01' }],

@@ -19,7 +19,7 @@ const seed = async (page: Page, role: 'Staff' | 'HOD', ready = true, legacy = fa
       { id: 'review', order: 2, title: 'Review output', department: 'Video Editor', kind: 'internal_review', clientVisible: false, required: true },
       { id: 'publish', order: 3, title: 'Publish output', department: 'Designer', kind: 'publishing', clientVisible: true, required: true },
     ] };
-    useStore.setState({ ...initial, currentUser: boss, users: [boss, worker, hod, designerHod], tasks: [], clients: [], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], addons: [], notifications: [], registrations: [], rolePermissions: [], servicePricingSnapshots: [], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+    useStore.setState({ ...initial, currentUser: boss, users: [boss, worker, hod, designerHod], tasks: [], clients: [], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], notifications: [], registrations: [], rolePermissions: [], servicePricingSnapshots: [], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     const plan = useStore.getState().createClientWithPlan({ clientName: 'Review QA', planName: 'Reviewed Plan', origin: 'custom', serviceItems: [{ id: 'review-service', name: 'Design', platforms: [], unit: 'output', quantity: 1, unitPriceMinor: 0, workflow: snapshotWorkflow(template) }], startDate: '2026-10-01', billingDay: 1, discountType: 'none', discountValue: 0, taxRateBps: 0 });
     useStore.getState().activateClientPlan(plan.planId!);
     const ids = useStore.getState().generateDeliverableTaskChain(useStore.getState().deliverables[0].id).taskIds!;

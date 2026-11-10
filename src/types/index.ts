@@ -209,7 +209,6 @@ export type ClientPlanStatus = 'Draft' | 'Active' | 'Paused' | 'Ended';
 export type ServiceCycleStatus = 'Draft' | 'Published' | 'Completed' | 'Cancelled';
 export type DeliverableStatus = 'Planned' | 'In Progress' | 'Ready' | 'Delivered';
 export type CommentVisibility = 'internal' | 'client-visible';
-export type AddonBillingMode = 'one_off' | 'monthly';
 export type TaskVisibility = 'internal' | 'client-visible';
 export type WorkflowStepKind = 'work' | 'internal_review' | 'client_approval' | 'publishing';
 
@@ -339,7 +338,6 @@ export interface ServiceCycle {
   status: ServiceCycleStatus;
   currency: 'MYR';
   serviceItems: ServiceItem[];
-  addonSnapshots: Addon[];
   discountType: 'none' | 'percent' | 'fixed';
   discountValue: number;
   taxRateBps: number;
@@ -384,36 +382,14 @@ export interface CycleComment {
   updatedAt: string;
 }
 
-export interface Addon {
-  id: string;
-  version?: number;
-  clientId: string;
-  clientName: string;
-  planId: string;
-  name: string;
-  platforms: string[];
-  quantity: number;
-  unitPriceMinor: number;
-  description?: string;
-  billingMode: AddonBillingMode;
-  targetCycleId?: string;
-  effectiveFrom: string;
-  effectiveUntil?: string;
-  isActive: boolean;
-  pricingSnapshotId?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface ServicePricingSnapshot {
   id: string;
   version?: number;
   clientId: string;
-  parentType: 'client_plan' | 'service_cycle' | 'addon';
+  parentType: 'client_plan' | 'service_cycle';
   parentId: string;
   currency: 'MYR';
   itemPrices: { serviceItemId: string; unitPriceMinor: number }[];
-  addonUnitPriceMinor?: number;
   discountType: 'none' | 'percent' | 'fixed';
   discountValue: number;
   taxRateBps: number;
