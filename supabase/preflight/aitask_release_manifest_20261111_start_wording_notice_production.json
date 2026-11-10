@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-10T17:05:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "PENDING OWNER APPROVAL: 20261110165837_release_notice_start_wording is not applied to production. Apply it before deploying the app change.",
+  "status": "APPLIED 2026-11-11: production records 20261110174255_release_notice_start_wording (owner approved); repository and production migration versions match (150/150).",
   "validatedMigrationTail": [
     "20261028120000_pm_no_hod_assignment_fallback",
     "20261028130000_service_command_guard_direct_writes",
@@ -32,22 +32,29 @@
     "20261110114105_rls_read_speedup",
     "20261110114150_audit_history_actor_snapshot_without_avatar",
     "20261110130438_remove_service_addons",
-    "20261110165837_release_notice_start_wording"
+    "20261110174255_release_notice_start_wording"
   ],
-  "pendingProductionMigrations": [
-    "20261110165837_release_notice_start_wording"
-  ],
+  "pendingProductionMigrations": [],
   "productionVerification": {
-    "historyAligned": false,
-    "historyThrough": "20261110130438_remove_service_addons",
-    "latestAppliedMigration": "20261110130438_remove_service_addons"
+    "historyAligned": true,
+    "historyThrough": "20261110174255_release_notice_start_wording",
+    "latestAppliedMigration": "20261110174255_release_notice_start_wording",
+    "historyCount": 150,
+    "beforeHistoryCount": 149,
+    "anonymousExecute": false,
+    "authenticatedExecute": true,
+    "bodyMd5": {
+      "aitask_get_release_notice_acknowledgement": "6a226a846d702d79c7332832b1966cc6",
+      "aitask_acknowledge_release_notice": "5058c988ae4ed9bccf9315da038912e9"
+    }
   },
   "changeSummary": {
-    "20261110165837_release_notice_start_wording": "Notice ID check in aitask_get_release_notice_acknowledgement and aitask_acknowledge_release_notice now also accepts 2026-11-start-wording (the Start / Running / month wording notice). Same signatures, security definer, empty search path and grants; earlier notice IDs stay valid."
+    "20261110174255_release_notice_start_wording": "Notice ID check in aitask_get_release_notice_acknowledgement and aitask_acknowledge_release_notice now also accepts 2026-11-start-wording (the Start / Running / month wording notice). Same signatures, security definer, empty search path and grants; earlier notice IDs stay valid."
   },
   "qualityGates": {
     "localDatabase": "PASS (2026-11-11): applied to the local stack; release_notice_acknowledgements pgTAP 26/26. Live function bodies matched the repository (md5) before the change.",
     "releaseOrder": "Apply this migration before deploying the app change. Otherwise the new notice ID is rejected, and signed-in members see the notice again at every sign-in.",
-    "rollback": "Re-run 20261110015703_release_notice_everyday_saves.sql to restore the previous notice ID list."
+    "rollback": "Re-run 20261110015703_release_notice_everyday_saves.sql to restore the previous notice ID list.",
+    "productionApply": "APPLIED via Supabase connector after owner approval. Both prior live function bodies matched the prior repository migration; both resulting body hashes match the new migration, anonymous EXECUTE is denied, authenticated EXECUTE remains allowed, and migration versions match 150/150."
   }
 }
