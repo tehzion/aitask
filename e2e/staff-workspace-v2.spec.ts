@@ -67,6 +67,8 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   await page.locator('main').getByRole('button', { name: 'Clear search' }).click();
   await expect(workSearch).toHaveValue('');
   await expect(page).toHaveURL(/\/tasks$/);
+  // Clearing the search can leave the main panel slightly scrolled.
+  await page.locator("main").evaluate(element => { element.scrollTop = 0; });
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-all-work-desktop-light.png', screenshotOptions(page));
   }
