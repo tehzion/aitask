@@ -1601,6 +1601,12 @@ registerUiTranslations({
   'Overdue months': '逾期月份',
   'Projects without HOD': '没有部门主管的项目',
   'Reviews over 2 days': '等待超过两天的审批',
+  'Updates about once a minute.': '约每分钟更新一次。',
+  'Staff workload across departments': '跨部门员工工作量',
+  'Workload totals across all departments. Task details remain limited to your access.': '显示所有部门的工作量总计。任务详情仍受您的权限限制。',
+  'Loading staff workload…': '正在加载员工工作量…',
+  'Staff workload is unavailable. Try again shortly.': '无法获取员工工作量，请稍后重试。',
+  'No staff members available.': '暂无员工。',
   'Waiting on you': '等待您处理',
   // Role audit fixes (10 Nov 2026)
   'Waiting on': '等待',

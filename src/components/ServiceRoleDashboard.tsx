@@ -249,7 +249,6 @@ const ServiceRoleDashboard = () => {
   if (persona === 'projectManager') {
     // Decisions for this PM only: reviews in their lane and work they can finalize.
     const personal = getPersonalReviewQueues(scopeTasks, { user: store.currentUser, users: store.users, roles: store.rolePermissions, scope: { clients: store.clients, projects: store.projects, users: store.users } });
-    const urgent = [...overdue, ...dueToday].sort((a, b) => (a.dueDate || '9999').localeCompare(b.dueDate || '9999'));
     const waitingOnOthers = [
       { title: t('With department review'), tasks: personal.department },
       { title: t('Awaiting Staff Assignment'), tasks: awaitingStaffAssignment },
