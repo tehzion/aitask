@@ -495,7 +495,7 @@ const Dashboard: React.FC = () => {
             <div>
               <p className="calm-eyebrow">{t('Local sample workspace')}</p>
               <h2 id="local-service-demo-heading" className="mt-1 text-lg font-semibold text-slate-950">{t('Explore the service demo')}</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{t('Open UrbanEats for a published cycle, deliverables, task-chain dependencies, comments, and files. TechNova and EcoLife show the other plan-creation modes.')}</p>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{t('Open UrbanEats for a started month, deliverables, task-chain dependencies, comments, and files. TechNova and EcoLife show the other plan-creation modes.')}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Link to={`/clients/${LOCAL_SERVICE_DEMO_URBAN_CLIENT_ID}`} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-control bg-accent px-4 text-sm font-semibold text-white transition hover:brightness-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 dark:text-[rgb(var(--calm-accent-ink))]">
@@ -697,7 +697,7 @@ const Dashboard: React.FC = () => {
                   <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="renewals-title">
                     <div className="border-b border-line/70 px-5 py-4">
                       <h2 id="renewals-title" className="text-base font-semibold text-ink">{t('Contract renewals')}</h2>
-                      <p className="mt-1 text-sm text-muted">{t('Active plans ending within 30 days.')}</p>
+                      <p className="mt-1 text-sm text-muted">{t('Running plans ending within 30 days.')}</p>
                     </div>
                     <div className="divide-y divide-line/60">
                       {bossBriefing.renewals.slice(0, 6).map(plan => {

@@ -54,9 +54,9 @@ const MarkDelivered: React.FC<{ deliverableId: string; title: string }> = ({ del
       const cycle = store.serviceCycles.find(item => item.id === deliverable?.cycleId);
       if (cycle?.status === 'Draft') {
         const published = store.setServiceCycleStatus(cycle.id, 'Published');
-        if (!published.ok) { setError(published.error || 'Unable to publish this month.'); return; }
+        if (!published.ok) { setError(published.error || 'Unable to start this month.'); return; }
         const saved = await useStore.getState().commitPendingMutation('service_cycle.manage');
-        if (!saved.ok) { setError(saved.error || 'The month is waiting to be published.'); return; }
+        if (!saved.ok) { setError(saved.error || 'The month is waiting to start.'); return; }
       }
       const delivered = useStore.getState().updateDeliverableStatus(deliverableId, 'Delivered');
       if (!delivered.ok) { setError(delivered.error || 'Unable to mark this delivered.'); return; }

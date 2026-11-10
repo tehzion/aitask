@@ -51,7 +51,7 @@ const CorrectDeliverableName = ({ deliverable, disabled = false, onSave }: {
     <input id={titleId} value={title} maxLength={200} onChange={event => setTitle(event.target.value)} className="min-h-10 rounded-control border border-line bg-surface px-3 text-sm text-ink" />
     <label htmlFor={reasonId} className="text-xs font-medium text-muted">{t('Reason (required)')}</label>
     <textarea id={reasonId} value={reason} maxLength={1000} rows={2} onChange={event => setReason(event.target.value)} className="rounded-control border border-line bg-surface px-3 py-2 text-sm text-ink" />
-    <p className="text-xs text-muted">{t('Only the name changes. Prices and quantities stay as published.')}</p>
+    <p className="text-xs text-muted">{t('Only the name changes. Prices and quantities stay the same.')}</p>
     <div className="flex flex-wrap justify-end gap-2">
       <Button type="button" variant="secondary" disabled={busy} onClick={() => setOpen(false)}>{t('Cancel')}</Button>
       <Button type="submit" disabled={!canSave}>{busy ? t('Saving...') : t('Save correction')}</Button>

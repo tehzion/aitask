@@ -55,7 +55,7 @@ test('PM re-dates long-overdue work and assigns unowned work from the dashboard'
   await expect(day.getByRole('heading', { name: 'Ready to finalize' })).toBeVisible();
   await expect(day.getByRole('heading', { name: 'Overdue', exact: true })).toBeVisible();
   await expect(day.getByRole('heading', { name: 'Due today', exact: true })).toBeVisible();
-  await expect(day.getByRole('heading', { name: 'Months to publish' })).toBeVisible();
+  await expect(day.getByRole('heading', { name: 'Months to start' })).toBeVisible();
   await expect(day.getByRole('heading', { name: 'Unlinked work this month' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Stuck work' })).toBeVisible();
   const newDue = isoDaysFromToday(5);

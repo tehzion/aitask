@@ -173,10 +173,10 @@ test('Customer progress uses the current plan and period while preserving delive
   await page.goto('/clients/role-company');
   await expect(page.getByText('50%', { exact: true }).first()).toBeVisible();
   await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(item => item.id !== 'current-cycle') }); });
-  await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
+  await expect(page.getByText('No month in progress', { exact: true })).toBeVisible();
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.goto('/');
-  await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
+  await expect(page.getByText('No month in progress', { exact: true })).toBeVisible();
   await expect(page.getByText('50%', { exact: true })).toHaveCount(0);
 });
 
@@ -276,7 +276,7 @@ test('Customer malformed published periods and contract dates do not break the w
   await page.goto('/clients/role-company');
   await expect(page.getByRole('heading', { name: 'Customer Co', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Deliveries', exact: true }).click();
-  await expect(page.getByText('No published deliveries yet', { exact: true })).toBeVisible();
+  await expect(page.getByText('No deliveries yet', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Services', exact: true }).click();
   await expect(page.getByText('Customer Plan', { exact: true })).toBeVisible();
   await expect(page.getByText('Service reminder', { exact: true })).toHaveCount(0);

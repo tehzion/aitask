@@ -136,7 +136,7 @@ const StaffMyWork: React.FC = () => {
     : persona === 'operation'
     ? { title: t('Operation context'), description: t('Your assigned delivery and review queue.'), values: [[t('Due today'), dueToday], [t('Waiting review'), waitingReview], [t('Blocked steps'), blockedCount]] as const }
     : persona === 'account'
-      ? { title: t('Account context'), description: t('Clients and plans connected to your assigned work.'), values: [[t('Assigned clients'), assignedClientCount], [t('Active plans'), activePlanCount], [t('Renewals'), renewals]] as const }
+      ? { title: t('Account context'), description: t('Clients and plans connected to your assigned work.'), values: [[t('Assigned clients'), assignedClientCount], [t('Running plans'), activePlanCount], [t('Renewals'), renewals]] as const }
     : { title: t('Production context'), description: t('Output, blockers, and revision work linked to your assignments.'), values: [[t('Linked outputs'), linkedOutputs], [t('Blocked steps'), blockedCount], [t('Revisions'), revisions]] as const };
 
   const openTask = (taskId: string) => {
