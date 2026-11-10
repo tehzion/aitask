@@ -50,7 +50,7 @@ try {
     await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
     const result = await page.evaluate(async ({ email, password, id }) => {
       localStorage.setItem('aitask:locale','en');
-      localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${id}`,'acknowledged');
+      localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${id}`,'acknowledged');
       const { useStore } = await import('/src/store/index.ts');
       return useStore.getState().login(email,password);
     }, { email: account.email, password, id });
