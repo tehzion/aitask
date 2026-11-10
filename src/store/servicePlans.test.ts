@@ -68,12 +68,12 @@ describe('client service plan store', () => {
 
     expect(useStore.getState().setServiceCycleStatus(cycleId, 'Completed')).toEqual({
       ok: false,
-      error: 'This cycle status transition is not allowed.',
+      error: 'This month’s status can’t change that way.',
     });
     expect(useStore.getState().setServiceCycleStatus(cycleId, 'Published').ok).toBe(true);
     expect(useStore.getState().setServiceCycleStatus(cycleId, 'Completed')).toEqual({
       ok: false,
-      error: 'Complete every required delivery before completing this cycle.',
+      error: 'Complete every required delivery before closing this month.',
     });
 
     useStore.setState(state => ({
@@ -82,7 +82,7 @@ describe('client service plan store', () => {
     expect(useStore.getState().setServiceCycleStatus(cycleId, 'Completed').ok).toBe(true);
     expect(useStore.getState().setServiceCycleStatus(cycleId, 'Draft')).toEqual({
       ok: false,
-      error: 'This cycle status transition is not allowed.',
+      error: 'This month’s status can’t change that way.',
     });
     expect(useStore.getState().serviceCycles.find(item => item.id === cycleId)?.status).toBe('Completed');
   });
@@ -98,7 +98,7 @@ describe('client service plan store', () => {
 
     expect(useStore.getState().setClientPlanStatus(created.planId!, 'Draft')).toEqual({
       ok: false,
-      error: 'Active plans with started cycles cannot return to Draft.',
+      error: 'A running plan with started months cannot go back to Draft.',
     });
     expect(useStore.getState().clientPlans.find(item => item.id === created.planId)?.status).toBe('Active');
   });

@@ -47,12 +47,12 @@ describe('release notice audiences', () => {
     const client = user({ role: 'Client', departments: ['Client'], department: 'Client', companyName: 'UrbanEats' });
     const english = getReleaseNoticeCopy(client, 'en');
     const chinese = getReleaseNoticeCopy(client, 'zh');
-    expect(english.title).toBe('Your progress is easier to read');
+    expect(english.title).toBe('Clearer words for your monthly service');
     expect(english.highlights.flatMap(item => [item.title, item.description]).join(' ')).not.toMatch(/price|pricing|internal|staff|approve several/i);
-    expect(chinese.title).toBe('进度更容易查看');
+    expect(chinese.title).toBe('月度服务的用词更清晰');
     expect(chinese.acknowledgeLabel).toBe('开始工作吧');
     const staff = getReleaseNoticeCopy(user(), 'en').highlights.map(item => item.title).join(' ');
-    expect(staff).not.toMatch(/Approve several|Staffing gaps|Assign from the list/);
+    expect(staff).not.toMatch(/Start plan|Start month/);
     for (const member of [user({ role: 'Project Manager', isSuperAdmin: true }), user({ role: 'Project Manager' }), user({ role: 'HOD', customRoleId: 'builtin-hod' }), user(), client]) {
       const en = getReleaseNoticeCopy(member, 'en');
       const zh = getReleaseNoticeCopy(member, 'zh');
@@ -64,7 +64,7 @@ describe('release notice audiences', () => {
 
 describe('local release notice acknowledgement', () => {
   it('is versioned and scoped to the signed-in local account', () => {
-    expect(RELEASE_NOTICE_ID).toBe('2026-11-everyday-saves');
+    expect(RELEASE_NOTICE_ID).toBe('2026-11-start-wording');
     expect(hasLocalReleaseNoticeAcknowledgement('member-1')).toBe(false);
     expect(acknowledgeLocalReleaseNotice('member-1')).toBe(true);
     expect(hasLocalReleaseNoticeAcknowledgement('member-1')).toBe(true);

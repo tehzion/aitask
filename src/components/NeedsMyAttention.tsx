@@ -30,7 +30,7 @@ const describeItem = (item: ManagementAttentionItem, t: Translate) => {
     case 'review': return t('Awaiting your review');
     case 'completion': return t('Ready to finalize');
     case 'renewal': return t('Renewal due');
-    case 'deliverable': return t('Service cycle ended before delivery');
+    case 'deliverable': return t('Month ended before delivery');
     case 'clientReview': return t('Ready for your review');
     default: return item.blocked ? t('Blocked work') : item.waitingReview ? t('Waiting review') : item.revisionCount ? `${t('Revision')} ${item.revisionCount}` : '';
   }

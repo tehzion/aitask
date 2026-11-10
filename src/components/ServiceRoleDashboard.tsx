@@ -361,7 +361,7 @@ const ServiceRoleDashboard = () => {
   }
 
   return <section className="space-y-4" aria-labelledby="management-workbench-title">
-    <WorkbenchHeader id="management-workbench-title" title={t('Company operations')} description={t('Contract value and current-cycle delivery for each active company.')} />
+    <WorkbenchHeader id="management-workbench-title" title={t('Company operations')} description={t("Contract value and this month's delivery for each company with a running plan.")} />
     <MetricStrip label={t('Company operations')} items={[
       { label: t('Contracted monthly value'), value: formatMoney(contractedMonthly, 'MYR', locale) },
       { label: t('Active clients'), value: activePlans.length, to: '/clients' },
@@ -386,7 +386,7 @@ const ServiceRoleDashboard = () => {
     {store.currentUser?.isSuperAdmin && <StaffingGapsPanel users={store.users} projects={store.projects} tasks={store.tasks} />}
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
-        <div><h3 className="font-semibold text-ink">{t('Monthly deliverables')}</h3><p className="mt-1 text-sm text-muted">{t('Current cycle delivery progress for each active company.')}</p></div>
+        <div><h3 className="font-semibold text-ink">{t('Monthly deliverables')}</h3><p className="mt-1 text-sm text-muted">{t("This month's delivery progress for each company with a running plan.")}</p></div>
         <CountLabel>{activeCompanies.length}</CountLabel>
       </div>
       <div className="divide-y divide-line/60">
@@ -408,7 +408,7 @@ const ServiceRoleDashboard = () => {
               </div>
               </> : <StatusChip tone="slate">{t(item.draftCycle
                 ? 'Not started yet'
-                : item.currentCycle ? 'No deliverables in this cycle' : 'No month in progress')}</StatusChip>}
+                : item.currentCycle ? 'No deliverables this month' : 'No month in progress')}</StatusChip>}
               <CompanyTaskActivity activity={item.taskActivity} />
               {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
                 {t('Progress counts completed work.')}

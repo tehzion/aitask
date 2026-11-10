@@ -11,7 +11,7 @@ const seedBoss = async (page: Page) => {
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   });
 };
@@ -32,7 +32,7 @@ test('an old role response cannot clear another account’s in-flight role draft
     const { useStore } = await import('/src/store/index.ts');
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
     enablePasswordResetBypass('another-role-account');
-    localStorage.setItem('aitask:release-notice:2026-11-everyday-saves:another-role-account', 'acknowledged');
+    localStorage.setItem('aitask:release-notice:2026-11-start-wording:another-role-account', 'acknowledged');
     useStore.setState(state => ({ currentUser: { ...state.currentUser!, id: 'another-role-account', mustResetPassword: false } }));
   });
   await expect(name).toHaveValue('');

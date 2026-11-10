@@ -519,7 +519,7 @@ const Settings: React.FC = () => {
         setLocalDemoMessage({
           tone: result.ok ? 'success' : 'error',
           text: result.ok
-            ? t('Sample workspace reset. Open Delivery tracker to explore the seeded service plans and cycles.')
+            ? t('Sample workspace reset. Open Delivery tracker to explore the seeded service plans and months.')
             : result.error || 'The sample workspace could not be reset.',
         });
       },
@@ -878,7 +878,7 @@ const Settings: React.FC = () => {
             <div>
               <p className="calm-eyebrow">{t('Local development only')}</p>
               <h2 id="local-demo-title" className="mt-1 text-lg font-semibold text-slate-900">{t('Sample service workspace')}</h2>
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{t('UrbanEats, TechNova, and EcoLife demonstrate package modes, frozen plans, cycles, task chains, client-visible activity, revisions, and role-specific workbenches. This data stays in this browser.')}</p>
+              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-600">{t('UrbanEats, TechNova, and EcoLife demonstrate package modes, frozen plans, months, task chains, client-visible activity, revisions, and role-specific workbenches. This data stays in this browser.')}</p>
             </div>
             <Button type="button" variant="secondary" onClick={handleResetLocalDemo}>
               <Database className="h-4 w-4" />

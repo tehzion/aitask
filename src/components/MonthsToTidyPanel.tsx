@@ -60,7 +60,7 @@ const MonthsToTidyPanel = ({ months, deliverables, todayKey, canManage }: {
     try {
       for (const cycle of targets) {
         const local = useStore.getState().setServiceCycleStatus(cycle.id, action.status);
-        if (!local.ok) { firstError ||= local.error || 'This cycle status transition is not allowed.'; continue; }
+        if (!local.ok) { firstError ||= local.error || 'This month’s status can’t change that way.'; continue; }
         const committed = await useStore.getState().commitPendingMutation('service_cycle.manage');
         if (committed.ok) saved += 1;
         else { firstError ||= committed.error || 'The change is waiting to be saved.'; break; }

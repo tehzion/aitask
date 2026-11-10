@@ -4715,7 +4715,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot revise client plans.' };
         const source = state.clientPlans.find(item => item.id === planId);
-        if (!source || !['Active', 'Paused', 'Ended'].includes(source.status)) return { ok: false, error: 'Only an active or ended plan can be renewed.' };
+        if (!source || !['Active', 'Paused', 'Ended'].includes(source.status)) return { ok: false, error: 'Only a running, paused or ended plan can be renewed.' };
         if (!isServiceClientInScope(state, source.clientId)) return { ok: false, error: serviceClientScopeError };
         const pending = state.clientPlans.find(item => item.supersedesPlanId === source.id && item.status === 'Draft');
         if (pending) return { ok: true, planId: pending.id };
@@ -4770,7 +4770,7 @@ export const useStore = create<StoreState>()(
         if (plan.status !== 'Draft' || !plan.supersedesPlanId) return { ok: false, error: 'Only a draft revision can be scheduled.' };
         if (expectedVersion !== undefined && plan.version !== expectedVersion) return { ok: false, error: 'This revision changed elsewhere. Review the saved revision before saving.' };
         const source = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
-        if (!source || source.status !== 'Active') return { ok: false, error: 'Resume the active plan before scheduling a revision.' };
+        if (!source || source.status !== 'Active') return { ok: false, error: 'Resume the plan before scheduling a revision.' };
         const next = nextRevisionBoundary(source, getBillingToday());
         if (next !== effectiveDate) return { ok: false, error: 'The billing date changed. Refresh and review the next cycle before scheduling.' };
         const error = validateRevisionItems(plan.serviceItems);
@@ -4784,7 +4784,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const plan = state.clientPlans.find(item => item.id === planId);
         if (!canManageClientPlans(state.currentUser, state.rolePermissions) || !plan || !isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
-        if (plan.status !== 'Draft' || !plan.supersedesPlanId) return { ok: false, error: 'This revision is already active. Create a new revision for the next cycle.' };
+        if (plan.status !== 'Draft' || !plan.supersedesPlanId) return { ok: false, error: 'This revision is already in use. Create a new revision for next month.' };
         if (expectedVersion !== undefined && plan.version !== expectedVersion) return { ok: false, error: 'This revision changed elsewhere. Review the saved revision before saving.' };
         set({ clientPlans: state.clientPlans.map(item => item.id === plan.id ? { ...item, revisionScheduleStatus: 'draft', updatedAt: new Date().toISOString() } : item) });
         return { ok: true };
@@ -4860,7 +4860,7 @@ export const useStore = create<StoreState>()(
         const plan = state.clientPlans.find(item => item.id === planId);
         if (!plan) return { ok: false, error: 'Plan not found.' };
         if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
-        if (plan.status !== 'Active' && plan.status !== 'Paused') return { ok: false, error: 'Only active or paused plans can be edited here.' };
+        if (plan.status !== 'Active' && plan.status !== 'Paused') return { ok: false, error: 'Only running or paused plans can be edited here.' };
         const nextBillingDay = data.billingDay !== undefined ? Math.min(31, Math.max(1, Math.trunc(data.billingDay))) : plan.billingDay;
         const nextContractEnd = data.contractEndDate !== undefined
           ? (data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined)
@@ -4886,10 +4886,10 @@ export const useStore = create<StoreState>()(
         if (plan.status !== 'Draft' && plan.status !== 'Paused') return { ok: false, error: 'Only draft or paused plans can be activated.' };
         if (plan.status === 'Draft' && plan.supersedesPlanId) {
           const sourcePlan = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
-          if (sourcePlan?.status !== 'Ended') return { ok: false, error: 'Review and schedule this revision for the next billing cycle.' };
+          if (sourcePlan?.status !== 'Ended') return { ok: false, error: 'Review and schedule this revision for next month.' };
         }
         if (state.clientPlans.some(item => item.clientId === plan.clientId && item.id !== plan.id && item.status === 'Active')) {
-          return { ok: false, error: 'This client already has an active plan.' };
+          return { ok: false, error: 'This client already has a running plan.' };
         }
         const periodStart = plan.status === 'Paused' ? nextBillingDate(getBillingToday(), plan.billingDay) : plan.startDate;
         const existing = state.serviceCycles.find(cycle => cycle.planId === plan.id && cycle.periodStart === periodStart);
@@ -4978,7 +4978,7 @@ export const useStore = create<StoreState>()(
         if (plan.status === 'Ended') return { ok: false, error: 'Ended plans cannot be reopened.' };
         const hasStartedCycle = state.serviceCycles.some(cycle => cycle.planId === plan.id && cycle.status !== 'Draft');
         if (plan.status === 'Active' && status === 'Draft' && hasStartedCycle) {
-          return { ok: false, error: 'Active plans with started cycles cannot return to Draft.' };
+          return { ok: false, error: 'A running plan with started months cannot go back to Draft.' };
         }
         set(current => ({ clientPlans: current.clientPlans.map(item => item.id === planId ? { ...item, status, updatedAt: new Date().toISOString() } : item) }));
         return { ok: true };
@@ -4994,14 +4994,14 @@ export const useStore = create<StoreState>()(
         if (!canManageServiceCycles(actor, state.rolePermissions)) return { ok: false, error: 'You do not have permission to manage service cycles.' };
         if (status === cycle.status) return { ok: true };
         if (!allowedServiceCycleTransitions[cycle.status].includes(status)) {
-          return { ok: false, error: 'This cycle status transition is not allowed.' };
+          return { ok: false, error: 'This month’s status can’t change that way.' };
         }
         if (status === 'Completed') {
           const cycleDeliverables = state.deliverables.filter(item => item.cycleId === cycle.id && item.clientId === cycle.clientId);
           const allDelivered = cycleDeliverables.length > 0 && cycleDeliverables.every(
             deliverable => resolveDeliverableStatus(deliverable, state.tasks, state.serviceCycles) === 'Delivered',
           );
-          if (!allDelivered) return { ok: false, error: 'Complete every required delivery before completing this cycle.' };
+          if (!allDelivered) return { ok: false, error: 'Complete every required delivery before closing this month.' };
         }
         const now = new Date().toISOString();
         set(current => ({ serviceCycles: current.serviceCycles.map(item => item.id === cycleId ? { ...item, status, publishedAt: status === 'Published' ? item.publishedAt || now : item.publishedAt, updatedAt: now } : item) }));

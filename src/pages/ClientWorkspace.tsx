@@ -580,7 +580,7 @@ const OperationsClientWorkspace = () => {
       <PageHeader
         compact
         title={<span data-i18n-skip>{client.clientName}</span>}
-        description={t("Plan details, delivery cycles, deliverables, and shared files.")}
+        description={t("Plan details, months, deliverables, and shared files.")}
         onboardingTarget="service-plan"
         meta={
           <>
@@ -701,9 +701,9 @@ const OperationsClientWorkspace = () => {
                   {/* The month's % lives in the delivery summary above; this block keeps the closeout figures. */}
                   {cycle.status === 'Draft' && <p className="text-sm text-muted">{t('Planned deliverables')}: {includedTotal}</p>}
                   {progress.length > 1 && <p className="mt-2 text-xs text-muted">{progress.map((item) => item.name).join(" · ")}</p>}
-                  <section aria-label={t('Monthly cycle closeout')} className={cn((cycle.status === 'Draft' || progress.length > 1) && "mt-5 border-t border-line/70 pt-4")}>
+                  <section aria-label={t('Month closeout')} className={cn((cycle.status === 'Draft' || progress.length > 1) && "mt-5 border-t border-line/70 pt-4")}>
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div><h3 className="text-sm font-semibold text-ink">{t('Cycle closeout')}</h3><p className="mt-1 text-xs text-muted">{closeout.isReadyToClose ? t('All deliverables and tasks are complete.') : t('Resolve the remaining work before closing this cycle.')}</p></div>
+                      <div><h3 className="text-sm font-semibold text-ink">{t('Month closeout')}</h3><p className="mt-1 text-xs text-muted">{closeout.isReadyToClose ? t('All deliverables and tasks are complete.') : t('Resolve the remaining work before closing this month.')}</p></div>
                       <Badge tone={closeout.isReadyToClose ? 'emerald' : closeout.overdueTasks > 0 ? 'red' : 'amber'}>{t(closeout.isReadyToClose ? 'Ready to close' : 'In progress')}</Badge>
                     </div>
                     {/* The % is shown once, in the delivery summary at the top of the tab. */}
@@ -921,7 +921,7 @@ const OperationsClientWorkspace = () => {
           })}
           {!selectedCycle && (
             <p className="rounded-control border border-dashed border-line p-10 text-center text-sm text-muted">
-              {t("No visible service cycles yet.")}
+              {t("No months to show yet.")}
             </p>
           )}
           <section className={cn(cardBase, "overflow-hidden")}>
@@ -1010,7 +1010,7 @@ const OperationsClientWorkspace = () => {
                 </div>
               </div>
             )}
-            {canManagePlans && activePlan && ['Active', 'Paused'].includes(activePlan.status) && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4"><p className="text-sm text-muted">{t('Plan settings apply to future billing cycles.')}</p><Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button></div>}
+            {canManagePlans && activePlan && ['Active', 'Paused'].includes(activePlan.status) && <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4"><p className="text-sm text-muted">{t('Plan settings apply to future months.')}</p><Button variant="secondary" onClick={() => setPlanDatesOpen(true)}>{t('Edit plan dates')}</Button></div>}
             {canManagePlans && activeOrPausedPlan?.status === "Active" && (
               <div className="flex flex-wrap justify-end gap-2 border-t p-4">
                 {!scheduledRevision && (
@@ -1210,7 +1210,7 @@ const OperationsClientWorkspace = () => {
           labelledBy={planConfirmationTitleId}
           title={planAction === "pause" ? t(`Pause the "${activePlan.name}" plan?`) : t(`End the "${activePlan.name}" plan?`)}
           description={planAction === "pause"
-            ? t("The current cycle stays unchanged and future cycles stop generating.")
+            ? t("This month stays as it is, and no new months are created.")
             : t("This cannot be reopened; the client keeps access to completed work.")}
           confirmLabel={planAction === "pause" ? t("Pause plan") : t("End plan")}
           onClose={() => setPlanAction(null)}

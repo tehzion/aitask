@@ -152,7 +152,7 @@ test('client portal and workspace keep user-authored names untouched in Chinese 
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
-    localStorage.setItem('aitask:release-notice:2026-11-everyday-saves:client-i18n', 'acknowledged');
+    localStorage.setItem('aitask:release-notice:2026-11-start-wording:client-i18n', 'acknowledged');
     useStore.setState({ currentUser: { id: 'client-i18n', name: 'Client I18N', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Settings', permissions: { viewDashboard: true, viewTasks: true } } });
   });
   await page.goto('/');
@@ -209,7 +209,7 @@ test('client delivery search preserves Chinese IME composition without repeating
   await page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' })
     .getByRole('button', { name: 'Happy working' }).click();
 
-  await page.evaluate(() => localStorage.setItem('aitask:release-notice:2026-11-everyday-saves:client-ime', 'acknowledged'));
+  await page.evaluate(() => localStorage.setItem('aitask:release-notice:2026-11-start-wording:client-ime', 'acknowledged'));
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
