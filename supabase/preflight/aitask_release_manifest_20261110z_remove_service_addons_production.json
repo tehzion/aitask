@@ -1,0 +1,54 @@
+{
+  "manifestVersion": "2026-11-10.5",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261110_workload_rls_read_speedup_production.json",
+  "immutable": false,
+  "capturedAt": "2026-11-10T12:20:00Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "PENDING PRODUCTION APPROVAL: 20261110201000_remove_service_addons is not applied. Production records 148 migrations through 20261110114150_audit_history_actor_snapshot_without_avatar.",
+  "validatedMigrationTail": [
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover",
+    "20261102120000_plan_activation_entity_types",
+    "20261102130000_hod_assignee_output_files",
+    "20261102140000_addon_save_entity_types",
+    "20261102150000_task_assigned_at_format",
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign",
+    "20261103125940_hod_department_delegation_disable_staff_creation",
+    "20261103125949_pm_direct_internal_assignment",
+    "20261103143949_service_cycle_payments",
+    "20261104053237_restore_hod_handoff_and_codify_live_grants",
+    "20261104062406_block_project_delete_with_linked_tasks",
+    "20261106041228_optimize_pm_service_access",
+    "20261109141920_r3_s1_project_approval_pm",
+    "20261109193707_aitask_client_events",
+    "20261110015703_release_notice_everyday_saves",
+    "20261110071019_hod_staff_workload_summary",
+    "20261110114105_rls_read_speedup",
+    "20261110114150_audit_history_actor_snapshot_without_avatar",
+    "20261110201000_remove_service_addons"
+  ],
+  "pendingProductionMigrations": [
+    "20261110201000_remove_service_addons"
+  ],
+  "productionVerification": {
+    "historyAligned": false,
+    "historyThrough": "20261110114150_audit_history_actor_snapshot_without_avatar",
+    "latestAppliedMigration": "20261110114150_audit_history_actor_snapshot_without_avatar"
+  },
+  "changeSummary": {
+    "20261110201000_remove_service_addons": "Removes service add-ons (owner decision, 10 Nov 2026). Copies every add-on row, add-on pricing snapshot and affected service cycle into private.addon_removal_backup_20261110 (RLS on, no anon/authenticated access), deletes the add-on rows and their pricing snapshots, clears addonSnapshots on cycles, and removes 'addon' from aitask_entities_entity_type_check. Production on 10 Nov 2026 held 8 add-ons across 5 clients, 8 add-on pricing snapshots and 4 cycles with add-on lines (3 Completed). Cycle pricing snapshots are unchanged: their totals never included add-on amounts."
+  },
+  "qualityGates": {
+    "localDatabase": "PASS: the migration ran in a rolled-back transaction on the local database with a seeded add-on, add-on pricing snapshot and a Completed cycle carrying add-on lines: all three were backed up, the add-on rows deleted, the cycle's addonSnapshots cleared (version bumped), and a new add-on insert rejected by the check constraint. remove_service_addons.test.sql: 6/6 assertions pass.",
+    "app": "Typecheck, lint and 1,115 unit tests pass with add-ons removed from the client page, store, sync, demo data and pricing helpers.",
+    "releaseOrder": "Apply this migration before deploying the app change, so no cycle edit drops add-on lines before they are backed up.",
+    "rollback": "Restore rows from private.addon_removal_backup_20261110 (entity_row holds each full aitask_entities row) and re-add 'addon' to aitask_entities_entity_type_check.",
+    "productionApply": "NOT APPLIED. Requires the owner's approval."
+  }
+}
