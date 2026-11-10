@@ -62,7 +62,7 @@ select 'ws-rls', (array['comment', 'approval'])[1 + g % 2], 'x' || g, 't' || (1 
 from generate_series(1, 30) g;
 
 insert into public.aitask_entities (workspace_id, entity_type, entity_id, parent_id, client_key, client_id, created_by, data)
-select 'ws-rls', (array['client_plan', 'service_cycle', 'deliverable', 'addon', 'service_pricing_snapshot', 'cycle_comment'])[1 + g % 6],
+select 'ws-rls', (array['client_plan', 'service_cycle', 'deliverable', 'service_pricing_snapshot', 'cycle_comment'])[1 + g % 5],
   's' || g, 'c' || (1 + g % 8), 'client' || (1 + g % 8), 'c' || (1 + g % 8), 'r-pm1', '{}'::jsonb
 from generate_series(1, 36) g;
 insert into public.aitask_entities (workspace_id, entity_type, entity_id, parent_id, client_key, client_id, created_by, data)

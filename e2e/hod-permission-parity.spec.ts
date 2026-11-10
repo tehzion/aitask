@@ -23,7 +23,7 @@ const seedHod = async (page: Page, options: { recipients?: boolean; manage?: boo
       { ...base, id: 'hod-oversight', title: 'Legacy Editor oversight', department: 'Editor', assignedTo: 'audit-editor', createdBy: 'audit-pm' },
       { ...base, id: 'hod-foreign', title: 'Foreign department work', department: 'Designer', assignedTo: 'audit-designer', createdBy: 'audit-pm' },
     ];
-    useStore.setState({ currentUser: hod, users, tasks, clients: [], projects: [], rolePermissions: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], servicePricingSnapshots: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+    useStore.setState({ currentUser: hod, users, tasks, clients: [], projects: [], rolePermissions: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], servicePricingSnapshots: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   }, options);
 };
 

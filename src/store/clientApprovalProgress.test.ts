@@ -30,7 +30,7 @@ const deliverable: Deliverable = {
 const cycle: ServiceCycle = {
   id: task.serviceCycleId!, clientId: task.clientId!, clientName: task.clientName, planId: 'progress-plan', planRevision: 1,
   periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', currency: 'MYR',
-  serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
+  serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
   publishedAt: timestamp, createdAt: timestamp, updatedAt: timestamp,
 };
 const reviewReadyTask: Task = {

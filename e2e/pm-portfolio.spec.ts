@@ -26,7 +26,7 @@ const seedPM = async (page: Page) => {
         { ...base, id: 'pm-edit', title: 'Inherited editable work', status: 'Pending' },
         { ...base, id: 'pm-hidden', title: 'Hidden other portfolio', clientId: 'foreign-company', clientName: 'Foreign Company', projectId: undefined, status: 'Approved' },
       ],
-      clientPlans: [], serviceCycles: [], deliverables: [], addons: [], cycleComments: [], servicePricingSnapshots: [], notifications: [],
+      clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], servicePricingSnapshots: [], notifications: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
     stopBackendAutoSync();

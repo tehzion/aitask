@@ -13,7 +13,7 @@ async function seed(page: Page) {
     enablePasswordResetBypass(boss.id);
     localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], projects: [], tasks: [], clientPlans: [],
-      serviceCycles: [], deliverables: [], addons: [], servicePricingSnapshots: [],
+      serviceCycles: [], deliverables: [], servicePricingSnapshots: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   });
 }

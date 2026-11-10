@@ -12,8 +12,7 @@ const seed = async (page: Page) => {
     enablePasswordResetBypass(boss.id);
     localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], projects: [], tasks: [],
-      clientPlans: [], serviceCycles: [], deliverables: [], addons: [],
-      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+      clientPlans: [], serviceCycles: [], deliverables: [],       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     const result = useStore.getState().createClientWithPlan({ clientName: 'Creation QA Company', planName: 'QA plan', origin: 'custom',
       serviceItems: [{ id: 'creation-design', name: 'Design', platforms: [], unit: 'post', quantity: 1, unitPriceMinor: 100 }],
       startDate: '2026-10-01', billingDay: 1, contractEndDate: '2027-10-01', discountType: 'none', discountValue: 0, taxRateBps: 0 });
@@ -73,50 +72,3 @@ test('discarded task creation keeps its draft and avoids opening an absent task'
   await expect(page).toHaveURL(/\/tasks$/);
 });
 
-test('add-on creation exception locks its submitted draft and retries one record', async ({ page }) => {
-  const fixture = await seed(page);
-  await page.goto(`/clients/${fixture.clientId}`);
-  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
-  await page.getByRole('button', { name: 'Add service add-on' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add service add-on' });
-  await dialog.getByLabel('Add-on name').fill('Recoverable add-on');
-  await dialog.getByLabel('Service cycle').selectOption(fixture.cycleId);
-  await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    let calls = 0;
-    useStore.setState({ commitPendingMutation: async () => {
-      if (++calls === 1) throw new Error('Injected add-on exception');
-      return { ok: true };
-    } });
-  });
-  await dialog.getByRole('button', { name: 'Add add-on', exact: true }).click();
-  await expect(dialog.getByText('Injected add-on exception')).toBeVisible();
-  await expect(dialog.getByLabel('Add-on name')).toBeDisabled();
-  await dialog.getByRole('button', { name: 'Retry save', exact: true }).click();
-  await expect(dialog).toBeHidden();
-  expect(await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().addons.filter(addon => addon.name === 'Recoverable add-on').length)).toBe(1);
-});
-
-test('discarded add-on creation retains its draft with review feedback', async ({ page }) => {
-  const fixture = await seed(page);
-  await page.goto(`/clients/${fixture.clientId}`);
-  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
-  await page.getByRole('button', { name: 'Add service add-on' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Add service add-on' });
-  await dialog.getByLabel('Add-on name').fill('Discarded add-on');
-  await dialog.getByLabel('Service cycle').selectOption(fixture.cycleId);
-  await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    useStore.setState({ commitPendingMutation: async () => ({ ok: false, error: 'Injected uncertain add-on' }) });
-  });
-  await dialog.getByRole('button', { name: 'Add add-on', exact: true }).click();
-  await expect(dialog.getByText('Injected uncertain add-on')).toBeVisible();
-  await page.evaluate(async () => {
-    const { useStore } = await import('/src/store/index.ts');
-    useStore.setState({ addons: [], commitPendingMutation: async () => ({ ok: true }) });
-  });
-  await dialog.getByRole('button', { name: 'Retry save', exact: true }).click();
-  await expect(dialog.getByText('The pending add-on is no longer available. Review your draft before saving again.')).toBeVisible();
-  await expect(dialog.getByLabel('Add-on name')).toHaveValue('Discarded add-on');
-  await expect(dialog.getByLabel('Add-on name')).toBeEnabled();
-});

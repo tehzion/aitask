@@ -203,8 +203,7 @@ describe('client profile store authorization', () => {
       serviceCycles: [],
       deliverables: [],
       cycleComments: [],
-      addons: [],
-      servicePricingSnapshots: [],
+            servicePricingSnapshots: [],
       rolePermissions: [],
       backend: { ...initialState.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     }, true);

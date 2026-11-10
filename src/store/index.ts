@@ -34,7 +34,6 @@ import {
   ServiceCycle,
   Deliverable,
   CycleComment,
-  Addon,
   PlanOrigin,
   ServiceCycleStatus,
   DeliverableStatus,
@@ -348,7 +347,6 @@ export interface StoreState {
   serviceCyclePayments: ServiceCyclePayment[];
   deliverables: Deliverable[];
   cycleComments: CycleComment[];
-  addons: Addon[];
   serviceWorkflowTemplates: ServiceWorkflowTemplate[];
   servicePricingSnapshots: ServicePricingSnapshot[];
   isCreateTaskModalOpen: boolean;
@@ -433,8 +431,6 @@ export interface StoreState {
   carryForwardTaskToCycle: (taskId: string, targetCycleId: string, targetDeliverableId?: string) => { ok: boolean; taskId?: string; error?: string };
   addCycleComment: (cycleId: string, text: string, visibility: CommentVisibility) => { ok: boolean; id?: string; error?: string };
   addCycleCommentAttachment: (commentId: string, attachment: AttachmentRef) => { ok: boolean; error?: string };
-  addAddon: (data: Omit<Addon, 'id' | 'createdAt' | 'updatedAt'>) => { ok: boolean; id?: string; error?: string };
-  setAddonActive: (addonId: string, isActive: boolean, effectiveUntil?: string) => { ok: boolean; error?: string };
   addComment: (taskId: string, text: string) => { ok: boolean; id?: string; error?: string };
   markNotificationRead: (id: string) => void;
   markNotificationUnread: (id: string) => void;
@@ -730,7 +726,7 @@ export const stripSensitiveWorkspaceFields = (value: unknown): unknown => {
 };
 
 const sanitizeWorkspaceStateForSnapshot = (
-  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'addons' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
+  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
 ): PersistedWorkspaceState => stripSensitiveWorkspaceFields({
   users: state.users.map(user => stripPassword(user as User & { password?: string })),
   clients: state.clients || [],
@@ -750,7 +746,6 @@ const sanitizeWorkspaceStateForSnapshot = (
   serviceCyclePayments: state.serviceCyclePayments || [],
   deliverables: state.deliverables || [],
   cycleComments: state.cycleComments || [],
-  addons: state.addons || [],
   serviceWorkflowTemplates: state.serviceWorkflowTemplates || [],
   servicePricingSnapshots: state.servicePricingSnapshots || [],
 }) as PersistedWorkspaceState;
@@ -1020,7 +1015,6 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
     serviceCycles: parsed.serviceCycles.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
     deliverables: parsed.deliverables.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
     cycleComments: parsed.cycleComments.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
-    addons: parsed.addons.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
     serviceWorkflowTemplates: parsed.serviceWorkflowTemplates.length ? parsed.serviceWorkflowTemplates : [{ ...SHORT_VIDEO_WORKFLOW_TEMPLATE, steps: SHORT_VIDEO_WORKFLOW_TEMPLATE.steps.map(step => ({ ...step })) }],
   };
 };
@@ -1107,14 +1101,13 @@ const setLocalServiceDemoVersion = () => {
 };
 
 const hasLocalServiceData = (state: Pick<StoreState,
-  'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'addons' | 'servicePricingSnapshots'
+  'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'servicePricingSnapshots'
 >) => (
   state.servicePackages.length > 0 ||
   state.clientPlans.length > 0 ||
   state.serviceCycles.length > 0 ||
   state.deliverables.length > 0 ||
   state.cycleComments.length > 0 ||
-  state.addons.length > 0 ||
   state.servicePricingSnapshots.length > 0
 );
 
@@ -1196,7 +1189,7 @@ const mergePersistedWorkspace = (persistedState: unknown, currentState: StoreSta
 const workspaceMutationFields: Array<keyof StoreState> = [
   'users', 'clients', 'projects', 'tasks', 'notifications', 'registrations', 'rolePermissions', 'taskStatuses',
   'deletedUserIds', 'deletedRoleIds', 'deletedTaskStatuses', 'deletedClientIds',
-  'servicePackages', 'clientPlans', 'serviceCycles', 'serviceCyclePayments', 'deliverables', 'cycleComments', 'addons',
+  'servicePackages', 'clientPlans', 'serviceCycles', 'serviceCyclePayments', 'deliverables', 'cycleComments',
   'serviceWorkflowTemplates', 'servicePricingSnapshots',
 ];
 
@@ -1238,7 +1231,6 @@ export const useStore = create<StoreState>()(
       serviceCyclePayments: [],
       deliverables: [],
       cycleComments: [],
-      addons: [],
       serviceWorkflowTemplates: [{ ...SHORT_VIDEO_WORKFLOW_TEMPLATE, steps: SHORT_VIDEO_WORKFLOW_TEMPLATE.steps.map(step => ({ ...step })) }],
       servicePricingSnapshots: [],
       isCreateTaskModalOpen: false,
@@ -4346,7 +4338,6 @@ export const useStore = create<StoreState>()(
           serviceCycles: current.serviceCycles.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
           deliverables: current.deliverables.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
           cycleComments: current.cycleComments.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
-          addons: current.addons.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
         }));
 
         return { ok: true };
@@ -4423,7 +4414,6 @@ export const useStore = create<StoreState>()(
           serviceCycles: current.serviceCycles.filter(item => item.clientId !== clientId),
           deliverables: current.deliverables.filter(item => item.clientId !== clientId),
           cycleComments: current.cycleComments.filter(item => item.clientId !== clientId),
-          addons: current.addons.filter(item => item.clientId !== clientId),
           servicePricingSnapshots: current.servicePricingSnapshots.filter(item => item.clientId !== clientId),
         }));
 
@@ -4903,7 +4893,7 @@ export const useStore = create<StoreState>()(
         }
         const periodStart = plan.status === 'Paused' ? nextBillingDate(getBillingToday(), plan.billingDay) : plan.startDate;
         const existing = state.serviceCycles.find(cycle => cycle.planId === plan.id && cycle.periodStart === periodStart);
-        const records = existing ? null : makeCycleRecords(plan, state.addons.filter(addon => addon.clientId === plan.clientId), periodStart, nowId);
+        const records = existing ? null : makeCycleRecords(plan, periodStart, nowId);
         const now = new Date().toISOString();
         const cyclePricing = records ? makePricingSnapshot({
           id: nowId('PRICE'), clientId: plan.clientId, parentType: 'service_cycle', parentId: records.cycle.id,
@@ -4952,7 +4942,7 @@ export const useStore = create<StoreState>()(
             if (!Number.isInteger(plan.billingDay) || plan.billingDay < 1 || plan.billingDay > 31) break;
             // Match the database uniqueness rule: one cycle per client and start date.
             if (![...state.serviceCycles, ...cycles].some(cycle => cycle.clientId === plan.clientId && cycle.periodStart === start)) {
-              const records = makeCycleRecords(plan, state.addons.filter(addon => addon.clientId === plan.clientId), start, nowId, now);
+              const records = makeCycleRecords(plan, start, nowId, now);
               const price = makePricingSnapshot({
                 id: nowId('PRICE'), clientId: plan.clientId, parentType: 'service_cycle', parentId: records.cycle.id,
                 items: records.cycle.serviceItems, discountType: plan.discountType,
@@ -5287,50 +5277,6 @@ export const useStore = create<StoreState>()(
             && state.tasks.some(task => task.serviceCycleId === comment.cycleId && task.assignedTo === state.currentUser?.id));
         if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
         set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
-        return { ok: true };
-      },
-
-      addAddon: (data) => {
-        const state = get();
-        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
-        const actor = state.currentUser;
-        if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
-        if (!state.clientPlans.some(plan => plan.id === data.planId && plan.clientId === data.clientId)) return { ok: false, error: 'Client plan not found.' };
-        if (!isServiceClientInScope(state, data.clientId)) return { ok: false, error: serviceClientScopeError };
-        const name = data.name.trim().slice(0, 160);
-        if (!name) return { ok: false, error: 'Add-on name is required.' };
-        if (data.billingMode === 'one_off' && !data.targetCycleId) return { ok: false, error: 'Choose the cycle for this one-off add-on.' };
-        if (data.targetCycleId && !state.serviceCycles.some(cycle => cycle.id === data.targetCycleId && cycle.clientId === data.clientId && cycle.planId === data.planId)) return { ok: false, error: 'Choose a cycle from this client plan.' };
-        if (!isValidIsoDate(data.effectiveFrom)) return { ok: false, error: 'Choose a valid effective date.' };
-        const now = new Date().toISOString();
-        const id = nowId('ADD');
-        const pricingSnapshotId = nowId('PRICE');
-        const item: Addon = { ...data, id, pricingSnapshotId, name, platforms: data.platforms.map(value => value.trim()).filter(Boolean).slice(0, 20), quantity: Math.max(1, Math.trunc(data.quantity)), unitPriceMinor: Math.max(0, Math.trunc(data.unitPriceMinor)), description: cleanProfileText(data.description, 2000), createdAt: now, updatedAt: now };
-        const pricing = makePricingSnapshot({ id: pricingSnapshotId, clientId: item.clientId, parentType: 'addon', parentId: id, addonUnitPriceMinor: item.unitPriceMinor, addonQuantity: item.quantity, now });
-        set(current => ({
-          addons: [...current.addons, item],
-          servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
-          serviceCycles: current.serviceCycles.map(cycle => {
-            const applies = cycle.status === 'Draft' && (
-              (item.billingMode === 'one_off' && item.targetCycleId === cycle.id)
-              || (item.billingMode === 'monthly' && cycle.planId === item.planId && cycle.periodStart >= item.effectiveFrom)
-            );
-            return applies ? { ...cycle, addonSnapshots: [...cycle.addonSnapshots, item], updatedAt: now } : cycle;
-          }),
-        }));
-        return { ok: true, id: item.id };
-      },
-
-      setAddonActive: (addonId, isActive, effectiveUntil) => {
-        const state = get();
-        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
-        if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
-        const addon = state.addons.find(item => item.id === addonId);
-        if (!addon) return { ok: false, error: 'Add-on not found.' };
-        if (!isServiceClientInScope(state, addon.clientId)) return { ok: false, error: serviceClientScopeError };
-        if (effectiveUntil && !isValidIsoDate(effectiveUntil)) return { ok: false, error: 'Choose a valid ending date.' };
-        const now = new Date().toISOString();
-        set(current => ({ addons: current.addons.map(item => item.id === addonId ? { ...item, isActive, effectiveUntil: isActive ? effectiveUntil : effectiveUntil || getTodayInputDate(), updatedAt: now } : item) }));
         return { ok: true };
       },
 
@@ -6546,7 +6492,6 @@ export const useStore = create<StoreState>()(
             serviceCycles: [...state.serviceCycles, ...fixture.serviceCycles],
             deliverables: [...state.deliverables, ...fixture.deliverables],
             cycleComments: [...state.cycleComments, ...fixture.cycleComments],
-            addons: [...state.addons, ...fixture.addons],
             serviceWorkflowTemplates: [
               ...state.serviceWorkflowTemplates,
               ...fixture.serviceWorkflowTemplates.filter(template => !state.serviceWorkflowTemplates.some(item => item.id === template.id)),
@@ -6584,7 +6529,6 @@ export const useStore = create<StoreState>()(
             serviceCycles: replaceLocalServiceDemoRecords(current.serviceCycles, fixture.serviceCycles),
             deliverables: replaceLocalServiceDemoRecords(current.deliverables, fixture.deliverables),
             cycleComments: replaceLocalServiceDemoRecords(current.cycleComments, fixture.cycleComments),
-            addons: replaceLocalServiceDemoRecords(current.addons, fixture.addons),
             serviceWorkflowTemplates: [
               ...current.serviceWorkflowTemplates,
               ...fixture.serviceWorkflowTemplates.filter(template => !current.serviceWorkflowTemplates.some(item => item.id === template.id)),
@@ -6680,7 +6624,6 @@ export const useStore = create<StoreState>()(
           serviceCyclePayments: state.serviceCyclePayments,
           deliverables: state.deliverables,
           cycleComments: state.cycleComments,
-          addons: state.addons,
           serviceWorkflowTemplates: state.serviceWorkflowTemplates,
           servicePricingSnapshots: state.servicePricingSnapshots,
         };
@@ -6899,8 +6842,7 @@ export const startBackendAutoSync = () => {
       state.serviceCycles !== previousState.serviceCycles ||
       state.serviceCyclePayments !== previousState.serviceCyclePayments ||
       state.deliverables !== previousState.deliverables ||
-      state.cycleComments !== previousState.cycleComments ||
-      state.addons !== previousState.addons;
+      state.cycleComments !== previousState.cycleComments;
 
     const serviceMetadataChanged =
       state.serviceWorkflowTemplates !== previousState.serviceWorkflowTemplates ||
@@ -6929,7 +6871,6 @@ export const startBackendAutoSync = () => {
         serviceCyclePayments: previousState.serviceCyclePayments,
         deliverables: previousState.deliverables,
         cycleComments: previousState.cycleComments,
-        addons: previousState.addons,
         serviceWorkflowTemplates: previousState.serviceWorkflowTemplates,
         servicePricingSnapshots: previousState.servicePricingSnapshots,
         backend: {
@@ -7091,7 +7032,7 @@ export const clearWorkspaceSession = (options: { discardPending?: boolean } = {}
     currentUser: null,
     ...(shouldUseSupabase() ? {
       taskStatuses: [], users: [], clients: [], projects: [], tasks: [], notifications: [], registrations: [], rolePermissions: [],
-      clientPlans: [], serviceCycles: [], serviceCyclePayments: [], deliverables: [], cycleComments: [], addons: [], servicePackages: [],
+      clientPlans: [], serviceCycles: [], serviceCyclePayments: [], deliverables: [], cycleComments: [], servicePackages: [],
       serviceWorkflowTemplates: [], servicePricingSnapshots: [], notificationUnreadCount: 0,
       deletedUserIds: [], deletedRoleIds: [], deletedTaskStatuses: [], deletedClientIds: [],
     } : {}),

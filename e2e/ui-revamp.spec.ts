@@ -60,7 +60,7 @@ const seed = async (page: Page, actor: Actor, locale: 'en' | 'zh' = 'en') => {
         { ...base, id: 'rv-pm-review', title: 'RV PM-approval submission', status: 'Waiting Approval', approvalMode: 'pm', completionPercentage: 80 },
         { ...base, id: 'rv-approved', title: 'RV approved poster', status: 'Approved', completionPercentage: 90 },
       ],
-      clientPlans: [], serviceCycles: [], deliverables: [], addons: [], cycleComments: [], servicePricingSnapshots: [], notifications: [], registrations: [],
+      clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], servicePricingSnapshots: [], notifications: [], registrations: [],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
     stopBackendAutoSync();

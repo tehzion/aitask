@@ -18,7 +18,7 @@ for (const mobile of [false, true]) {
         currentUser: pm, users: [pm], rolePermissions: [], tasks: [], notifications: [],
         clients: [{ id: 'release-company', clientName: 'Release company', createdBy: pm.id, createdAt: '2026-10-01', updatedAt: '2026-10-01' }],
         projects: [{ id: 'release-project', clientId: 'release-company', clientName: 'Release company', projectName: 'Release launch', services: ['Graphic Design'], startDate: '2026-10-01', deadline: '2026-11-30', projectManagerIds: [pm.id], hodMemberIds: [], staffMemberIds: [], createdBy: pm.id, status: 'Active', defaultApprovalMode: 'pm', milestones: [] }],
-        registrations: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], servicePricingSnapshots: [],
+        registrations: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], servicePricingSnapshots: [],
         backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
       });
     });

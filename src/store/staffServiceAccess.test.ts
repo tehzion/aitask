@@ -4,7 +4,7 @@ import { defaultRolePermissions } from '../lib/access';
 import { useStore } from './index';
 
 const initialState = useStore.getState();
-const cycle = { id: 'cycle', clientId: 'client', clientName: 'Company', status: 'Published', publishedAt: '2026-10-01', serviceItems: [], addonSnapshots: [] } as unknown as ServiceCycle;
+const cycle = { id: 'cycle', clientId: 'client', clientName: 'Company', status: 'Published', publishedAt: '2026-10-01', serviceItems: [] } as unknown as ServiceCycle;
 const deliverable = { id: 'deliverable', clientId: 'client', clientName: 'Company', cycleId: cycle.id, status: 'Planned', taskIds: ['task'], attachments: [] } as Deliverable;
 
 describe.each(['Staff', 'HOD'] as const)('%s assigned-service access', role => {

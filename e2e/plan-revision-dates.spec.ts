@@ -14,8 +14,7 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
     enablePasswordResetBypass(boss.id);
     localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], projects: [], tasks: [],
-      clientPlans: [], serviceCycles: [], deliverables: [], servicePricingSnapshots: [], addons: [],
-      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+      clientPlans: [], serviceCycles: [], deliverables: [], servicePricingSnapshots: [],       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
     const created = useStore.getState().createClientWithPlan({ clientName: 'Revision Feedback Co', planName: 'RM2250 PACKAGE', origin: 'custom',
       serviceItems: [{ id: 'fee', name: 'RM2250 PACKAGE', platforms: [], unit: 'month', quantity: 1, unitPriceMinor: 225000 }],

@@ -14,8 +14,7 @@ const seedDraftPlan = async (page: import('@playwright/test').Page, startDate: s
     localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
-      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [], addons: [],
-      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [],       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Notes Co', planName: 'Notes Plan', origin: 'custom',

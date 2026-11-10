@@ -4,7 +4,7 @@ import { defaultRolePermissions } from '../lib/access';
 import type { ServiceCycle, User } from '../types';
 import { cyclePaymentSummary } from '../lib/cyclePayments';
 import { makePricingSnapshot } from '../lib/serviceManagement';
-const cycle: ServiceCycle = { id: 'cycle', clientId: 'client', clientName: 'Company', planId: 'plan', planRevision: 1, periodStart: '2026-01-01', periodEnd: '2026-01-31', currency: 'MYR', status: 'Completed', serviceItems: [{ id: 'item', name: 'Design', quantity: 1, unit: 'item', unitPriceMinor: 10000, platforms: [] }], addonSnapshots: [], discountType: 'percent', discountValue: 1000, taxRateBps: 600, createdAt: '', updatedAt: '' };
+const cycle: ServiceCycle = { id: 'cycle', clientId: 'client', clientName: 'Company', planId: 'plan', planRevision: 1, periodStart: '2026-01-01', periodEnd: '2026-01-31', currency: 'MYR', status: 'Completed', serviceItems: [{ id: 'item', name: 'Design', quantity: 1, unit: 'item', unitPriceMinor: 10000, platforms: [] }], discountType: 'percent', discountValue: 1000, taxRateBps: 600, createdAt: '', updatedAt: '' };
 const actor = { id: 'pm', name: 'PM', role: 'Project Manager', isSuperAdmin: true } as User;
 beforeEach(() => useStore.setState({ currentUser: actor, rolePermissions: [], clients: [{ id: 'client', clientName: 'Company', createdBy: 'pm', createdAt: '', updatedAt: '' }], serviceCycles: [structuredClone(cycle)], serviceCyclePayments: [], servicePricingSnapshots: [], backend: { ...useStore.getState().backend, mode: 'local', isSaving: false, hasLocalChanges: false, status: 'local', pendingMutations: 0 } }));
 const summary = () => cyclePaymentSummary(cycle, useStore.getState().servicePricingSnapshots, useStore.getState().serviceCyclePayments);

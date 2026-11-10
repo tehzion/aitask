@@ -67,9 +67,7 @@ describe('local service demo fixture', () => {
     expect(internalComment.text).toContain('hidden from the client portal');
   });
 
-  it('contains active monthly and current-cycle one-off add-ons with pricing snapshots', () => {
-    expect(fixture.addons.map(addon => addon.billingMode)).toEqual(['monthly', 'one_off']);
-    expect(fixture.addons.every(addon => addon.pricingSnapshotId)).toBe(true);
+  it('contains plan pricing snapshots', () => {
     expect(fixture.servicePricingSnapshots.some(snapshot => snapshot.parentId === 'demo-service-plan-urban-active')).toBe(true);
   });
 });
