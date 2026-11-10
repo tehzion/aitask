@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-10T10:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "PENDING: 20261110093000 (20261110093000_release_notice_everyday_saves) lets the 2026-11-everyday-saves release notice be read and acknowledged. Needs approval before it is applied to production; production is recorded through 20261109193707_aitask_client_events.",
+  "status": "APPLIED 2026-11-10: production records 20261110015703_release_notice_everyday_saves (release notice IDs 2026-08-service-operations and 2026-11-everyday-saves accepted; approved by Y.L). Repository and production migration history are identical (145/145).",
   "validatedMigrationTail": [
     "20261023154255_bind_service_command_entity_types",
     "20261028120000_pm_no_hod_assignment_fallback",
@@ -28,20 +28,19 @@
     "20261106041228_optimize_pm_service_access",
     "20261109141920_r3_s1_project_approval_pm",
     "20261109193707_aitask_client_events",
-    "20261110093000_release_notice_everyday_saves"
+    "20261110015703_release_notice_everyday_saves"
   ],
-  "pendingProductionMigrations": [
-    "20261110093000_release_notice_everyday_saves"
-  ],
+  "pendingProductionMigrations": [],
   "productionVerification": {
-    "historyAligned": false,
-    "historyThrough": "20261109193707_aitask_client_events",
-    "latestAppliedMigration": "20261109193707_aitask_client_events"
+    "historyAligned": true,
+    "historyThrough": "20261110015703_release_notice_everyday_saves",
+    "latestAppliedMigration": "20261110015703_release_notice_everyday_saves"
   },
   "changeSummary": {
-    "20261110093000_release_notice_everyday_saves": "Notice ID check in aitask_get_release_notice_acknowledgement and aitask_acknowledge_release_notice now accepts 2026-08-service-operations and 2026-11-everyday-saves. Same signatures, security definer, empty search path and grants."
+    "20261110015703_release_notice_everyday_saves": "Notice ID check in aitask_get_release_notice_acknowledgement and aitask_acknowledge_release_notice now accepts 2026-08-service-operations and 2026-11-everyday-saves. Same signatures, security definer, empty search path and grants."
   },
   "qualityGates": {
-    "localDatabase": "PASS (2026-11-10): applied to the local stack; release_notice_acknowledgements pgTAP 26/26."
+    "localDatabase": "PASS (2026-11-10): applied to the local stack; release_notice_acknowledgements pgTAP 26/26.",
+    "productionApply": "APPLIED 2026-11-10 via the Supabase connector; live function bodies matched the repository before the change; 8 existing acknowledgements kept; anon still has no EXECUTE; advisors show no new findings."
   }
 }
