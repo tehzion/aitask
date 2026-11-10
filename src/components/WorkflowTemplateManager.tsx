@@ -39,7 +39,7 @@ const WorkflowTemplateManager = () => {
     }),
     findRecord: id => useStore.getState().serviceWorkflowTemplates.find(template => template.id === id),
     persist: (value, id) => saveWorkflowTemplate({ ...value, id }), remove: deleteWorkflowTemplate,
-    command: 'service_workflow.manage', savedMessage: 'Workflow saved. Existing client and cycle snapshots were not changed.',
+    command: 'service_workflow.manage', savedMessage: 'Workflow saved. Existing client and month snapshots were not changed.',
     deletedMessage: 'Workflow template deleted. Frozen copies in plans remain unchanged.',
   });
   const [templateToDelete, setTemplateToDelete] = React.useState<ServiceWorkflowTemplate | null>(null);

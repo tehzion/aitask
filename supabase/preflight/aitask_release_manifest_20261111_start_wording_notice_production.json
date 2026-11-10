@@ -1,0 +1,60 @@
+{
+  "manifestVersion": "2026-11-11.1",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261110z_remove_service_addons_production.json",
+  "immutable": false,
+  "capturedAt": "2026-11-10T17:05:00Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "APPLIED 2026-11-11: production records 20261110174255_release_notice_start_wording (owner approved); repository and production migration versions match (150/150).",
+  "validatedMigrationTail": [
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover",
+    "20261102120000_plan_activation_entity_types",
+    "20261102130000_hod_assignee_output_files",
+    "20261102140000_addon_save_entity_types",
+    "20261102150000_task_assigned_at_format",
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign",
+    "20261103125940_hod_department_delegation_disable_staff_creation",
+    "20261103125949_pm_direct_internal_assignment",
+    "20261103143949_service_cycle_payments",
+    "20261104053237_restore_hod_handoff_and_codify_live_grants",
+    "20261104062406_block_project_delete_with_linked_tasks",
+    "20261106041228_optimize_pm_service_access",
+    "20261109141920_r3_s1_project_approval_pm",
+    "20261109193707_aitask_client_events",
+    "20261110015703_release_notice_everyday_saves",
+    "20261110071019_hod_staff_workload_summary",
+    "20261110114105_rls_read_speedup",
+    "20261110114150_audit_history_actor_snapshot_without_avatar",
+    "20261110130438_remove_service_addons",
+    "20261110174255_release_notice_start_wording"
+  ],
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261110174255_release_notice_start_wording",
+    "latestAppliedMigration": "20261110174255_release_notice_start_wording",
+    "historyCount": 150,
+    "beforeHistoryCount": 149,
+    "anonymousExecute": false,
+    "authenticatedExecute": true,
+    "bodyMd5": {
+      "aitask_get_release_notice_acknowledgement": "6a226a846d702d79c7332832b1966cc6",
+      "aitask_acknowledge_release_notice": "5058c988ae4ed9bccf9315da038912e9"
+    }
+  },
+  "changeSummary": {
+    "20261110174255_release_notice_start_wording": "Notice ID check in aitask_get_release_notice_acknowledgement and aitask_acknowledge_release_notice now also accepts 2026-11-start-wording (the Start / Running / month wording notice). Same signatures, security definer, empty search path and grants; earlier notice IDs stay valid."
+  },
+  "qualityGates": {
+    "localDatabase": "PASS (2026-11-11): applied to the local stack; release_notice_acknowledgements pgTAP 26/26. Live function bodies matched the repository (md5) before the change.",
+    "releaseOrder": "Apply this migration before deploying the app change. Otherwise the new notice ID is rejected, and signed-in members see the notice again at every sign-in.",
+    "rollback": "Re-run 20261110015703_release_notice_everyday_saves.sql to restore the previous notice ID list.",
+    "productionApply": "APPLIED via Supabase connector after owner approval. Both prior live function bodies matched the prior repository migration; both resulting body hashes match the new migration, anonymous EXECUTE is denied, authenticated EXECUTE remains allowed, and migration versions match 150/150."
+  }
+}

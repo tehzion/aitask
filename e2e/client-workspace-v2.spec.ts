@@ -61,7 +61,7 @@ test('Client 2.0 is approval-first, mobile-safe, and fails closed', async ({ pag
       startDate: '2026-08-01', billingDay: 15, contractEndDate: '2027-08-14',
       createdBy: contact.id, createdAt: now, updatedAt: now,
     } : null;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${client.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${client.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...client, mustResetPassword: false },
       tasks: [...current.tasks.filter(task => ![reviewTask.id, approveTask.id, foreignTask.id].includes(task.id)), reviewTask, approveTask, foreignTask],
@@ -205,7 +205,7 @@ test('Client tracker statistics reconcile approvals, cancellations and filtered 
       clientName: company, visibility: 'client-visible' as const, dueDate: '',
       status: 'Pending', isCompleted: false, clientApprovalStatus: 'Pending' as const,
       comments: [], approvalHistory: [], ...extra });
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${client.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${client.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...client, mustResetPassword: false },
       tasks: [
         makeTask('Stats awaiting review', { status: 'Completed', isCompleted: true }),
@@ -248,7 +248,7 @@ test('Client Home counts the entire review queue and Reports separate completion
     const due = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`;
     const completion = new Date(start); completion.setHours(9);
     const approval = new Date(start); approval.setDate(start.getDate() + 1); approval.setHours(10);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${client.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${client.id}`, 'acknowledged');
     const tasks = Array.from({ length: 6 }, (_, index) => ({ ...base,
       id: `Review queue ${index}`, title: `Review queue ${index}`, clientName: client.companyName!,
       visibility: 'client-visible' as const, status: 'Completed', isCompleted: true,

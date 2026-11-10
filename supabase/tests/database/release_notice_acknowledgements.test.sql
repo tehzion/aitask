@@ -73,8 +73,10 @@ select is(
 select ok(
   position('2026-11-everyday-saves' in pg_get_functiondef('public.aitask_acknowledge_release_notice(text,text)'::regprocedure)) > 0
   and position('2026-08-service-operations' in pg_get_functiondef('public.aitask_acknowledge_release_notice(text,text)'::regprocedure)) > 0
-  and position('2026-11-everyday-saves' in pg_get_functiondef('public.aitask_get_release_notice_acknowledgement(text,text)'::regprocedure)) > 0,
-  'the current and earlier release notices are both accepted'
+  and position('2026-11-everyday-saves' in pg_get_functiondef('public.aitask_get_release_notice_acknowledgement(text,text)'::regprocedure)) > 0
+  and position('2026-11-start-wording' in pg_get_functiondef('public.aitask_acknowledge_release_notice(text,text)'::regprocedure)) > 0
+  and position('2026-11-start-wording' in pg_get_functiondef('public.aitask_get_release_notice_acknowledgement(text,text)'::regprocedure)) > 0,
+  'the current and earlier release notices are all accepted'
 );
 select ok(
   position('p_member_id' in pg_get_functiondef('public.aitask_acknowledge_release_notice(text,text)'::regprocedure)) = 0

@@ -11,7 +11,7 @@ test('monthly plans roll over on their billing date and retain previous months a
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [], servicePricingSnapshots: [],
       backend: { ...state.backend, mode: 'local', status: 'local', isLoading: false, hasLocalChanges: false, pendingMutations: 0 } });
     const created = useStore.getState().createClientWithPlan({
@@ -47,7 +47,7 @@ test('monthly plans roll over on their billing date and retain previous months a
   await expect(schedule.getByText('9 Nov 2026', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Edit plan dates', exact: true }).click();
   await page.getByRole('spinbutton', { name: 'Monthly billing day', exact: true }).fill('20');
-  await expect(page.getByText('Transition cycle').locator('..')).toContainText('2026-11-09 – 2026-11-19');
+  await expect(page.getByText('Transition month').locator('..')).toContainText('2026-11-09 – 2026-11-19');
   await page.getByRole('button', { name: 'Save dates', exact: true }).click();
   await expect(schedule.getByText('Day 20', { exact: true })).toBeVisible();
   await expect(schedule.getByText('9 Oct 2026 – 8 Nov 2026', { exact: true })).toBeVisible();

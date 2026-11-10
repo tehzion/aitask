@@ -41,6 +41,19 @@ const isTechnicalErrorText = (text: string) => (
 );
 
 /**
+ * The database still words a few service messages with the old "cycle" and
+ * "active plan" terms. Show them in the current month and Running wording.
+ */
+const renamedServerMessages = new Map<string, string>([
+  ['Active plans with started cycles cannot return to Draft.', 'A running plan with started months cannot go back to Draft.'],
+  ['Complete every required delivery before completing this cycle.', 'Complete every required delivery before closing this month.'],
+  ['This cycle status transition is not allowed.', 'This month’s status can’t change that way.'],
+  ['Choose a cycle from this client plan.', 'Choose a month from this client plan.'],
+  ['Staff cannot publish or manually change service cycles.', 'Staff cannot start or manually change months.'],
+  ['Staff cannot administer service cycles.', 'Staff cannot manage months.'],
+]);
+
+/**
  * Presentation boundary for system feedback. Application validation and
  * workflow guidance are preserved, while transport, database, auth, and
  * runtime details are converted into safe, actionable copy.
@@ -55,6 +68,8 @@ export const userFacingMessage = (value: unknown): string | MessageDescriptor =>
   if (!text && (code || status)) return msg('errors.requestFailed');
   if (!text) return isRecord(value) ? msg('errors.requestFailed') : '';
   if (!text) return '';
+  const renamed = renamedServerMessages.get(text);
+  if (renamed) return renamed;
   if (/^Complete every required predecessor before/.test(text)) return 'Complete the earlier workflow steps first.';
   if (/^Workflow details are unavailable\./.test(text)) return 'Workflow details are unavailable. Refresh this task and try again.';
   if (/^FORBIDDEN:/i.test(text)) return msg('errors.permissionDenied');

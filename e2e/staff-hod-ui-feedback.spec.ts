@@ -14,7 +14,7 @@ const seed = async (page: Page, role: 'Staff' | 'HOD', locale: 'en' | 'zh' = 'en
     const actor = role === 'Staff' ? staff : hod;
     for (const user of [staff, hod]) {
       enablePasswordResetBypass(user.id);
-      localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${user.id}`, 'acknowledged');
+      localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${user.id}`, 'acknowledged');
     }
     localStorage.setItem('aitask:locale', locale);
     localStorage.setItem('aitask:onboarding:v1', JSON.stringify({ 'ui-hod': { status: 'skipped', updatedAt: new Date().toISOString() } }));

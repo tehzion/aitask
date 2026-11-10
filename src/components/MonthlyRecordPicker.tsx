@@ -17,7 +17,7 @@ const MonthlyRecordPicker = ({ records, selected, current, unavailable, onChange
     <div className="flex flex-wrap items-end justify-between gap-3">
       <label htmlFor={id} className="block min-w-0 flex-1 text-sm font-medium text-ink">{t('Billing period')}
         <select id={id} value={selected?.id || ''} onChange={event => onChange(event.target.value === current?.id ? null : event.target.value || null)} className={`${inputBase} mt-2 px-3 py-2`}>
-          {!selected && <option value="">{t(unavailable ? 'Monthly record unavailable' : 'No current cycle')}</option>}
+          {!selected && <option value="">{t(unavailable ? 'Monthly record unavailable' : 'No current month')}</option>}
           {records.map(cycle => <option key={cycle.id} value={cycle.id}>{monthlyRecordLabel(cycle, locale)} · {t(cycleStatusLabel(cycle.status))}{cycle.id === current?.id ? ` · ${t('Current')}` : ''}</option>)}
         </select>
       </label>
@@ -25,8 +25,8 @@ const MonthlyRecordPicker = ({ records, selected, current, unavailable, onChange
     </div>
     <p className="mt-3 text-sm leading-6 text-muted" role="status">{unavailable
       ? t('This monthly record is unavailable for your account. Choose another billing period.')
-      : selected ? t(selected.id === current?.id ? 'This month’s scope and prices are saved with this record. Plan changes apply to the next cycle.' : 'Historical scope and prices are preserved. Delivery progress and late files stay with this period.')
-        : t('No cycle is available for the current billing period. You can still browse earlier records.')}</p>
+      : selected ? t(selected.id === current?.id ? 'This month’s scope and prices are saved with this record. Plan changes apply from next month.' : 'Historical scope and prices are preserved. Delivery progress and late files stay with this period.')
+        : t('No month is available for the current billing period. You can still browse earlier records.')}</p>
   </section>;
 };
 
