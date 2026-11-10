@@ -6,6 +6,35 @@ number remain uniquely identifiable.
 
 ## [Unreleased]
 
+### Added
+
+- Project Managers get a "My day" section on their dashboard: work awaiting
+  their review, tasks ready to finalize, overdue and due-today work, months
+  waiting to be published, months to tidy up, and this month's tasks that are
+  not linked to a deliverable, each with a suggested deliverable when one clearly
+  fits.
+- The Project Manager dashboard shows the monthly contract value of plans that
+  are behind pace. People who may not see prices see "Restricted".
+- Boss Koo gets a company health list: for each client, overdue months, months
+  never published, active projects without a HOD, and reviews waiting more than
+  two days.
+- HODs can see how many open, overdue and due-this-week tasks each staff member
+  has across departments, without gaining access to other departments' tasks.
+  Needs database migration `20261110062504_hod_staff_workload_summary`.
+
+### Changed
+
+- The client dashboard now lists every deliverable waiting on the client under
+  "Waiting on you", and each opens its review in place.
+- Workspace reads check access once per read instead of once per row, which cuts
+  the database work of a full load roughly in half in local testing. Access rules
+  are unchanged. Needs database migration `20261110170000_rls_read_speedup`,
+  which is pending production approval.
+- The audit history no longer stores a copy of the acting member's profile
+  picture with every entry; the pictures were about 70% of the database. Needs
+  database migration `20261110180000_audit_history_actor_snapshot_without_avatar`,
+  which is pending production approval. Entries already recorded are unchanged.
+
 ### Fixed
 
 - Project Managers can no longer skip the PM -> HOD -> Staff checkpoint by

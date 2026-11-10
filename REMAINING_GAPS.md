@@ -3,6 +3,23 @@
 **Audit date:** 2026-10-17
 **Release posture:** no-go until P1 items are resolved or explicitly accepted by the release owner.
 
+## Status on 2026-11-10
+
+Re-checked against the current tree. The tables below are the 17 Oct audit text, kept as written.
+Only items with evidence from this check are marked.
+
+| ID | Status | Evidence on 10 Nov |
+| --- | --- | --- |
+| TEST-003 | Resolved | `pnpm test`: 142 files, 1,119 tests pass. |
+| CFG-005 | Resolved | `vite.config.ts` rejects `VITE_AITASK_ALLOW_PASSWORD_RESET_BYPASS` in hosted production builds. |
+| PERF-007 | Addressed | `pnpm verify:bundle` passes with per-entry budgets; eager JS is 271.8 KiB gzip against the 300 KiB cap. |
+| REL-002 | Changed | The manifest now covers the full migration tail (147 migrations). `pnpm verify:release-db-alignment` still fails on purpose while `20261110062504_hod_staff_workload_summary` and `20261110170000_rls_read_speedup` are pending production approval. |
+| HIST-001 | Partly resolved | Deleting a member's login now works (`auth_user_id` becomes null), checked locally. Deleting a workspace that has history is refused by design; see `AUDIT_HISTORY_RETENTION_REVIEW.md`. Needs the retention decision below. |
+| UX-004 | Open | The full Playwright suite has not been run since the audit. In a targeted run, 7 of 8 specs touched by the 10 Nov role work pass. `client-workspace-v2.spec.ts:5` ("Client 2.0 is approval-first, mobile-safe, and fails closed") fails the same way on master before those commits: the app stays on "Loading AiTask…". |
+| OPS-006 | Partly evidenced | A read-only production check on 10 Nov found health advisor clean, 13 of 60 connections used, 0 deadlocks, scheduled jobs succeeding. Backups, Auth protection, alerting and the four-role live smoke are still not evidenced. Workspace reads are slow under load: see `docs/2026-11-10-handoff-supabase-performance.md`. |
+
+New since the audit: `aitask_entity_history` holds about 81 MB of the 107 MB production database and needs a retention policy.
+
 ## P1 — release blockers
 
 | ID | Module | Gap | Impact | Evidence | Action |
