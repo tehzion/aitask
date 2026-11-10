@@ -6,11 +6,13 @@ import { Link } from 'react-router-dom';
 import { isBefore } from 'date-fns/isBefore';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
-import { canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canLinkTaskDelivery, canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
 import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
 import { getRoleWorkSummary } from '../lib/roleWorkSummary';
-import { getMonthsToTidy } from '../lib/monthHousekeeping';
+import { getMonthHousekeeping, getMonthsToTidy } from '../lib/monthHousekeeping';
+import { isTaskLinkedToDeliverable, rankLinkCandidates, scoreLinkCandidate } from '../lib/deliveryLinks';
+import { projectHasNoHod } from '../lib/taskWorkflowAccess';
 import { canManageServiceCycles } from '../lib/access';
 import MonthsToTidyPanel from './MonthsToTidyPanel';
 import BulkApprovePanel from './BulkApprovePanel';
@@ -193,6 +195,26 @@ const ServiceRoleDashboard = () => {
   [activePlans, store.deliverables, store.serviceCycles, visibleTasks, store.users, now]);
   const monthsToTidy = getMonthsToTidy(store.serviceCycles.filter(cycle => commercialClientKeys.has(getClientKey(cycle.clientName))), store.deliverables, getTodayInputDate(now));
   const plansAtRisk = activeCompanies.filter(item => item.pace === 'atRisk' || item.pace === 'missed');
+  const riskSnapshots = plansAtRisk.map(item => store.servicePricingSnapshots.find(snapshot => snapshot.parentType === 'client_plan' && snapshot.parentId === item.plan.id));
+  const riskValue = riskSnapshots.reduce((sum, snapshot) => sum + (snapshot?.totalMinor ?? 0), 0);
+  const riskValueKnown = riskSnapshots.every(Boolean);
+  const todayKey = getTodayInputDate(now);
+  const unlinkedWork = scopeTasks.filter(task => task.clientId && task.dueDate && task.dueDate.slice(0, 7) === todayKey.slice(0, 7)
+    && task.status !== 'Cancelled' && !task.generatedFromDeliverable && !isTaskLinkedToDeliverable(task, store.deliverables)
+    && canLinkTaskDelivery(store.currentUser, task, store.rolePermissions, { clients: store.clients, projects: store.projects })).map(task => {
+      const candidates = isTaskOpen(task) ? store.deliverables.flatMap(item => {
+        const cycle = store.serviceCycles.find(c => c.id === item.cycleId && c.clientId === task.clientId && c.status === 'Published' && c.periodStart <= todayKey && c.periodEnd >= todayKey);
+        if (!cycle || item.status === 'Delivered') return [];
+        const service = cycle.serviceItems.find(entry => entry.id === item.serviceItemId);
+        if (item.workflowGeneratedAt || service?.workflow) return [];
+        const peers = scopeTasks.filter(other => other.clientId === task.clientId && isTaskOpen(other) && !other.generatedFromDeliverable && !isTaskLinkedToDeliverable(other, store.deliverables));
+        if (rankLinkCandidates(peers, item, cycle, service?.name).suggestion?.id !== task.id) return [];
+        return [{ item, cycle, score: scoreLinkCandidate(task, item, cycle, service?.name) }];
+      }).sort((a, b) => b.score - a.score) : [];
+      const [best, second] = candidates;
+      return { task, suggestion: best && best.score >= 3 && (!second || best.score > second.score) ? best : undefined };
+    });
+  const monthsToPublish = store.serviceCycles.filter(cycle => cycle.status === 'Draft' && cycle.periodStart <= todayKey && cycle.periodEnd >= todayKey && commercialClientKeys.has(getClientKey(cycle.clientName)));
   const renewingSoon = renewalPlans
     .map(plan => ({ plan, days: getContractDaysRemaining(plan.contractEndDate, now) }))
     .filter((item): item is { plan: typeof item.plan; days: number } => item.days !== null && item.days >= 0 && item.days <= 30);
@@ -248,26 +270,23 @@ const ServiceRoleDashboard = () => {
         { label: t('Awaiting your review'), value: personal.mine.length, to: '/tasks?queue=needs_action', tone: 'warning' },
         { label: t('Ready to finalize'), value: personal.completion.length, to: '/tasks?queue=needs_action', tone: 'warning' },
       ]} />
-      <section aria-labelledby="pm-action-title" className="space-y-3">
-        <h2 id="pm-action-title" className="text-lg font-semibold text-ink">{t('Requires your action')}</h2>
-        {/* Only queues with work take a column; empty ones fold into one line instead of full-height blank panels. */}
-        {(() => {
-          const queues = [
-            { title: t('Awaiting your review'), tasks: personal.mine, empty: t('Nothing is waiting for your review.') },
-            { title: t('Ready to finalize'), tasks: personal.completion, empty: t('No tasks awaiting final completion.') },
-            { title: t('Due today / overdue'), tasks: urgent, empty: t('No urgent portfolio delivery work.') },
-          ];
-          const busy = queues.filter(queue => queue.tasks.length > 0);
-          const clear = queues.filter(queue => queue.tasks.length === 0);
-          return <>
-            {busy.length > 0 && <div className={`grid gap-4 ${busy.length === 3 ? 'xl:grid-cols-3' : busy.length === 2 ? 'lg:grid-cols-2' : ''}`}>
-              {busy.map(queue => <TaskQueue key={queue.title} title={queue.title} tasks={queue.tasks} empty={queue.empty} />)}
-            </div>}
-            {clear.length > 0 && <p className="text-sm text-muted">{busy.length === 0 ? t('Nothing needs your action right now.') : <>{t('All clear')}: {clear.map(queue => queue.title).join(' · ')}</>}</p>}
-          </>;
-        })()}
+      <section aria-labelledby="pm-day-title" className="space-y-4">
+        <h2 id="pm-day-title" className="text-lg font-semibold text-ink">{t('My day')}</h2>
+        <TaskQueue title={t('Awaiting your review')} tasks={personal.mine} empty={t('Nothing is waiting for your review.')} />
+        <BulkApprovePanel tasks={personal.mine} />
+        <TaskQueue title={t('Overdue')} tasks={overdue} empty={t('No overdue tasks.')} />
+        <Surface className="overflow-hidden"><div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Months to publish')}</h3></div>
+          <ul className="divide-y divide-line/60">{monthsToPublish.map(cycle => <li key={cycle.id} className="px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=delivery&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`} className="font-medium text-accent hover:underline"><span data-i18n-skip>{cycle.clientName}</span> · {t('Awaiting publication')}</Link></li>)}</ul>
+          {monthsToPublish.length === 0 && <p className="px-5 py-4 text-sm text-muted">{t('No months to publish.')}</p>}
+        </Surface>
+        <MonthsToTidyPanel months={monthsToTidy} deliverables={store.deliverables} todayKey={todayKey} canManage={canManageServiceCycles(store.currentUser, store.rolePermissions)} />
+        <Surface className="overflow-hidden"><div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Unlinked work this month')}</h3><CountLabel>{unlinkedWork.length}</CountLabel></div>
+          <ul className="divide-y divide-line/60">{unlinkedWork.map(({ task, suggestion }) => <li key={task.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm">
+            <Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} data-i18n-skip className="font-medium text-ink hover:text-accent">{task.title}</Link>
+            {suggestion ? <Link to={`/clients/${encodeURIComponent(suggestion.cycle.clientId)}?tab=delivery&cycleId=${encodeURIComponent(suggestion.cycle.id)}#cycle-${encodeURIComponent(suggestion.cycle.id)}`} className="text-accent hover:underline">{t('Suggested deliverable')}: <span data-i18n-skip>{suggestion.item.title}</span></Link> : <span className="text-muted">{t('No clear suggestion')}</span>}
+          </li>)}</ul>{unlinkedWork.length === 0 && <p className="px-5 py-4 text-sm text-muted">{t('No unlinked work this month.')}</p>}
+        </Surface>
       </section>
-      <BulkApprovePanel tasks={personal.mine} />
       {/* Unassigned work needs the PM to act, so it is listed here, not under waiting on others. */}
       <StuckWorkPanel tasks={scopeTasks} />
       {plansAtRisk.length > 0 && <Surface className="overflow-hidden" aria-labelledby="pm-plans-risk-title">
@@ -347,8 +366,21 @@ const ServiceRoleDashboard = () => {
       { label: t('Active clients'), value: activePlans.length, to: '/clients' },
       { label: t('Delivered outputs'), value: delivered.length, to: '/clients' },
       { label: t('Plans at risk this month'), value: plansAtRisk.length, to: '/clients', tone: plansAtRisk.length ? 'danger' : undefined },
+      { label: t('Monthly contract value at risk'), value: !canSeePrices ? t('Restricted') : riskValueKnown ? formatMoney(riskValue, 'MYR', locale) : t('Unavailable') },
       { label: t('Months to tidy up'), value: monthsToTidy.length, to: '/clients', tone: monthsToTidy.length ? 'warning' : undefined },
     ]} />
+    {store.currentUser?.isSuperAdmin && <Surface className="overflow-hidden" aria-labelledby="company-health-title">
+      <div className="border-b border-line/70 px-5 py-4"><h3 id="company-health-title" className="font-semibold text-ink">{t('Weekly company health')}</h3><p className="mt-1 text-sm text-muted">{t('Open issues by client, updated daily.')}</p></div>
+      <ul className="divide-y divide-line/60">{store.clients.map(client => {
+        const item = { clientId: client.id, clientName: client.clientName };
+        const months = getMonthsToTidy(store.serviceCycles.filter(cycle => cycle.clientId === item.clientId), store.deliverables, todayKey);
+        const overdueMonths = months.filter(cycle => getMonthHousekeeping(cycle, store.deliverables, todayKey).kind === 'overdue').length;
+        const unpublished = months.filter(cycle => getMonthHousekeeping(cycle, store.deliverables, todayKey).kind === 'never-published').length;
+        const missingHod = visibleProjects.filter(project => project.clientId === item.clientId && projectStatus(project) === 'Active' && projectHasNoHod(project)).length;
+        const oldReviews = visibleTasks.filter(task => task.clientId === item.clientId && task.status === 'Waiting Approval' && task.workState?.reviewRequestedAt && Date.parse(task.workState.reviewRequestedAt) < Date.now() - 2 * 86400000).length;
+        return <li key={item.clientId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="font-semibold text-ink hover:text-accent">{item.clientName}</Link><span className="text-muted">{t('Overdue months')}: {overdueMonths} · {t('Never published')}: {unpublished} · {t('Projects without HOD')}: {missingHod} · {t('Reviews over 2 days')}: {oldReviews}</span></li>;
+      })}</ul>
+    </Surface>}
     <MonthsToTidyPanel months={monthsToTidy} deliverables={store.deliverables} todayKey={getTodayInputDate(now)} canManage={canManageServiceCycles(store.currentUser, store.rolePermissions)} />
     {store.currentUser?.isSuperAdmin && <StaffingGapsPanel users={store.users} projects={store.projects} tasks={store.tasks} />}
     <Surface className="overflow-hidden">
