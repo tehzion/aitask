@@ -13,7 +13,7 @@ const seed = async (page: Page, role: 'boss' | 'hod') => {
     const staff = { id: 'blind-staff', name: 'Shared Worker', role: 'Staff' as const, departments: ['Video Shooting' as const, 'Video Editor' as const] };
     const actor = role === 'boss' ? boss : hod;
     enablePasswordResetBypass(actor.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${actor.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${actor.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', 'en');
     const base = { clientName: 'Blindspot Co', serviceType: 'Video', description: '', startDate: '2026-10-01', dueDate: '', status: 'Pending', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false, comments: [], approvalHistory: [], visibility: 'internal', createdBy: boss.id };
     useStore.setState({

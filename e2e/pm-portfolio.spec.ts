@@ -13,7 +13,7 @@ const seedPM = async (page: Page) => {
     const boss = state.users.find(user => user.isSuperAdmin)!;
     const worker = state.users.find(user => user.role === 'Staff' && user.id !== pm.id)!;
     enablePasswordResetBypass(pm.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${pm.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${pm.id}`, 'acknowledged');
     const base = { clientId: 'pm-company', clientName: 'PM Company', projectId: 'pm-project', projectName: 'Inherited campaign', serviceType: 'Design', description: '', department: 'Designer', assignedTo: worker.id, createdBy: boss.id, startDate: '2026-10-01', dueDate: '', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false, visibility: 'client-visible', comments: [], approvalHistory: [], attachmentLink: 'https://example.com/output.pdf' };
     useStore.setState({
       currentUser: { ...pm, mustResetPassword: false }, rolePermissions: [],

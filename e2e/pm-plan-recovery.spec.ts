@@ -11,7 +11,7 @@ async function seed(page: Page, projectAccess = false, prices = true) {
     const user = state.users.find(user => user.role === 'Project Manager' && !user.isSuperAdmin)!;
     const pm = { ...user, mustResetPassword: false, permissions: { ...defaultRolePermissions['Project Manager'], viewServicePrices: prices } };
     enablePasswordResetBypass(pm.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${pm.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${pm.id}`, 'acknowledged');
     useStore.setState({ currentUser: pm, users: state.users.map(user => user.id === pm.id ? pm : user), rolePermissions: [], clients: [], projects: [], tasks: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], servicePricingSnapshots: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     const created = useStore.getState().createClientWithPlan({ clientName: 'PM recovery company', planName: 'PM scope', origin: 'custom', serviceItems: [{ id: 'pm-item', name: 'Management', platforms: [], unit: 'month', quantity: 1, unitPriceMinor: 918000 }], startDate: '2026-11-01', billingDay: 1, discountType: 'none', discountValue: 0, taxRateBps: 0 });
     if (!created.ok) throw new Error(created.error);

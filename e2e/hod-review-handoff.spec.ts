@@ -12,7 +12,7 @@ test('staff submission reaches the department HOD inbox and opens pending work',
     const hod = { ...staff, id: 'handoff-hod', name: 'Review HOD', role: 'HOD', customRoleId: undefined, customRoleName: undefined };
     enablePasswordResetBypass(staff.id);
     enablePasswordResetBypass(hod.id);
-    for (const user of [staff, hod]) localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${user.id}`, 'acknowledged');
+    for (const user of [staff, hod]) localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${user.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', 'en');
     useStore.setState({ currentUser: staff, users: [staff, hod], rolePermissions: [], clients: [], projects: [], clientPlans: [], deliverables: [], serviceCycles: [], notifications: [], tasks: [{ ...state.tasks[0], generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined, internalReview: undefined, id: 'handoff-task', title: 'Artwork for HOD review', clientName: 'Handoff Company', clientId: undefined, projectId: undefined, department: 'Designer', assignedTo: staff.id, assignedBy: hod.id, createdBy: hod.id, status: 'In Progress', isCompleted: false, revisionCount: 0, completionPercentage: 50, predecessorTaskIds: [], deliverableId: undefined, serviceCycleId: undefined, visibility: 'internal', comments: [], approvalHistory: [] }], backend: { ...state.backend, mode: 'local', status: 'local', pendingMutations: 0, hasLocalChanges: false } });
   });

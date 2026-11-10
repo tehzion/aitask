@@ -11,7 +11,7 @@ const seedDraftPlan = async (page: import('@playwright/test').Page, startDate: s
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
       clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [],       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
@@ -121,7 +121,7 @@ test('plan history includes the current month and links to its delivery details'
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ serviceCycles: state.serviceCycles.map(item => item.clientId === id && item.status === 'Published' ? { ...item, status: 'Completed' as const } : item) }));
   }, clientId);
-  await expect(current.getByText('Closed', { exact: true })).toBeVisible();
+  await expect(current.getByText('Done', { exact: true })).toBeVisible();
   await current.getByRole('button', { name: 'View', exact: true }).click();
   await expect(page).toHaveURL(/cycleId=/);
 });

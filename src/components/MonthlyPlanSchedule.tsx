@@ -7,6 +7,7 @@ import { useI18n } from './I18nProvider';
 import { formatLocalizedDate } from '../lib/i18n';
 import { getCurrentPlanCycle } from '../lib/dashboardData';
 import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
+import { cycleStatusLabel } from '../lib/serviceStatusLabels';
 import { Button, StatusChip } from './ui';
 
 const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManagePlans = false, canManageCycles = false, busy = false, upcomingPlan, onEditDetails, onCreateNextPlan, onViewNextPlan, onViewCycle, onViewHistory, onSetCycleStatus }: {
@@ -41,9 +42,9 @@ const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManage
     const date = parseOptionalDate(value);
     return date ? formatLocalizedDate(date, locale) : t('Not scheduled');
   };
-  const nextLabel = plan.status === 'Draft' ? 'First cycle starts' : nextDate <= getTodayInputDate(today) ? 'Monthly update due' : 'Next monthly update';
+  const nextLabel = plan.status === 'Draft' ? 'First month starts' : nextDate <= getTodayInputDate(today) ? 'Monthly update due' : 'Next monthly update';
   const cycleState = (item: ServiceCycle) => item.periodStart > todayKey
-    ? 'Upcoming'
+    ? 'Coming up'
     : item.periodStart <= todayKey && todayKey <= item.periodEnd
       ? 'This month'
       : 'Ended';
@@ -57,10 +58,10 @@ const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManage
     if (housekeeping.kind === 'never-published') return <div className="flex flex-wrap items-center gap-2"><StatusChip tone="amber">{t('Never started')}</StatusChip>{act('Published', 'Start late')}{act('Cancelled', 'Cancel month')}</div>;
     if (housekeeping.kind === 'ready-to-close') return <div className="flex flex-wrap items-center gap-2"><StatusChip tone="emerald">{t('Ready to close')}</StatusChip>{act('Completed', 'Close month')}</div>;
     if (housekeeping.kind === 'overdue') return <StatusChip tone="red">{t('Overdue: {count} not done', { count: housekeeping.notDone })}</StatusChip>;
-    if (item.status === 'Completed') return <div className="flex flex-wrap gap-2">{item.id === cycle?.id && <StatusChip tone="emerald">{t('This month')}</StatusChip>}<StatusChip tone="slate">{t('Closed')}</StatusChip></div>;
+    if (item.status === 'Completed') return <div className="flex flex-wrap gap-2">{item.id === cycle?.id && <StatusChip tone="emerald">{t('This month')}</StatusChip>}<StatusChip tone="slate">{t(cycleStatusLabel(item.status))}</StatusChip></div>;
     if (item.status === 'Cancelled') return <StatusChip tone="slate">{t('Cancelled')}</StatusChip>;
     const state = cycleState(item);
-    return <StatusChip tone={state === 'This month' ? 'emerald' : state === 'Upcoming' ? 'amber' : 'slate'}>{t(state)}</StatusChip>;
+    return <StatusChip tone={state === 'This month' ? 'emerald' : state === 'Coming up' ? 'amber' : 'slate'}>{t(state)}</StatusChip>;
   };
 
   return <section aria-label={t('Monthly update schedule')} className="rounded-panel border border-line bg-surface px-5 py-4">
@@ -77,16 +78,16 @@ const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManage
       </div>
     </div>
     <p className="mt-1 text-sm leading-6 text-muted">{t(plan.status === 'Draft'
-      ? plan.supersedesPlanId ? 'This revision takes over automatically at its scheduled cycle.' : 'Start this plan to begin the months below.'
+      ? plan.supersedesPlanId ? 'This revision takes over automatically in its scheduled month.' : 'Start this plan to begin the months below.'
       : plan.status === 'Paused'
         ? 'Monthly updates are paused. Resume the plan to continue from the next billing day.'
         : plan.status === 'Ended'
-          ? 'This plan has ended. Previous monthly cycles remain in history.'
-          : 'A fresh draft cycle and deliverables are created on each billing day. Previous months keep their own progress and files.')}</p>
+          ? 'This plan has ended. Previous months remain in history.'
+          : 'A new month and its deliverables are created on each billing day, ready to start. Previous months keep their own progress and files.')}</p>
     <dl className="mt-4 grid gap-4 sm:grid-cols-3">
       <div><dt className="text-xs text-muted">{t('Monthly billing day')}</dt><dd className="mt-1 text-sm font-medium text-ink">{t('Day')} {plan.billingDay}</dd></div>
-      <div><dt className="text-xs text-muted">{t('Current cycle')}</dt><dd className="mt-1 text-sm font-medium text-ink">{cycle
-        ? `${dateLabel(cycle.periodStart)} – ${dateLabel(cycle.periodEnd)}` : t('No active cycle today')}</dd></div>
+      <div><dt className="text-xs text-muted">{t('Current month')}</dt><dd className="mt-1 text-sm font-medium text-ink">{cycle
+        ? `${dateLabel(cycle.periodStart)} – ${dateLabel(cycle.periodEnd)}` : t('No month in progress today')}</dd></div>
       <div><dt className="text-xs text-muted">{t(plan.status === 'Paused' || plan.status === 'Ended' ? 'Monthly update status' : nextLabel)}</dt><dd className="mt-1 text-sm font-medium text-ink">{plan.status === 'Paused' ? t('Paused') : plan.status === 'Ended' ? t('Ended') : dateLabel(nextDate)}</dd></div>
     </dl>
     {!cycle && plan.status === 'Active' && <p className="mt-3 flex items-start gap-2 rounded-control bg-inset px-3 py-2 text-sm leading-6 text-muted"><CalendarClock aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0 text-accent" />{t('The previous period has ended. The next plan starts on')} {dateLabel(nextDate)}.</p>}

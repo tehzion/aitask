@@ -16,7 +16,7 @@ const seedPublishedMonth = async (page: import('@playwright/test').Page) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
       clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [],       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
@@ -107,7 +107,7 @@ test('Staff start their work from the list without opening the task', async ({ p
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const staff = state.users.find(user => user.role === 'Staff' && user.status !== 'Inactive')!;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${staff.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${staff.id}`, 'acknowledged');
     const task = state.tasks.find(item => item.assignedTo === staff.id && ['Pending', 'Revision'].includes(item.status) && !item.dependencies?.length)
       || state.tasks.find(item => item.assignedTo === staff.id && item.status === 'In Progress');
     if (!task) throw new Error('no staff task');

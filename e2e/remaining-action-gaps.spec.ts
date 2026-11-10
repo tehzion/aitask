@@ -12,7 +12,7 @@ const seedBoss = async (page: Page) => {
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false },
       registrations: [{ id: 'remaining-registration', name: 'Remaining Applicant', email: 'remaining@example.test', phone: '', jobPosition: 'Designer', requestedRole: 'Staff', status: 'Pending', createdAt: '2026-09-01T00:00:00Z' }],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
