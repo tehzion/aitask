@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-10T12:20:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "PENDING PRODUCTION APPROVAL: 20261110201000_remove_service_addons is not applied. Production records 148 migrations through 20261110114150_audit_history_actor_snapshot_without_avatar.",
+  "status": "APPLIED 2026-11-10: production records 20261110130438_remove_service_addons (approved by Y.L). Repository and production migration history are identical (149/149).",
   "validatedMigrationTail": [
     "20261028120000_pm_no_hod_assignment_fallback",
     "20261028130000_service_command_guard_direct_writes",
@@ -31,24 +31,22 @@
     "20261110071019_hod_staff_workload_summary",
     "20261110114105_rls_read_speedup",
     "20261110114150_audit_history_actor_snapshot_without_avatar",
-    "20261110201000_remove_service_addons"
+    "20261110130438_remove_service_addons"
   ],
-  "pendingProductionMigrations": [
-    "20261110201000_remove_service_addons"
-  ],
+  "pendingProductionMigrations": [],
   "productionVerification": {
-    "historyAligned": false,
-    "historyThrough": "20261110114150_audit_history_actor_snapshot_without_avatar",
-    "latestAppliedMigration": "20261110114150_audit_history_actor_snapshot_without_avatar"
+    "historyAligned": true,
+    "historyThrough": "20261110130438_remove_service_addons",
+    "latestAppliedMigration": "20261110130438_remove_service_addons"
   },
   "changeSummary": {
-    "20261110201000_remove_service_addons": "Removes service add-ons (owner decision, 10 Nov 2026). Copies every add-on row, add-on pricing snapshot and affected service cycle into private.addon_removal_backup_20261110 (RLS on, no anon/authenticated access), deletes the add-on rows and their pricing snapshots, clears addonSnapshots on cycles, and removes 'addon' from aitask_entities_entity_type_check. Production on 10 Nov 2026 held 8 add-ons across 5 clients, 8 add-on pricing snapshots and 4 cycles with add-on lines (3 Completed). Cycle pricing snapshots are unchanged: their totals never included add-on amounts."
+    "20261110130438_remove_service_addons": "Removes service add-ons (owner decision, 10 Nov 2026). Copies every add-on row, add-on pricing snapshot and affected service cycle into private.addon_removal_backup_20261110 (RLS on, no anon/authenticated access), deletes the add-on rows and their pricing snapshots, clears addonSnapshots on cycles, and removes 'addon' from aitask_entities_entity_type_check. Production on 10 Nov 2026 held 8 add-ons across 5 clients, 8 add-on pricing snapshots and 4 cycles with add-on lines (3 Completed). Cycle pricing snapshots are unchanged: their totals never included add-on amounts."
   },
   "qualityGates": {
     "localDatabase": "PASS: the migration ran in a rolled-back transaction on the local database with a seeded add-on, add-on pricing snapshot and a Completed cycle carrying add-on lines: all three were backed up, the add-on rows deleted, the cycle's addonSnapshots cleared (version bumped), and a new add-on insert rejected by the check constraint. remove_service_addons.test.sql: 6/6 assertions pass.",
     "app": "Typecheck, lint and 1,115 unit tests pass with add-ons removed from the client page, store, sync, demo data and pricing helpers.",
     "releaseOrder": "Apply this migration before deploying the app change, so no cycle edit drops add-on lines before they are backed up.",
     "rollback": "Restore rows from private.addon_removal_backup_20261110 (entity_row holds each full aitask_entities row) and re-add 'addon' to aitask_entities_entity_type_check.",
-    "productionApply": "NOT APPLIED. Requires the owner's approval."
+    "productionApply": "APPLIED 2026-11-10 via the Supabase connector (1 active query). Before: 8 add-ons, 8 add-on pricing snapshots, 4 cycles with add-on lines. After: 0 / 0 / 0; private.addon_removal_backup_20261110 holds addon=8, addon_pricing_snapshot=8, service_cycle_before_clear=4; anon and authenticated cannot read it; the entity type check no longer allows 'addon'; 63 cycles intact."
   }
 }
