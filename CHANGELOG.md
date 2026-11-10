@@ -20,7 +20,7 @@ number remain uniquely identifiable.
   two days.
 - HODs can see how many open, overdue and due-this-week tasks each staff member
   has across departments, without gaining access to other departments' tasks.
-  Needs database migration `20261110062504_hod_staff_workload_summary`.
+  Needs database migration `20261110071019_hod_staff_workload_summary`.
 
 ### Changed
 
@@ -28,12 +28,12 @@ number remain uniquely identifiable.
   "Waiting on you", and each opens its review in place.
 - Workspace reads check access once per read instead of once per row, which cuts
   the database work of a full load roughly in half in local testing. Access rules
-  are unchanged. Needs database migration `20261110170000_rls_read_speedup`,
-  which is pending production approval.
+  are unchanged. Needs database migration `20261110114105_rls_read_speedup`,
+  which is live in production.
 - The audit history no longer stores a copy of the acting member's profile
   picture with every entry; the pictures were about 70% of the database. Needs
-  database migration `20261110180000_audit_history_actor_snapshot_without_avatar`,
-  which is pending production approval. Entries already recorded are unchanged.
+  database migration `20261110114150_audit_history_actor_snapshot_without_avatar`,
+  which is live in production. Entries already recorded are unchanged.
 
 ### Fixed
 

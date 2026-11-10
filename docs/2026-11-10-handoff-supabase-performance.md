@@ -6,13 +6,13 @@ Written 10 Nov 2026 for the next agent. It covers one session: a gap review of t
 
 Read this first. Sections 1 to 6 below are the original handoff; where they disagree with this update, this update wins.
 
-**Done, committed on `codex/role-enhancements-20261110`, nothing applied to production:**
+**Done, committed on `codex/role-enhancements-20261110`, and applied to production on 10 Nov with owner approval (Y.L):**
 
 | What | Where |
 | --- | --- |
-| Row-security read speed-up, tested | `supabase/migrations/20261110170000_rls_read_speedup.sql` |
-| Avatar removed from audit history snapshots | `supabase/migrations/20261110180000_audit_history_actor_snapshot_without_avatar.sql` |
-| Pending release manifest listing all three pending migrations | `supabase/preflight/aitask_release_manifest_20261110_workload_rls_read_speedup_production.json` |
+| Row-security read speed-up, tested | `supabase/migrations/20261110114105_rls_read_speedup.sql` |
+| Avatar removed from audit history snapshots | `supabase/migrations/20261110114150_audit_history_actor_snapshot_without_avatar.sql` |
+| Release manifest, now marked APPLIED and aligned with production history (148/148) | `supabase/preflight/aitask_release_manifest_20261110_workload_rls_read_speedup_production.json` |
 | Tests | `rls_read_speedup.test.sql` (17), `audit_history_actor_snapshot.test.sql` (5); two old text-matching tests updated |
 
 **Test evidence (local replay of all 148 migrations, no production writes):** pgTAP suite 92 files, 1,285 assertions, 0 failures. Deliberately broken policies fail the new equivalence test (7 and 2 failures), so it does catch regressions.
@@ -23,7 +23,7 @@ Read this first. Sections 1 to 6 below are the original handoff; where they disa
 2. **`aitask_read_notifications` is fixed by the same migration.** It reads through row security, so each notification row paid for about six helper calls. Helper calls per read fell from roughly 6,000 to 8,800 down to 140 to 190.
 3. **The history table is 83 MB because of the avatar, not before/after copies.** 73 MB of it is the actor's avatar (about 33 kB) copied into `actor_snapshot` on 2,276 of 2,722 rows. Before and after values total about 2 MB. The new avatar migration stops the growth. Old rows are append-only and untouched; shrinking them is still an owner decision.
 4. **No schema.sql or fingerprint regeneration is needed.** `supabase/schema.sql` is the legacy snapshot importer and `preflight/schema_fingerprint.sql` is a query, not a stored output. The release gate is the manifest plus `verify-supabase-rollout`.
-5. **`verify:release-db-alignment` fails on purpose** while migrations are pending. It already failed before this work because of the HOD workload migration.
+5. **`verify:release-db-alignment` passes again.** It failed while migrations were pending. Migration files were renamed to production's stamps: `20261110071019_hod_staff_workload_summary` (applied earlier by another session), `20261110114105_rls_read_speedup`, `20261110114150_audit_history_actor_snapshot_without_avatar`.
 6. **The two SQL errors on 9 Nov** match no statement in the repo or in any function body, and look like one-off ad-hoc queries on `aitask_members`.
 7. **The signed-out "permission denied" bursts are the project's own check.** `pnpm verify:supabase` probes production anonymously and expects denial: 14 denied calls per run. A burst at 07:32 UTC matches a run made during this session; earlier bursts match earlier runs.
 
@@ -40,7 +40,7 @@ Suggested next step: resolve the actor once per call and pass it down, and compu
 
 **Still needs the owner**
 
-- Approve applying, in a quiet period, the three pending migrations in timestamp order. The RLS migration holds an exclusive lock on `aitask_entities` while it verifies each login (10 s `lock_timeout`). After it is live, reset query statistics so new numbers reflect new code.
+- **Applied, verified live.** A Project Manager's full read went from 20,750 to 6,727 shared buffer hits (about 601 ms to 343 ms). Still to do with owner approval: reset query statistics (`pg_stat_statements`) so averages reflect the new code. Until then they still include old code. Rollback for the RLS change is the commented block in its migration.
 - Retention for the 2,722 existing history rows (about 74 MB is avatar copies). Options: leave as is, or a one-off scrub in a controlled maintenance step, because the table is append-only by design.
 - Drop `private.r3_backup_20261109_entities` (952 kB), `_members` (152 kB), `_workspaces` (16 kB)? They are small, so there is no urgency.
 - Four never-scanned indexes (all under 110 kB, so not worth dropping yet) and one missing index on `aitask_tutorial_feedback.auth_user_id`: low value, left alone.
@@ -54,7 +54,7 @@ Suggested next step: resolve the actor once per call and pass it down, and compu
 | Branch | `codex/role-enhancements-20261110`, one commit ahead of `origin/master` (`b6f4e7a`), not pushed, no PR |
 | Role UX gap list (18 items) | Code and test items fixed and merged by another session in PRs #19 and #20 |
 | Role UX features still to build | Built in `b6f4e7a` by another session; **not reviewed by this session** |
-| Supabase performance | Diagnosed and confirmed; fix drafted, **not applied** |
+| Supabase performance | Fix applied to production on 10 Nov; see section 0 |
 | Draft file | `supabase/drafts/rls_read_speedup.draft.sql`, untracked |
 | This document | Untracked |
 
