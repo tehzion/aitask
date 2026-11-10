@@ -24,6 +24,25 @@ import { formatLocalizedWeekdayDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getStaffDashboardMetrics } from '../lib/staffDashboard';
+import { useQuickTaskAction } from '../hooks/useQuickTaskAction';
+
+/**
+ * The focus card's main button is the next step when it takes one click, such
+ * as Start work or Send for review; opening the task stays beside it (role audit).
+ */
+const FocusTaskActions: React.FC<{ task: Task; openLabel: string; onOpen: () => void }> = ({ task, openLabel, onOpen }) => {
+  const { t } = useI18n();
+  const quickAction = useQuickTaskAction(task);
+  if (!quickAction) {
+    return <Button onClick={onOpen} className="w-full lg:w-auto">{openLabel} <ArrowRight className="h-4 w-4" /></Button>;
+  }
+  return (
+    <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:flex-col">
+      <Button onClick={() => { void quickAction.run(); }} disabled={quickAction.busy} aria-busy={quickAction.busy} aria-describedby="staff-focus-title" className="w-full lg:w-auto">{t(quickAction.label)} <ArrowRight className="h-4 w-4" /></Button>
+      <Button variant="secondary" onClick={onOpen} className="w-full lg:w-auto">{openLabel}</Button>
+    </div>
+  );
+};
 
 const bucketOrder: StaffWorkBucketKey[] = ['needs_action', 'up_next', 'waiting', 'done'];
 
@@ -102,7 +121,7 @@ const StaffMyWork: React.FC = () => {
     if (!hasSelectedBucketRef.current) setActiveBucket(defaultBucket);
   }, [defaultBucket, scope]);
 
-  const { blockedCount, unavailableDependencyTaskCount, assignedClientCount, activePlanCount, renewals, linkedOutputs, dueToday, waitingReview, revisions } = React.useMemo(
+  const { blockedCount, unavailableDependencyTaskCount, assignedClientCount, activePlanCount, renewals, renewalPlans, linkedOutputs, dueToday, waitingReview, revisions } = React.useMemo(
     () => getStaffDashboardMetrics(tasks, accessibleTasks, clientPlans, todayDate, clients),
     [accessibleTasks, clientPlans, clients, tasks, todayDate],
   );
@@ -200,9 +219,7 @@ const StaffMyWork: React.FC = () => {
                 </div>
               )}
             </div>
-            <Button onClick={() => openTask(focusTask.id)} className="w-full lg:w-auto">
-              {isHod && focusTask.assignedTo === currentUser?.id && isAwaitingHodAssignment(focusTask) ? t('Assign to…') : t('Open task')} <ArrowRight className="h-4 w-4" />
-            </Button>
+            <FocusTaskActions task={focusTask} openLabel={isHod && focusTask.assignedTo === currentUser?.id && isAwaitingHodAssignment(focusTask) ? t('Assign to…') : t('Open task')} onOpen={() => openTask(focusTask.id)} />
           </div>
         </section>
       ) : (
@@ -249,6 +266,17 @@ const StaffMyWork: React.FC = () => {
         </div>
         {contextUnavailableDependencyTaskCount > 0 && <p className="flex items-start gap-2 border-t border-line px-5 py-3 text-sm text-muted"><AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" /><span>{t(contextUnavailableDependencyTaskCount === 1 ? '{count} task waits on an earlier step you cannot see. Ask your PM if it is urgent.' : '{count} tasks wait on earlier steps you cannot see. Ask your PM if one is urgent.', { count: contextUnavailableDependencyTaskCount })}</span></p>}
       </Surface>
+
+      {persona === 'account' && !isDepartmentLead && renewalPlans.length > 0 && <section aria-labelledby="account-renewals-title">
+        <h2 id="account-renewals-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{t('Upcoming renewals')}</h2>
+        <p className="mt-1 text-sm text-muted">{t('Plans for your clients that end in the next 30 days.')}</p>
+        <Surface className="mt-4 divide-y divide-line/70 overflow-hidden">
+          {renewalPlans.map(({ plan, daysLeft }) => <Link key={plan.id} to={`/clients/${encodeURIComponent(plan.clientId)}`} className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-inset/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+            <span className="min-w-0"><span data-i18n-skip className="block truncate font-semibold text-ink">{plan.clientName}</span><span data-i18n-skip className="block truncate text-sm text-muted">{plan.name}</span></span>
+            <span className="shrink-0 text-sm font-medium text-ink">{daysLeft === 0 ? t('Ends today') : t('Ends in {count} days', { count: daysLeft })}</span>
+          </Link>)}
+        </Surface>
+      </section>}
 
       {isHod && <section aria-labelledby="hod-workload-title">
         <h2 id="hod-workload-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{t('Department workload')}</h2>

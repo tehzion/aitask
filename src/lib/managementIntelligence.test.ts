@@ -188,7 +188,10 @@ describe('management intelligence', () => {
       [user('staff-a', 'Staff', 'Staff A')],
       now,
     );
-    expect(summaries[0]).toMatchObject({ open: 2, dueSoon: 2, projects: 2, signal: 'busy' });
+    // Same rule as the Team workload table's week view: 2 due this week is still available.
+    expect(summaries[0]).toMatchObject({ open: 2, dueSoon: 2, projects: 2, signal: 'available' });
+    const overdue = getSharedEmployeeWorkload([task('late', 'a', { assignedTo: 'staff-a', dueDate: '2026-10-01' })], [user('staff-a', 'Staff', 'Staff A')], now);
+    expect(overdue[0].signal).toBe('attention');
   });
 
   it('keeps monthly report boundaries inclusive and prevents duplicate project rows', () => {

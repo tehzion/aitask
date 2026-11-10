@@ -21,6 +21,7 @@ describe('department PM fallback reviewer', () => {
     expect(getDepartmentReviewers(scope.users, task, [], scope).map(u => u.id)).toEqual(['pm']);
     expect(canReviewTaskInternally(pm, task, [], scope)).toBe(true);
     expect(getStaffGuidedAction(task, ['Waiting Approval', 'Completed'], pm, [], scope)).toMatchObject({ label: 'Approve', targetStatus: 'Approved', disabled: false });
+    expect(getStaffGuidedAction({ ...task, workflowStepKind: 'client_approval' }, ['Waiting Approval', 'Completed'], pm, [], scope)).toMatchObject({ label: 'Send to client', targetStatus: 'Approved' });
     expect(canApproveInternalReview(pm, task, [], scope)).toBe(true);
     expect(canReviewTaskInternally(other, task, [], scope)).toBe(false);
   });

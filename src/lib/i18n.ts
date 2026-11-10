@@ -549,6 +549,7 @@ const zhCopyExtras: Record<string, string> = {
   'Requested Access': '申请的访问权限',
   'Registrations are approved as Staff.': '注册申请会以员工身份审批。',
   'Approve': '批准',
+  'Send to client': '发送给客户',
   'Approve internal review': '批准内部审核',
   'Workflow details are unavailable. Refresh before completing this step.': '工作流程资料暂不可用，请刷新任务后重试。',
   'Complete every required predecessor before submitting or completing this step.': '请先完成之前的必要工作步骤。',

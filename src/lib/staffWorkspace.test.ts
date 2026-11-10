@@ -241,6 +241,9 @@ describe('work waiting on earlier steps (role audit, 10 Nov 2026)', () => {
     expect(isTaskWaitingOnEarlierSteps(hiddenDone, visible)).toBe(false);
     expect(isTaskWaitingOnEarlierSteps(shooting, visible)).toBe(false);
     expect(isTaskWaitingOnEarlierSteps(editing, [{ ...shooting, status: 'Completed', isCompleted: true }, editing])).toBe(false);
+    // Started work is never held back, even with an earlier step still open.
+    expect(isTaskWaitingOnEarlierSteps({ ...editing, status: 'In Progress' }, visible)).toBe(false);
+    expect(isTaskWaitingOnEarlierSteps({ ...hidden, status: 'Revision' }, visible)).toBe(true);
   });
 
   it('sorts waiting work last and never picks it as the focus task', () => {

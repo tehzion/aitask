@@ -129,15 +129,23 @@ const Dashboard: React.FC = () => {
     if (!showBossOperations) return [];
     const ownerName = (ownerId?: string) => users.find(member => member.id === ownerId)?.name || t('Unassigned');
     return [
-      ...clientProfiles.map(client => ({
-        id: `company-${client.id}`,
-        type: t('Company'),
-        company: client.clientName,
-        project: t('All projects'),
-        ownerIds: client.createdBy ? [client.createdBy] : [],
-        owner: ownerName(client.createdBy),
-        to: `/clients/${encodeURIComponent(client.id)}`,
-      })),
+      ...clientProfiles.map(client => {
+        // A company is owned by the PMs of its projects (role audit); the
+        // creator only stands in when it has no project with a PM yet.
+        const projectOwners = Array.from(new Set(projects
+          .filter(project => project.clientId === client.id || (!project.clientId && project.clientName === client.clientName))
+          .flatMap(project => project.projectManagerIds ?? [])));
+        const ownerIds = projectOwners.length ? projectOwners : client.createdBy ? [client.createdBy] : [];
+        return {
+          id: `company-${client.id}`,
+          type: t('Company'),
+          company: client.clientName,
+          project: t('All projects'),
+          ownerIds,
+          owner: ownerIds.map(ownerName).join(', ') || t('Unassigned'),
+          to: `/clients/${encodeURIComponent(client.id)}`,
+        };
+      }),
       ...projects.map(project => ({
         id: `project-${project.id}`,
         type: t('Project'),
@@ -619,7 +627,7 @@ const Dashboard: React.FC = () => {
                         onChange={event => setPortfolioOwner(event.target.value)}
                         className="min-h-9 rounded-control border border-line bg-surface px-2 text-sm text-ink focus:outline-none focus:ring-2 focus:ring-accent/35"
                       >
-                        <option value="All">{t('All Project Managers')} ({portfolioAllRows.length})</option>
+                        <option value="All">{t('All Project Managers')}</option>
                         {portfolioHasUnassigned && (
                           <option value="Unassigned">{t('Unassigned')} ({portfolioOwnerCounts.get('Unassigned') || 0})</option>
                         )}

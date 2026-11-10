@@ -70,7 +70,7 @@ for (const department of ['Operation', 'Designer'] as const) {
   });
   expect(actualVisibleBlockers).toBe(1);
   await expect(metric(page, 'Blocked steps')).toHaveText('1');
-  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).toContainText('1 blocker');
+  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).toContainText('Waiting on: Creator visible predecessor');
  });
 }
 
@@ -117,8 +117,8 @@ test('blocker metrics do not expose an inaccessible predecessor', async ({ page 
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, predecessorTaskIds: ['foreign'] } : task) }));
   });
   await expect(metric(page, 'Blocked steps')).toHaveText('0');
-  await expect(page.locator('[aria-labelledby="staff-role-context"]')).toContainText('Dependency status unavailable · Tasks: 1');
-  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).toContainText('Dependency status unavailable');
+  await expect(page.locator('[aria-labelledby="staff-role-context"]')).toContainText('1 task waits on an earlier step you cannot see');
+  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).toContainText('earlier step');
   await expect(page.getByText('Foreign task', { exact: true })).toHaveCount(0);
 });
 
@@ -163,28 +163,28 @@ test('unavailable dependency notices clear when visible and exclude closed tasks
   await page.setViewportSize({ width: 390, height: 844 });
   await seed(page, 'Designer');
   const context = page.locator('[aria-labelledby="staff-role-context"]');
-  await expect(context).not.toContainText('Dependency status unavailable');
+  await expect(context).not.toContainText('you cannot see');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, predecessorTaskIds: ['foreign', 'foreign'] } : task) }));
   });
-  await expect(context).toContainText('Dependency status unavailable · Tasks: 1');
+  await expect(context).toContainText('1 task waits on an earlier step you cannot see');
   await expect(metric(page, 'Blocked steps')).toHaveText('0');
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'foreign' ? { ...task, createdBy: state.currentUser!.id } : task) }));
   });
-  await expect(context).not.toContainText('Dependency status unavailable');
+  await expect(context).not.toContainText('you cannot see');
   await expect(metric(page, 'Blocked steps')).toHaveText('1');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, status: 'Cancelled', predecessorTaskIds: ['hidden'] } : task) }));
   });
-  await expect(context).not.toContainText('Dependency status unavailable');
+  await expect(context).not.toContainText('you cannot see');
   await expect(metric(page, 'Blocked steps')).toHaveText('0');
   await page.getByRole('tab', { name: /Done/ }).click();
-  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).not.toContainText('Dependency status unavailable');
+  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).not.toContainText('earlier step');
 });
 
 test('account metrics and queue counts react to reassignment and plan changes', async ({ page }) => {
@@ -245,9 +245,9 @@ test('HOD dependency context follows department work across personal scope chang
   });
   await expect(page.getByRole('heading', { name: 'Department work', exact: true })).toBeVisible();
   const context = page.locator('[aria-labelledby="staff-role-context"]');
-  await expect(context).toContainText('Dependency status unavailable · Tasks: 1');
+  await expect(context).toContainText('1 task waits on an earlier step you cannot see');
   await page.getByRole('tab', { name: /My assignments/ }).click();
-  await expect(context).toContainText('Dependency status unavailable · Tasks: 1');
-  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).not.toContainText('Dependency status unavailable');
+  await expect(context).toContainText('1 task waits on an earlier step you cannot see');
+  await expect(page.locator('article').filter({ hasText: 'Assigned dependency task' })).not.toContainText('earlier step');
   await expect(page.getByRole('button').filter({ hasText: 'Creator visible predecessor' })).toHaveCount(0);
 });

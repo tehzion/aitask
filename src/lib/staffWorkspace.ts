@@ -57,8 +57,10 @@ export const getUnavailableTaskDependencyCount = (task: Task, visibleTasks: Task
  * you cannot see is not confirmed done by the server (role audit, 10 Nov 2026).
  */
 export const isTaskWaitingOnEarlierSteps = (task: Task, visibleTasks: Task[]): boolean => (
-  getTaskBlockers(task, visibleTasks).length > 0
-  || (getUnavailableTaskDependencyCount(task, visibleTasks) > 0 && task.workflowDependenciesReady !== true)
+  // Only work that has not started waits; started work stays in front of its owner.
+  ['Pending', 'Revision'].includes(task.status)
+  && (getTaskBlockers(task, visibleTasks).length > 0
+  || (getUnavailableTaskDependencyCount(task, visibleTasks) > 0 && task.workflowDependenciesReady !== true))
 );
 
 const REVISION_NOTE_PREFIX = 'Revision requested: ';
@@ -149,7 +151,8 @@ export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[], act
   const options = actor ? getTaskStatusOptions(actor, task, taskStatuses, roles, scope) : taskStatuses;
   const approvalMode = getEffectiveTaskApprovalMode(task, scope.projects || []);
   if (task.status === 'Waiting Approval' && approvalMode === 'none' && actor?.role === 'Project Manager' && options.includes('Completed')) return { kind: 'advance', label: 'Confirm completion', targetStatus: 'Completed', disabled: false };
-  if (task.status === 'Waiting Approval' && actor && options.includes('Approved')) return { kind: 'advance', label: 'Approve', targetStatus: 'Approved', disabled: false };
+  // Approving a client-approval step is what shows it to the client (role audit).
+  if (task.status === 'Waiting Approval' && actor && options.includes('Approved')) return { kind: 'advance', label: task.workflowStepKind === 'client_approval' ? 'Send to client' : 'Approve', targetStatus: 'Approved', disabled: false };
   if (task.status === 'Approved') return actor && options.includes('Completed')
     ? { kind: 'advance', label: 'Confirm completion', targetStatus: 'Completed', disabled: false }
     : { kind: 'waiting', label: 'Awaiting final completion', disabled: true };

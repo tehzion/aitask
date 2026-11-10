@@ -19,6 +19,9 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import ContextualTutorialLink from '../components/ContextualTutorialLink';
 import MonthlyOperationalReport from '../components/MonthlyOperationalReport';
 
+
+/** A rate with nothing tracked yet reads as "—", not a failing 0% (role audit). */
+const rateText = (rate: number, tracked: number) => (tracked > 0 ? `${rate}%` : '—');
 const ReportsTrendChart = React.lazy(() => import('../components/ReportsCharts').then(module => ({ default: module.ReportsTrendChart })));
 const ReportsDepartmentChart = React.lazy(() => import('../components/ReportsCharts').then(module => ({ default: module.ReportsDepartmentChart })));
 
@@ -190,7 +193,7 @@ const Reports: React.FC = () => {
         <MetricCard title={t('Overdue')} value={overview.overdue} icon={AlertCircle} tone="red" />
         <MetricCard title={t('Upcoming')} value={overview.upcoming} icon={Clock} tone="indigo" />
         <MetricCard title={t('Open today')} value={overview.open} icon={Clock} tone="amber" />
-        <MetricCard title={t('On-time completion rate')} value={`${overview.completionRate}%`} icon={CheckCircle2} tone="emerald" footer={`${overview.tracked} ${t('Tracked').toLowerCase()}`} />
+        <MetricCard title={t('On-time completion rate')} value={rateText(overview.completionRate, overview.tracked)} icon={CheckCircle2} tone="emerald" footer={`${overview.tracked} ${t('Tracked').toLowerCase()}`} />
         {!isClientUser && <MetricCard title={t('Assignees in period')} value={overview.assigneesInPeriod} icon={Users} tone="indigo" />}
       </div>
 
@@ -230,7 +233,7 @@ const Reports: React.FC = () => {
                         <td className="px-3 py-3 text-right text-amber-700 dark:text-amber-300">{week.open}</td>
                         <td className="px-3 py-3 text-right text-red-700 dark:text-red-300">{week.overdue}</td>
                         <td className="px-3 py-3 text-right text-muted">{week.untracked}</td>
-                        <td className="px-3 py-3 text-right font-semibold text-ink">{week.completionRate}%</td>
+                        <td className="px-3 py-3 text-right font-semibold text-ink">{rateText(week.completionRate, week.onTime + week.late)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -276,7 +279,7 @@ const Reports: React.FC = () => {
                           <td className="px-3 py-3 text-right text-accent">{dept.upcoming}</td>
                           <td className="px-3 py-3 text-right text-amber-700 dark:text-amber-300">{dept.open}</td>
                           <td className="px-3 py-3 text-right text-red-700 dark:text-red-300">{dept.overdue}</td>
-                          <td className="px-3 py-3 text-right font-semibold text-ink">{dept.completionRate}%</td>
+                          <td className="px-3 py-3 text-right font-semibold text-ink">{rateText(dept.completionRate, dept.onTime + dept.late)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -335,7 +338,7 @@ const Reports: React.FC = () => {
                             style={{ width: `${dept.completionRate}%` }}
                           />
                         </div>
-                        <span className="w-10 text-right text-sm font-bold text-ink">{dept.completionRate}%</span>
+                        <span className="w-10 text-right text-sm font-bold text-ink">{rateText(dept.completionRate, dept.onTime + dept.late)}</span>
                       </div>
                     </td>
                   </tr>
@@ -353,7 +356,7 @@ const Reports: React.FC = () => {
                     <Users className="h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
                     <h4 className="min-w-0 break-words text-sm font-semibold text-ink">{dept.name}</h4>
                   </div>
-                  <span className="shrink-0 text-sm font-bold text-ink">{dept.completionRate}%</span>
+                  <span className="shrink-0 text-sm font-bold text-ink">{rateText(dept.completionRate, dept.onTime + dept.late)}</span>
                 </div>
                 <div className="mt-3 h-2 overflow-hidden rounded-full bg-line/60" aria-label={t('On-time completion rate')} role="img">
                   <div
