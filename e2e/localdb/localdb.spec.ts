@@ -96,16 +96,16 @@ test('PM actions from the team feedback save to Supabase', async ({ page }) => {
 
   // F3: cancel a never-published month and close a finished one.
   const octLabel = await page.evaluate(() => new Intl.DateTimeFormat(document.documentElement.lang || 'en', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(2026, 9, 1)));
-  await expect(page.getByText('Never published', { exact: true })).toHaveCount(2);
+  await expect(page.getByText('Never started', { exact: true })).toHaveCount(2);
   await timed('cancel month', async () => {
     await page.getByRole('button', { name: /^Cancel month: / }).first().click();
     await expectSettled(page);
   });
   await timed('publish late', async () => {
-    await page.getByRole('button', { name: /^Publish late: / }).first().click();
+    await page.getByRole('button', { name: /^Start late: / }).first().click();
     await expectSettled(page);
   });
-  await expect(page.getByText('Never published', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Never started', { exact: true })).toHaveCount(0);
   console.log('[info] oct label', octLabel);
   console.log('[info] cycles', sql(`select string_agg(entity_id||'='||(data->>'status'), ',' order by entity_id) from aitask_entities where entity_type='service_cycle'`));
   expect(sql(`select count(*) from aitask_entities where entity_type='service_cycle' and data->>'status'='Cancelled'`)).toBe('1');

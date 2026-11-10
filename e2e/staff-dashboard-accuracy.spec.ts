@@ -88,7 +88,7 @@ test('assigned clients excludes work only created by Staff', async ({ page }) =>
 test('early-morning renewals includes the contract exactly 30 local calendar days away', async ({ page }) => {
   await seed(page, 'Account & Finance', '2026-10-06T17:30:00Z');
   expect(await page.evaluate(() => new Date().getDate())).toBe(7);
-  await expect(metric(page, 'Active plans')).toHaveText('1');
+  await expect(metric(page, 'Running plans')).toHaveText('1');
   await expect(metric(page, 'Renewals')).toHaveText('1');
 });
 
@@ -129,13 +129,13 @@ test('account metrics use company IDs across stale and duplicate saved names', a
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'assigned' ? { ...task, clientName: 'Old assigned company' } : task) }));
   });
   await expect(metric(page, 'Assigned clients')).toHaveText('1');
-  await expect(metric(page, 'Active plans')).toHaveText('1');
+  await expect(metric(page, 'Running plans')).toHaveText('1');
   await expect(metric(page, 'Renewals')).toHaveText('1');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => ({ ...plan, clientId: 'different-company' })) }));
   });
-  await expect(metric(page, 'Active plans')).toHaveText('0');
+  await expect(metric(page, 'Running plans')).toHaveText('0');
   await expect(metric(page, 'Renewals')).toHaveText('0');
 });
 
@@ -150,13 +150,13 @@ test('canonical profiles resolve legacy assignments without merging ambiguous co
     }));
   });
   await expect(metric(page, 'Assigned clients')).toHaveText('1');
-  await expect(metric(page, 'Active plans')).toHaveText('1');
+  await expect(metric(page, 'Running plans')).toHaveText('1');
   await expect(metric(page, 'Renewals')).toHaveText('1');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ clients: [...state.clients, { id: 'ambiguous-company', clientName: 'Assigned company', createdAt: '', updatedAt: '' }] }));
   });
-  await expect(metric(page, 'Active plans')).toHaveText('0');
+  await expect(metric(page, 'Running plans')).toHaveText('0');
 });
 
 test('unavailable dependency notices clear when visible and exclude closed tasks', async ({ page }) => {
@@ -190,14 +190,14 @@ test('unavailable dependency notices clear when visible and exclude closed tasks
 test('account metrics and queue counts react to reassignment and plan changes', async ({ page }) => {
   await seed(page, 'Account & Finance');
   await expect(metric(page, 'Assigned clients')).toHaveText('1');
-  await expect(metric(page, 'Active plans')).toHaveText('1');
+  await expect(metric(page, 'Running plans')).toHaveText('1');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState(state => ({ tasks: state.tasks.map(task => task.id === 'creator-visible' ? { ...task, assignedTo: state.currentUser!.id } : task),
       clientPlans: state.clientPlans.map(plan => ({ ...plan, status: 'Paused' })) }));
   });
   await expect(metric(page, 'Assigned clients')).toHaveText('2');
-  await expect(metric(page, 'Active plans')).toHaveText('0');
+  await expect(metric(page, 'Running plans')).toHaveText('0');
   await expect(metric(page, 'Renewals')).toHaveText('0');
   await expect(page.getByRole('tab', { name: /Needs action/ })).toContainText('2');
 });

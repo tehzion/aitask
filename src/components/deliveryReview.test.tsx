@@ -51,15 +51,15 @@ describe('role-specific delivery review', () => {
       clients: [{ id: 'client', clientName: 'Company' } as ClientProfile], deliverables: [],
       serviceCycles: [{ id: 'draft', clientId: 'client', clientName: 'Company', status: 'Draft', periodStart: '2026-10-01', periodEnd: '2026-10-31' } as ServiceCycle] });
     const html = render(<DeliveryReviewPanel />);
-    expect(html).toContain('Awaiting publication');
-    expect(html).not.toContain('>Publish<');
+    expect(html).toContain('Not started yet');
+    expect(html).not.toContain('>Start month<');
     expect(html).not.toContain('<select');
   });
   it('shows explicit publication to the Super Admin without publishing during render', () => {
     const actor = { id: 'boss', name: 'Boss', role: 'Project Manager', departments: [], isSuperAdmin: true } as User;
     useStore.setState({ currentUser: actor, users: [actor], tasks: [], clients: [], projects: [], deliverables: [], rolePermissions: [],
       serviceCycles: [{ id: 'draft', clientId: 'client', clientName: 'Company', status: 'Draft', periodStart: '2026-10-01', periodEnd: '2026-10-31' } as ServiceCycle] });
-    expect(render(<DeliveryReviewPanel />)).toContain('>Publish<');
+    expect(render(<DeliveryReviewPanel />)).toContain('>Start month<');
     expect(useStore.getState().serviceCycles[0].status).toBe('Draft');
   });
 });

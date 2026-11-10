@@ -174,7 +174,7 @@ test('company operations keeps current draft planning separate from confirmed pr
   await seedCompanyCycles(page);
   await page.goto('/clients/followup-company');
   await page.clock.runFor(500);
-  await expect(page.getByText('Awaiting publication', { exact: true })).toBeVisible();
+  await expect(page.getByText('Not started yet', { exact: true })).toBeVisible();
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -185,7 +185,7 @@ test('company operations keeps current draft planning separate from confirmed pr
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(cycle => cycle.id !== 'followup-current-cycle') });
   });
-  await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
+  await expect(page.getByText('No month in progress', { exact: true })).toBeVisible();
   await expect(page.getByText('Done 2/4', { exact: true })).toHaveCount(0);
 });
 

@@ -70,7 +70,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
 
   await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   const billingPeriod = page.getByRole('combobox', { name: 'Billing period' });
-  const publishedPeriod = billingPeriod.locator('option').filter({ hasText: /Published/ }).first();
+  const publishedPeriod = billingPeriod.locator('option').filter({ hasText: /In progress/ }).first();
   await billingPeriod.selectOption(await publishedPeriod.getAttribute('value'));
   const cyclesPanel = page.getByRole('tabpanel', { name: 'Plan & delivery', exact: true });
   await expect(cyclesPanel.getByText('Included', { exact: true })).toBeVisible();

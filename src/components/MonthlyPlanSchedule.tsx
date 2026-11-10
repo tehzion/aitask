@@ -44,7 +44,7 @@ const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManage
   const cycleState = (item: ServiceCycle) => item.periodStart > todayKey
     ? 'Upcoming'
     : item.periodStart <= todayKey && todayKey <= item.periodEnd
-      ? 'Active'
+      ? 'This month'
       : 'Ended';
 
   // F3: ended months that still need a decision say so, with the PM's options.
@@ -53,13 +53,13 @@ const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManage
     const act = (status: ServiceCycle['status'], label: string) => canManageCycles && onSetCycleStatus
       ? <Button variant="secondary" className="min-h-9 px-3 py-1.5" disabled={busy} aria-label={`${t(label)}: ${dateLabel(item.periodStart)}`} onClick={() => onSetCycleStatus(item.id, status)}>{t(label)}</Button>
       : null;
-    if (housekeeping.kind === 'never-published') return <div className="flex flex-wrap items-center gap-2"><StatusChip tone="amber">{t('Never published')}</StatusChip>{act('Published', 'Publish late')}{act('Cancelled', 'Cancel month')}</div>;
+    if (housekeeping.kind === 'never-published') return <div className="flex flex-wrap items-center gap-2"><StatusChip tone="amber">{t('Never started')}</StatusChip>{act('Published', 'Start late')}{act('Cancelled', 'Cancel month')}</div>;
     if (housekeeping.kind === 'ready-to-close') return <div className="flex flex-wrap items-center gap-2"><StatusChip tone="emerald">{t('Ready to close')}</StatusChip>{act('Completed', 'Close month')}</div>;
     if (housekeeping.kind === 'overdue') return <StatusChip tone="red">{t('Overdue: {count} not done', { count: housekeeping.notDone })}</StatusChip>;
     if (item.status === 'Completed') return <StatusChip tone="slate">{t('Closed')}</StatusChip>;
     if (item.status === 'Cancelled') return <StatusChip tone="slate">{t('Cancelled')}</StatusChip>;
     const state = cycleState(item);
-    return <StatusChip tone={state === 'Active' ? 'emerald' : state === 'Upcoming' ? 'amber' : 'slate'}>{t(state)}</StatusChip>;
+    return <StatusChip tone={state === 'This month' ? 'emerald' : state === 'Upcoming' ? 'amber' : 'slate'}>{t(state)}</StatusChip>;
   };
 
   return <section aria-label={t('Monthly update schedule')} className="rounded-panel border border-line bg-surface px-5 py-4">
@@ -76,7 +76,7 @@ const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManage
       </div>
     </div>
     <p className="mt-1 text-sm leading-6 text-muted">{t(plan.status === 'Draft'
-      ? plan.supersedesPlanId ? 'This revision takes over automatically at its scheduled cycle.' : 'Activate this plan to begin monthly cycles on the dates below.'
+      ? plan.supersedesPlanId ? 'This revision takes over automatically at its scheduled cycle.' : 'Start this plan to begin the months below.'
       : plan.status === 'Paused'
         ? 'Monthly updates are paused. Resume the plan to continue from the next billing day.'
         : plan.status === 'Ended'

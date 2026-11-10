@@ -14,8 +14,8 @@ export const DeliveryProgress = ({ published, total, delivered, confirmed, draft
 }) => {
   const { t } = useI18n();
   if (!published || total === 0) return <div className="mt-5" role="status">
-    <StatusChip tone="slate">{t(published ? 'No deliverables in this cycle' : draft ? 'Awaiting publication' : 'No current published cycle')}</StatusChip>
-    {!published && <p className="mt-2 text-sm text-muted">{t('Delivery progress appears after the current cycle is published.')}</p>}
+    <StatusChip tone="slate">{t(published ? 'No deliverables in this cycle' : draft ? 'Not started yet' : 'No month in progress')}</StatusChip>
+    {!published && <p className="mt-2 text-sm text-muted">{t('Delivery progress appears once this month starts.')}</p>}
   </div>;
   return <div className="mt-5">
     <p className="calm-number text-4xl font-semibold tracking-tight text-ink">{Math.round(delivered / total * 100)}%</p>

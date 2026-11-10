@@ -87,7 +87,7 @@ test('several ended months are cancelled together from the dashboard', async ({ 
   });
   await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
   const panel = page.locator('section', { has: page.getByRole('heading', { name: 'Months to tidy up' }) }).last();
-  await expect(panel.getByText('Never published', { exact: true })).toHaveCount(2);
+  await expect(panel.getByText('Never started', { exact: true })).toHaveCount(2);
   for (const box of await panel.getByRole('checkbox', { name: /^Select: Clicks Co · / }).all()) await box.check();
   await panel.getByRole('button', { name: 'Cancel month (2)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Cancel 2 months?' });

@@ -65,8 +65,8 @@ for (const mobile of [false, true]) {
     await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
     const portfolio = page.getByRole('tabpanel');
     await expect(portfolio.getByRole('heading', { name: 'Contract renewals' })).toHaveCount(0);
-    await expect(portfolio.getByText(/No published cycle covering today/)).toBeVisible();
-    await expect(portfolio.getByText('No current published cycle', { exact: true })).toBeVisible();
+    await expect(portfolio.getByText(/Accuracy Plan.*No month in progress/)).toBeVisible();
+    await expect(portfolio.getByText('No month in progress', { exact: true })).toBeVisible();
     await expect(portfolio.getByText('0 Delivered', { exact: true })).toHaveCount(0);
     await page.getByRole('tab', { name: 'Agency pulse', exact: true }).click();
     await expectMetric(page.getByRole('tabpanel'), 'Overdue now', 1);

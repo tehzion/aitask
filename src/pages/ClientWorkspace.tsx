@@ -1,3 +1,4 @@
+import { planStatusLabel, cycleStatusLabel } from '../lib/serviceStatusLabels';
 import '../lib/pageCopy';
 import ModalShell from '../components/ModalShell';
 import '../lib/actionFeedbackCopy';
@@ -336,7 +337,7 @@ const OperationsClientWorkspace = () => {
     if (pendingActivity.current) { await retryActivitySave(); return; }
     const cycle = cycles.find(item => item.id === activityCycleId);
     if (!cycle)
-      return setActivityFeedback({ tone: "error", text: canManageCycles ? "Create a service cycle before adding activity." : "No service cycle is available for this activity. Ask your project manager to publish one." });
+      return setActivityFeedback({ tone: "error", text: canManageCycles ? "Create a service cycle before adding activity." : "No month is available for this activity. Ask your project manager to start one." });
     if (file && file.size > SERVICE_FILE_MAX_BYTES) {
       setActivityFeedback({ tone: "error", text: t("Files must be 100 MB or smaller."), action: pendingActivity.current ? "save" : undefined });
       return;
@@ -583,7 +584,7 @@ const OperationsClientWorkspace = () => {
         onboardingTarget="service-plan"
         meta={
           <>
-            <StatusChip tone={activePlan?.status === "Active" ? "emerald" : activePlan?.status === "Paused" ? "amber" : "slate"}>{activePlan ? t(activePlan.status) : t("No plan")}</StatusChip>
+            <StatusChip tone={activePlan?.status === "Active" ? "emerald" : activePlan?.status === "Paused" ? "amber" : "slate"}>{activePlan ? t(planStatusLabel(activePlan.status)) : t("No plan")}</StatusChip>
             {currentCycle && <span>{formatLocalizedDate(parseOptionalDate(currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(currentCycle.periodEnd)!, locale)}</span>}
             {activePlan?.contractEndDate && <span>{t("Renewal date")} {formatLocalizedDate(parseOptionalDate(activePlan.contractEndDate)!, locale)}</span>}
           </>
@@ -591,16 +592,16 @@ const OperationsClientWorkspace = () => {
         action={
           planToActivate ? (
             <Button onClick={() => setActivationConfirmOpen(true)}>
-              <Play className="h-4 w-4" />{t(activationPublishesNow ? "Activate & publish this month" : "Activate plan")}
+              <Play className="h-4 w-4" />{t(activationPublishesNow ? "Start plan and this month" : "Start plan")}
             </Button>
           ) : null
         }
       />
       {activationConfirmOpen && planToActivate && <ModalShell labelledBy={activationTitleId} onClose={() => { if (!serviceSaving) setActivationConfirmOpen(false); }} panelClassName="max-w-lg"><div className="p-5">
-        <h2 id={activationTitleId} className="font-semibold text-ink">{t(activationPublishesNow ? "Activate & publish this month" : "Activate plan")}</h2>
+        <h2 id={activationTitleId} className="font-semibold text-ink">{t(activationPublishesNow ? "Start plan and this month" : "Start plan")}</h2>
         <p className="mt-2 text-sm text-muted">{activationPublishesNow
-          ? t("This activates the plan and publishes this month, so the team can start work.")
-          : t("This activates the plan. Its first month can be published when it is due.")}</p>
+          ? t("This starts the plan and this month. The team can begin work, and the client will see this month's deliverables.")
+          : t("This starts the plan. Its first month begins on {date}.", { date: formatLocalizedDate(parseOptionalDate(planToActivate.startDate)!, locale) })}</p>
         <ul className="mt-4 divide-y divide-line/70 rounded-control border border-line text-sm">
           {planToActivate.serviceItems.map(item => <li key={item.id} className="flex items-center justify-between gap-3 px-3 py-2"><span data-i18n-skip className="font-medium text-ink">{item.name}</span><span className="text-muted">{item.quantity} <span data-i18n-skip>{item.unit}</span></span></li>)}
           {planToActivate.serviceItems.length === 0 && <li className="px-3 py-2 text-muted">{t("No services in this plan yet.")}</li>}
@@ -608,7 +609,7 @@ const OperationsClientWorkspace = () => {
         {activationPublishesNow && activationTaskCount > 0 && <p className="mt-3 text-sm text-muted">{t("{count} workflow tasks can then be generated from this month.", { count: activationTaskCount })}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <Button variant="secondary" disabled={serviceSaving} onClick={() => setActivationConfirmOpen(false)}>{t("Cancel")}</Button>
-          <Button disabled={serviceSaving} onClick={() => void activatePlan()}><Play className="h-4 w-4" />{t(activationPublishesNow ? "Activate & publish" : "Activate plan")}</Button>
+          <Button disabled={serviceSaving} onClick={() => void activatePlan()}><Play className="h-4 w-4" />{t(activationPublishesNow ? "Start plan and this month" : "Start plan")}</Button>
         </div>
       </div></ModalShell>}
       {detailsPlan && canManagePlans && <ModalShell labelledBy="plan-details-title" onClose={() => setDetailsPlanId(null)} panelClassName="max-w-4xl"><div className="p-4"><h2 id="plan-details-title" className="mb-4 font-semibold">{t('Edit details')}</h2><DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${detailsPlan.id}`} plan={detailsPlan} source={store.clientPlans.find(item => item.id === detailsPlan.supersedesPlanId) || detailsPlan} /><Button variant="secondary" className="mt-4" onClick={() => setDetailsPlanId(null)}>{t('Close')}</Button></div></ModalShell>}
@@ -678,10 +679,11 @@ const OperationsClientWorkspace = () => {
                           : "slate"
                       }
                     >
-                      {cycle.status}
+                      {t(cycleStatusLabel(cycle.status))}
                     </Badge>
                     {canManageCycles && cycle.status === "Draft" && (
                       <Button
+                        title={t("Starting this month lets the team begin work and makes its deliverables visible to the client.")}
                         onClick={() =>
                           void saveAndCommit(
                             store.setServiceCycleStatus(cycle.id, "Published"),
@@ -690,7 +692,7 @@ const OperationsClientWorkspace = () => {
                         }
                       >
                         <Send className="h-4 w-4" />
-                        {t("Publish")}
+                        {t("Start month")}
                       </Button>
                     )}
                   </div>

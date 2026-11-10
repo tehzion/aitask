@@ -18,7 +18,7 @@ const RenewalSignals = ({ plan }: { plan: Pick<ClientServicePlan, 'id' | 'client
     () => getRenewalSignals(plan, serviceCycles, deliverables, tasks),
     [plan, serviceCycles, deliverables, tasks],
   );
-  if (signals.cyclesReviewed === 0) return <p className="mt-1 text-xs text-muted">{t('No published months yet to review.')}</p>;
+  if (signals.cyclesReviewed === 0) return <p className="mt-1 text-xs text-muted">{t('No started months yet to review.')}</p>;
   return <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
     <span>{t('On time')} {percent(signals.onTimeRate)}</span>
     <span>{t('Revisions')} {percent(signals.revisionRate)}</span>
