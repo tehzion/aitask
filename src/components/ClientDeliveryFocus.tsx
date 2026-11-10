@@ -12,7 +12,7 @@ import { CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, Me
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 import { canCommentOnTask, canReviewTaskAsClient, canViewTask } from '../lib/access';
-import { getClientDeliveryStage, getClientDeliveryStageLabel, getClientDeliveryStageTone } from '../lib/clientPortal';
+import { getClientDeliveryStage, getClientDeliveryStageLabel, getClientDeliveryStageTone, getClientTaskTitle } from '../lib/clientPortal';
 import { formatLocalizedDate } from '../lib/i18n';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { safeHttpsUrl } from '../lib/security';
@@ -227,7 +227,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
             <StatusChip tone={getClientDeliveryStageTone(displayTask)}>{t(getClientDeliveryStageLabel(displayTask))}</StatusChip>
             <span data-i18n-skip className="text-xs font-medium text-muted">{task.serviceType}</span>
           </div>
-          <h3 id="delivery-outcome-title" data-i18n-skip className="mt-4 text-2xl font-semibold tracking-[-0.035em] text-ink text-pretty">{task.title}</h3>
+          <h3 id="delivery-outcome-title" data-i18n-skip className="mt-4 text-2xl font-semibold tracking-[-0.035em] text-ink text-pretty">{getClientTaskTitle(task)}</h3>
           <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-muted text-pretty">{task.description ? <span data-i18n-skip>{task.description}</span> : t('The requested outcome will appear here when the team adds a brief.')}</p>
         </section>
 

@@ -1600,6 +1600,7 @@ registerUiTranslations({
   '{count} of these will be sent to the client.': '其中 {count} 项将发送给客户。',
   'Plans for your clients that end in the next 30 days.': '你负责的客户中，30 天内到期的方案。',
   'Ends in {count} days': '{count} 天后到期',
+  'Ends tomorrow': '明天到期',
   '{count} task is waiting on an earlier step. It moves here when that step is done.': '{count} 个任务正在等待前一步完成，完成后会出现在这里。',
   '{count} tasks are waiting on earlier steps. They move here when those steps are done.': '{count} 个任务正在等待前面的步骤完成，完成后会出现在这里。',
   '{count} task waits on an earlier step you cannot see. Ask your PM if it is urgent.': '{count} 个任务正在等待您无法查看的前一步。如有急需，请联系项目经理。',

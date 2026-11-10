@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { useStore } from '../store';
 import type { Task, User } from '../types';
 import { getLocalizedPriority, getLocalizedTaskStatus } from '../lib/localeLabels';
-import { getLatestRevisionNote, getTaskBlockers, getUnavailableTaskDependencyCount } from '../lib/staffWorkspace';
+import { getLatestRevisionNote, getTaskBlockers, getUnavailableTaskDependencyCount, isTaskWaitingOnEarlierSteps } from '../lib/staffWorkspace';
 import { getTaskWorkflowSteps, type TaskWorkflowStep } from '../lib/taskStage';
 import { isTaskOverdue } from '../lib/taskReporting';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
@@ -65,7 +65,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   const unavailableDependencies = getUnavailableTaskDependencyCount(task, allTasks);
   // Work that cannot start yet says what it waits on instead of offering "Start work" (role audit).
   const hiddenStepsOpen = unavailableDependencies > 0 && task.workflowDependenciesReady !== true;
-  const waitingToStart = ['Pending', 'Revision'].includes(task.status) && (blockers > 0 || hiddenStepsOpen);
+  const waitingToStart = isTaskWaitingOnEarlierSteps(task, allTasks);
   const waitingOn = !waitingToStart ? '' : blockers > 0
     ? (blockers > 1 ? t('{title} and {count} more', { title: blockerTasks[0].title, count: blockers - 1 }) : blockerTasks[0].title)
     : t('an earlier step you cannot see');

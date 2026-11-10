@@ -273,7 +273,7 @@ const StaffMyWork: React.FC = () => {
         <Surface className="mt-4 divide-y divide-line/70 overflow-hidden">
           {renewalPlans.map(({ plan, daysLeft }) => <Link key={plan.id} to={`/clients/${encodeURIComponent(plan.clientId)}`} className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-inset/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
             <span className="min-w-0"><span data-i18n-skip className="block truncate font-semibold text-ink">{plan.clientName}</span><span data-i18n-skip className="block truncate text-sm text-muted">{plan.name}</span></span>
-            <span className="shrink-0 text-sm font-medium text-ink">{daysLeft === 0 ? t('Ends today') : t('Ends in {count} days', { count: daysLeft })}</span>
+            <span className="shrink-0 text-sm font-medium text-ink">{daysLeft === 0 ? t('Ends today') : daysLeft === 1 ? t('Ends tomorrow') : t('Ends in {count} days', { count: daysLeft })}</span>
           </Link>)}
         </Surface>
       </section>}

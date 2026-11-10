@@ -2,6 +2,7 @@ import '../lib/pageCopy';
 import ModalShell from '../components/ModalShell';
 import '../lib/actionFeedbackCopy';
 import { formatLocalizedDateRange } from '../lib/i18n';
+import { getClientTaskTitle } from '../lib/clientPortal';
 import { msg, type MessageDescriptor } from '../lib/messages';
 import type { UiFeedback } from '../lib/actionFeedback';
 import UnavailableWork from '../components/UnavailableWork';
@@ -839,7 +840,7 @@ const OperationsClientWorkspace = () => {
                                       data-i18n-skip
                                       className="min-w-0 font-medium text-ink hover:text-accent"
                                     >
-                                      {task.title.replace(/^\d+\.\s*/, "")}
+                                      {getClientTaskTitle(task)}
                                     </Link>
                                     <span className={cn("font-medium", task.isCompleted ? "text-[rgb(var(--calm-success))]" : waiting ? "text-[rgb(var(--calm-warning))]" : "text-muted")}>{task.isCompleted ? t("Completed") : waiting ? t("Waiting on previous step") : t("Current / ready")}</span>
                                     {!isClient && canManageCycles && nextCycle && isTaskOpen(task) && (

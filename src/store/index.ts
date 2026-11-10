@@ -1995,7 +1995,7 @@ export const useStore = create<StoreState>()(
           markTaskSavesFailed(get().backend.lastSavedAt, false);
           if (queuedEditReportedAsSaved) {
             queuedEditReportedAsSaved = false;
-            useToastStore.getState().addToast('A change you made earlier could not be saved. Check the message at the top of the page.', 'error');
+            useToastStore.getState().addToast(msg('errors.earlierChangeNotSaved'), 'error');
           }
           apply((state) => ({
             backend: {

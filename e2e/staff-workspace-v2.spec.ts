@@ -10,7 +10,8 @@ const screenshotOptions = (page: import('@playwright/test').Page) => ({
   animations: 'disabled' as const,
   caret: 'hide' as const,
   scale: 'css' as const,
-  mask: [page.getByAltText('Staff Demo')],
+  // The per-task save note fades on a timer, so it is masked rather than raced.
+  mask: [page.getByAltText('Staff Demo'), page.locator('[data-task-save-note]')],
 });
 
 const openStaffWorkspace = async (page: import('@playwright/test').Page) => {

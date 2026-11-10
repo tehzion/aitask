@@ -34,6 +34,7 @@ import { cn } from '../lib/utils';
 import { formatLocalizedDateRange, formatLocalizedDate } from '../lib/i18n';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import ContextualTutorialLink from '../components/ContextualTutorialLink';
+import ShortcutKey from '../components/ShortcutKey';
 
 const PERIOD_TABS = [
   { id: 'week' as const, label: 'Week' },
@@ -202,7 +203,7 @@ const DeliveryTracker: React.FC = () => {
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2">
             <ContextualTutorialLink tutorialId="track-delivery-progress" label={t('How do I track delivery progress?')} />
-            {canCreateTasksFromAnywhere(currentUser, rolePermissions) && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+            {canCreateTasksFromAnywhere(currentUser, rolePermissions) && <Button aria-keyshortcuts="N" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}<ShortcutKey className="ml-1">N</ShortcutKey></Button>}
           </div>
         )}
       />

@@ -99,3 +99,109 @@ test('a PM approves several submitted tasks at once', async ({ page }) => {
   });
   expect(statuses).toEqual(['Approved', 'Approved']);
 });
+
+// Role audit and gap fixes (10 Nov 2026).
+
+type Seed = { member: string; tasks?: Record<string, unknown>[]; plans?: Record<string, unknown>[]; onlyMember?: boolean };
+
+/**
+ * Signs a demo member in locally (no password) and replaces the work with
+ * `tasks`, built on a copy of a demo task. Plans keep a demo plan's shape.
+ */
+const seedRole = async (page: Page, route: string, seed: Seed) => {
+  await start(page);
+  await page.goto(route);
+  await page.evaluate(async input => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const member = { ...state.users.find(user => user.name === input.member)!, mustResetPassword: false };
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${member.id}`, 'acknowledged');
+    localStorage.setItem('aitask:locale', 'en');
+    const base = {
+      ...(state.tasks[0] as object), generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined,
+      internalReview: undefined, projectId: undefined, predecessorTaskIds: [], dependencies: [], deliverableId: undefined, serviceCycleId: undefined,
+      visibility: 'internal', comments: [], approvalHistory: [], revisionCount: 0, isCompleted: false, clientId: undefined, clientName: 'UX Company',
+      department: member.department, assignedTo: member.id, createdBy: member.id, dueDate: '2099-12-31', status: 'Pending',
+    };
+    const plan = state.clientPlans[0];
+    useStore.setState({
+      currentUser: member,
+      users: input.onlyMember ? [member] : state.users,
+      tasks: (input.tasks || []).map(task => ({ ...base, ...task, ...(task.assignedTo === '$me' ? { assignedTo: member.id } : {}) })) as never,
+      clientPlans: (input.plans || []).map(item => ({ ...plan, ...item })) as never,
+      projects: [], deliverables: [], serviceCycles: [], notifications: [],
+      backend: { ...state.backend, mode: 'local', status: 'local', pendingMutations: 0, hasLocalChanges: false },
+    });
+  }, seed);
+  await page.getByRole('dialog', { name: 'Welcome to AiTask' }).getByRole('button', { name: 'Explore on my own' }).click({ timeout: 3000 }).catch(() => undefined);
+};
+
+const dayKey = (offset: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
+test('a Staff task waiting on a hidden earlier step cannot be started', async ({ page }) => {
+  await seedRole(page, '/', { member: 'Staff Demo', tasks: [{ id: 'ux-wait', title: 'Edit after the shoot', predecessorTaskIds: ['not-visible'] }] });
+  await expect(page.getByRole('heading', { name: 'Nothing can start yet' })).toBeVisible();
+  await page.getByRole('link', { name: 'All work' }).first().click();
+  const card = page.locator('article').filter({ hasText: 'Edit after the shoot' });
+  await expect(card).toContainText('Waiting on: an earlier step you cannot see');
+  await expect(page.getByRole('button', { name: 'Start work: Edit after the shoot' })).toHaveCount(0);
+});
+
+test('an HOD with no Staff to hand out to is told so on the card', async ({ page }) => {
+  await seedRole(page, '/tasks', {
+    member: 'HOD Demo', onlyMember: true,
+    tasks: [{ id: 'ux-handout', title: 'Poster nobody can take', assignedTo: '$me', assignmentState: 'pending_hod' }],
+  });
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const me = useStore.getState().currentUser!.id;
+    useStore.setState({ tasks: useStore.getState().tasks.map(task => ({ ...task, responsibleHodId: me, assignedBy: me })) });
+  });
+  await expect(page.locator('article').filter({ hasText: 'Poster nobody can take' })).toContainText('No Staff to assign');
+});
+
+test('a PM sees Send to client on a client-approval step', async ({ page }) => {
+  await seedRole(page, '/tasks', {
+    member: 'Project Manager Demo',
+    tasks: [{ id: 'ux-client-step', title: 'Client Approval for the launch video', status: 'Waiting Approval', workflowStepKind: 'client_approval', approvalMode: 'pm', assignedTo: 'other-staff' }],
+  });
+  await expect(page.getByRole('button', { name: 'Send to client: Client Approval for the launch video' })).toBeVisible();
+});
+
+test('Account staff see plans ending soon on their home', async ({ page }) => {
+  await seedRole(page, '/', {
+    member: 'Account Demo',
+    tasks: [{ id: 'ux-invoice', title: 'Send the November invoice', clientId: 'ux-co', clientName: 'Renewal Co' }],
+    plans: [
+      { id: 'ux-plan-soon', clientId: 'ux-co', clientName: 'Renewal Co', name: 'Growth Plan', status: 'Active', contractEndDate: dayKey(1) },
+    ],
+  });
+  const renewals = page.getByRole('region', { name: 'Upcoming renewals' });
+  await expect(renewals).toContainText('Renewal Co');
+  await expect(renewals).toContainText('Ends tomorrow');
+});
+
+test('a task save note shows Saving, then Not saved after a failed save', async ({ page }) => {
+  await seedRole(page, '/tasks', { member: 'Staff Demo', tasks: [{ id: 'ux-save', title: 'Caption draft', status: 'In Progress' }] });
+  const card = page.locator('article').filter({ hasText: 'Caption draft' });
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const { markTasksChanged } = await import('/src/lib/taskSaveMarks.ts');
+    const backend = useStore.getState().backend;
+    markTasksChanged(['ux-save'], backend.lastSavedAt);
+    useStore.setState({ backend: { ...backend, hasLocalChanges: true, pendingMutations: 1, status: 'saving' } });
+  });
+  await expect(card.locator('[data-task-save-note]')).toHaveText('Saving…');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const { markTaskSavesFailed } = await import('/src/lib/taskSaveMarks.ts');
+    const backend = useStore.getState().backend;
+    markTaskSavesFailed(backend.lastSavedAt, true);
+    useStore.setState({ backend: { ...backend, hasLocalChanges: false, pendingMutations: 0, status: 'local' } });
+  });
+  await expect(card.locator('[data-task-save-note]')).toHaveText('Not saved');
+});

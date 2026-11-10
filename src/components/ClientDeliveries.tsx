@@ -8,6 +8,7 @@ import {
   CLIENT_DELIVERY_STAGE_LABELS,
   CLIENT_DELIVERY_STAGE_ORDER,
   getClientDeliveryStage,
+  getClientTaskTitle,
   groupClientDeliveries,
 } from '../lib/clientPortal';
 import { getVisibleTasks } from '../lib/access';
@@ -152,7 +153,7 @@ const ClientDeliveries = () => {
                   return (
                     <article key={task.id} className="group grid gap-4 px-4 py-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:px-5">
                       <div className="min-w-0">
-                        <div className="flex flex-wrap items-center gap-2"><Link data-i18n-skip to={taskUrl(task.id)} className="truncate text-sm font-semibold text-ink transition-colors duration-160 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{task.title}</Link><StatusChip tone={stageTone[stage]}>{stageLabel(stage)}</StatusChip></div>
+                        <div className="flex flex-wrap items-center gap-2"><Link data-i18n-skip to={taskUrl(task.id)} className="truncate text-sm font-semibold text-ink transition-colors duration-160 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{getClientTaskTitle(task)}</Link><StatusChip tone={stageTone[stage]}>{stageLabel(stage)}</StatusChip></div>
                         <p className="mt-1 text-xs leading-5 text-muted"><span data-i18n-skip>{task.serviceType}</span> · {contactName()}<span> · {dueDate ? formatLocalizedDate(dueDate, locale) : t('Date to be confirmed')}</span></p>
                         {stage === 'timing_changed' && <p className="mt-2 line-clamp-2 max-w-3xl text-sm leading-6 text-amber-800 dark:text-amber-200">{latestTeamComment?.text ? <span data-i18n-skip>{latestTeamComment.text}</span> : <>{t('The expected date has changed.')} {contactName()} {t('is your contact for timing.')}</>}</p>}
                       </div>

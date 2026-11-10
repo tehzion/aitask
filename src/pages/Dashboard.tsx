@@ -448,9 +448,10 @@ const Dashboard: React.FC = () => {
                 <p className="text-sm font-semibold text-slate-600">{t('No recent tasks yet')}</p>
                 <p className="mt-1 text-xs text-slate-500">{t('Newly created work will appear here first.')}</p>
                 {canCreateTask && (
-                  <Button onClick={() => setCreateTaskModalOpen(true)} variant="secondary" className="mt-3 min-h-9 px-3 py-1.5 text-xs">
+                  <Button onClick={() => setCreateTaskModalOpen(true)} variant="secondary" aria-keyshortcuts="N" className="mt-3 min-h-9 px-3 py-1.5 text-xs">
                     <Plus className="h-3.5 w-3.5" />
                     {t('New task')}
+                    <ShortcutKey className="ml-1">N</ShortcutKey>
                   </Button>
                 )}
               </div>

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task } from '../types';
 import { rankLinkCandidates, scoreLinkCandidate } from './deliveryLinks';
-import { defaultDueDateForMonth, readCreateTaskChoice, rememberCreateTaskChoice } from './createTaskDefaults';
+import { defaultDueDateForMonth, forgetCreateTaskChoice, readCreateTaskChoice, rememberCreateTaskChoice } from './createTaskDefaults';
 
 const task = (id: string, extra: Partial<Task> = {}) => ({ id, title: id, serviceType: '', dueDate: '', ...extra } as Task);
 const november = { periodStart: '2026-11-01', periodEnd: '2026-11-30' };
@@ -34,7 +34,7 @@ describe('click reduction: Create task defaults', () => {
   let items: Record<string, string> = {};
   beforeEach(() => {
     items = {};
-    vi.stubGlobal('window', { localStorage: { getItem: (key: string) => items[key] ?? null, setItem: (key: string, value: string) => { items[key] = value; } } });
+    vi.stubGlobal('window', { localStorage: { getItem: (key: string) => items[key] ?? null, setItem: (key: string, value: string) => { items[key] = value; }, removeItem: (key: string) => { delete items[key]; } } });
   });
   afterEach(() => vi.unstubAllGlobals());
 
@@ -42,6 +42,17 @@ describe('click reduction: Create task defaults', () => {
     vi.stubGlobal('window', { localStorage: { getItem: () => { throw new Error('denied'); }, setItem: () => { throw new Error('denied'); } } });
     expect(() => rememberCreateTaskChoice('pm-1', { department: 'Designer', assignedTo: '', projectId: '' })).not.toThrow();
     expect(readCreateTaskChoice('pm-1')).toBeNull();
+  });
+
+  it('forgets one person\'s choice and keeps everyone else\'s', () => {
+    rememberCreateTaskChoice('pm-1', { department: 'Designer', assignedTo: '', projectId: '' });
+    rememberCreateTaskChoice('pm-2', { department: 'Operation', assignedTo: '', projectId: '' });
+    forgetCreateTaskChoice('pm-1');
+    expect(readCreateTaskChoice('pm-1')).toBeNull();
+    expect(readCreateTaskChoice('pm-2')?.department).toBe('Operation');
+    expect(() => forgetCreateTaskChoice(undefined)).not.toThrow();
+    vi.stubGlobal('window', { localStorage: { removeItem: () => { throw new Error('denied'); } } });
+    expect(() => forgetCreateTaskChoice('pm-2')).not.toThrow();
   });
 
   it('remembers the last choice per person', () => {
