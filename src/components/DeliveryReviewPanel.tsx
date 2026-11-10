@@ -124,7 +124,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
               if (item) save(() => useStore.getState().linkTaskToDeliverable(task.id, item.cycleId, item.id), 'task.update', { taskId: task.id, deliverableId: item.id });
             }}>{t('Link task')}</Button>
           </div>}
-          {editable && !invalidLink && eligible.length === 0 && <p className="text-xs text-muted">{t('No eligible deliverable. Review the company service cycle.')}</p>}
+          {editable && !invalidLink && eligible.length === 0 && <p className="text-xs text-muted">{t("No eligible deliverable. Review the company's current month.")}</p>}
         </div>;
       })}
     </div>

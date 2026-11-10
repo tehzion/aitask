@@ -159,7 +159,7 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
         { label: t('Monthly renewals in 30 days'), value: snapshot.upcomingRenewals, to: '/clients', tone: 'warning' },
         { label: t('Overdue deliverables'), value: snapshot.overdueDeliverables, to: '/clients', tone: 'danger' },
       ]} />
-      <p className="text-xs leading-5 text-muted">{t('Metrics are calculated from permission-visible projects, tasks, plans, cycles, and deliverables as of')} {formatLocalizedDate(now, locale)}.</p>
+      <p className="text-xs leading-5 text-muted">{t('Metrics are calculated from permission-visible projects, tasks, plans, months, and deliverables as of')} {formatLocalizedDate(now, locale)}.</p>
     </section>
   );
 };

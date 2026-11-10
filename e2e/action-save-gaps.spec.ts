@@ -14,7 +14,7 @@ const seedBoss = async (page: Page) => {
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     const task = { ...state.tasks[0], id: 'action-gap-task', title: 'Action gap task',
       clientName: 'Action QA', clientId: undefined, projectId: undefined, projectName: undefined,
       deliverableId: undefined, serviceCycleId: undefined, status: 'Pending', priority: 'Medium',
@@ -131,7 +131,7 @@ for (const kind of ['package', 'workflow'] as const) {
       const { useStore } = await import('/src/store/index.ts');
       const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
       enablePasswordResetBypass('action-next-account');
-      localStorage.setItem('aitask:release-notice:2026-11-everyday-saves:action-next-account', 'acknowledged');
+      localStorage.setItem('aitask:release-notice:2026-11-start-wording:action-next-account', 'acknowledged');
       useStore.setState(state => ({ currentUser: { ...state.currentUser!, id: 'action-next-account', mustResetPassword: false } }));
     });
     await expect(page.getByLabel(controls.name, { exact: true })).toHaveValue('');

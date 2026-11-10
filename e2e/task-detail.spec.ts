@@ -21,7 +21,7 @@ const seed = async (page: Page, actorId: string, task: Extra = {}, linked = fals
     const now = new Date().toISOString();
     for (const id of ['u-staff-demo-local', 'u-hod-demo-local', 'u-admin', 'u-boss']) {
       enablePasswordResetBypass(id);
-      localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${id}`, 'acknowledged');
+      localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${id}`, 'acknowledged');
     }
     localStorage.setItem('aitask:locale', 'en');
     const day = (offset: number) => { const d = new Date(); d.setDate(d.getDate() + offset); return d.toISOString().slice(0, 10); };

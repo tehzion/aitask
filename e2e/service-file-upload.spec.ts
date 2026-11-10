@@ -8,7 +8,7 @@ const openOperationsWorkspace = async (page: import('@playwright/test').Page) =>
     const { useStore } = await import('/src/store/index.ts');
     const user = useStore.getState().users.find(candidate => candidate.id === 'u-boss');
     if (user) useStore.setState({ currentUser: { ...user, mustResetPassword: false } });
-    localStorage.setItem('aitask:release-notice:2026-11-everyday-saves:u-boss', 'acknowledged');
+    localStorage.setItem('aitask:release-notice:2026-11-start-wording:u-boss', 'acknowledged');
   });
   await page.goto('/clients/demo-service-client-urban');
   await expect(page.getByRole('heading', { name: 'UrbanEats' })).toBeVisible();
