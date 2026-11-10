@@ -13,6 +13,7 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import { useTaskNextStep } from '../hooks/useTaskNextStep';
 import { useQuickTaskAction } from '../hooks/useQuickTaskAction';
 import { useQuickAssign } from '../hooks/useQuickAssign';
+import { isAwaitingHodAssignment } from '../lib/taskWorkflowAccess';
 import { StatusChip } from './ui';
 import TaskSaveNote from './TaskSaveNote';
 import { useI18n } from './I18nProvider';
@@ -53,18 +54,30 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   const nextStep = useTaskNextStep(task);
   const quickAction = useQuickTaskAction(task);
   const quickAssign = useQuickAssign(task);
+  const currentUserId = useStore(state => state.currentUser?.id);
+  // An HOD's task waiting to be handed out: assigning is the next step; with no
+  // eligible Staff, say so, since starting it yourself is then the only option.
+  const awaitingMyAssignment = Boolean(currentUserId) && task.assignedTo === currentUserId && isAwaitingHodAssignment(task);
   const overdue = isTaskOverdue(task, today);
   const assignee = users.find(user => user.id === task.assignedTo)?.name;
-  const blockers = getTaskBlockers(task, allTasks).length;
+  const blockerTasks = getTaskBlockers(task, allTasks);
+  const blockers = blockerTasks.length;
   const unavailableDependencies = getUnavailableTaskDependencyCount(task, allTasks);
+  // Work that cannot start yet says what it waits on instead of offering "Start work" (role audit).
+  const hiddenStepsOpen = unavailableDependencies > 0 && task.workflowDependenciesReady !== true;
+  const waitingToStart = ['Pending', 'Revision'].includes(task.status) && (blockers > 0 || hiddenStepsOpen);
+  const waitingOn = !waitingToStart ? '' : blockers > 0
+    ? (blockers > 1 ? t('{title} and {count} more', { title: blockerTasks[0].title, count: blockers - 1 }) : blockerTasks[0].title)
+    : t('an earlier step you cannot see');
   const open = !task.isCompleted && !['Completed', 'Cancelled'].includes(task.status);
   // What to fix, without opening the task (role UX: revision reason on the card).
   const revisionNote = open && task.status !== 'Waiting Approval' ? getLatestRevisionNote(task) : undefined;
   const flags = [
     task.revisionCount > 0 && open && `${t('Revision')} ${task.revisionCount}`,
     open && task.workState?.blocker && t('Help requested'),
-    blockers > 0 && `${blockers} ${t(blockers === 1 ? 'blocker' : 'blockers')}`,
-    unavailableDependencies > 0 && t('Dependency status unavailable'),
+    !waitingToStart && blockers > 0 && `${blockers} ${t(blockers === 1 ? 'blocker' : 'blockers')}`,
+    !waitingToStart && hiddenStepsOpen && t('Waits on an earlier step'),
+    awaitingMyAssignment && !quickAssign && t('No Staff to assign'),
   ].filter((flag): flag is string => Boolean(flag));
 
   // Finished work reads like order history: one compact row, newest context only.
@@ -133,7 +146,10 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
           {quickAssign.options.map(member => <option key={member.id} value={member.id} data-i18n-skip>{member.name}</option>)}
         </select>
       </div>}
-      {nextStep && <div className="mt-1 flex items-center justify-between gap-3 border-t border-line/60 pt-2.5">
+      {waitingToStart && <p className="mt-1 border-t border-line/60 pt-2.5 text-sm text-muted">
+        <span className="font-medium">{t('Waiting on')}:</span> <span data-i18n-skip={blockers > 0 ? true : undefined} className="font-semibold text-ink">{waitingOn}</span>
+      </p>}
+      {nextStep && !waitingToStart && !quickAssign && <div className="mt-1 flex items-center justify-between gap-3 border-t border-line/60 pt-2.5">
         <span className="text-sm font-semibold text-ink"><span className="font-medium text-muted">{t('Next')}:</span> {t(nextStep)}</span>
         {quickAction
           // Sits above the card's full-size open target, so it acts without opening the task.

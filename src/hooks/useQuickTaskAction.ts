@@ -4,7 +4,7 @@ import { isPendingMutationResolution, useStore } from '../store';
 import { useToastStore } from '../store/useToastStore';
 import type { Task } from '../types';
 import { getTaskAccess, getVisibleTasks } from '../lib/access';
-import { getStaffGuidedAction, getTaskBlockers, isStaffGuidedActionEnabled } from '../lib/staffWorkspace';
+import { getStaffGuidedAction, isStaffGuidedActionEnabled, isTaskWaitingOnEarlierSteps } from '../lib/staffWorkspace';
 import { workflowTransitionError } from '../lib/workflowReview';
 
 export interface QuickTaskAction {
@@ -38,7 +38,8 @@ export const resolveQuickTaskAction = (task: Task, state: QuickActionState, opti
   if (target === 'In Progress' && !task.assignedTo?.trim()) return null;
   if (!getTaskAccess(currentUser, task, rolePermissions, scope).canEdit) return null;
   const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, scope);
-  if (getTaskBlockers(task, visibleTasks).length > 0) return null;
+  // Earlier steps still open, or hidden and not confirmed done: start from the task, where the warning shows.
+  if (isTaskWaitingOnEarlierSteps(task, visibleTasks)) return null;
   const gateError = workflowTransitionError(task, { ...task, status: target, isCompleted: target === 'Completed' }, currentUser, visibleTasks, serviceCycles, deliverables, rolePermissions, scope);
   if (gateError) return null;
   const locked = backend.upgradeRequired === true || isPendingMutationResolution(backend) || backend.isSaving || backend.isPulling || backend.hasLocalChanges || Boolean(backend.pendingMutations);

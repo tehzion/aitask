@@ -10,6 +10,7 @@ import { startOfMonth } from 'date-fns/startOfMonth';
 import type { Deliverable, ServiceCycle, Task, User } from '../types';
 import { getClientTaskStage, isAwaitingClientReview, isAwaitingInternalReview } from './clientPortal';
 import { averageTaskProgress } from './taskProgress';
+import { isDeliverableWorkDone } from './serviceManagement';
 import { getWorkWeekRange } from './workWeek';
 import { formatLocalizedDate, formatLocalizedMonth, type AppLocale } from './i18n';
 
@@ -188,12 +189,25 @@ export const buildClientDeliverySummaries = ({
         && (!clientView || (getClientTaskStage(task) === 'active' && !isAwaitingInternalReview(task)))
         && isBefore(atStartOfDay(due), todayStart));
     }).length;
-    const delivered = clientDeliverables.filter(item => item.status === 'Delivered').length;
-    const included = clientDeliverables.length;
+    // Progress counts the period's service month only, with finished work
+    // (Ready) counted as done: the same numbers as the portfolio, the client
+    // home and the monthly report. Deliveries from earlier months that landed
+    // in this period stay in the list but not in the count.
+    const currentCycle = period === 'all' ? undefined : clientCycles[0];
+    // The whole month counts even in the week view, so a week with two
+    // deliveries never reads as "2/2, 100%" while five are still planned.
+    const countedDeliverables = currentCycle
+      ? deliverables.filter(item => item.cycleId === currentCycle.id && normalize(item.clientName) === key)
+      : clientDeliverables;
+    const delivered = countedDeliverables.filter(isDeliverableWorkDone).length;
+    const included = countedDeliverables.length;
     // Each delivery is one work unit; its linked tasks contribute their stage
     // progress. Independent tasks remain visible without being counted twice.
     const linkedIds = new Set<string>();
-    const unitProgress = clientDeliverables.map(item => {
+    clientDeliverables.forEach(item => clientTasks.forEach(task => {
+      if (task.deliverableId === item.id || (item.taskIds || []).includes(task.id) || item.primaryTaskId === task.id) linkedIds.add(task.id);
+    }));
+    const unitProgress = countedDeliverables.map(item => {
       const linked = clientTasks.filter(task => (!task.clientId || task.clientId === item.clientId) && (task.deliverableId === item.id
         || (item.taskIds || []).includes(task.id) || item.primaryTaskId === task.id));
       linked.forEach(task => linkedIds.add(task.id));

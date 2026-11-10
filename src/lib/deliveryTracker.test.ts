@@ -252,7 +252,24 @@ describe('matching tracker records', () => {
     const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [cycle], deliverables: [output],
       period: 'all', range: getDeliveryPeriodRange('all', new Date()),
       tasks: [task({ id: 'work', clientName: 'Acme', clientId: output.clientId, status: 'Completed', isCompleted: true })] });
-    expect(summary).toMatchObject({ progress: 100, delivered: 0, included: 1, completed: 1 });
+    expect(summary).toMatchObject({ progress: 100, delivered: 1, included: 1, completed: 1 });
+  });
+  it('counts only this period\'s service month, so earlier deliveries do not inflate progress', () => {
+    const previous: ServiceCycle = { ...cycle, id: 'cycle-0', periodStart: '2026-08-01', periodEnd: '2026-08-31', status: 'Completed' };
+    const range = getDeliveryPeriodRange('week', new Date(2026, 8, 10, 12));
+    const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [cycle, previous], tasks: [],
+      period: 'week', range, today: new Date(2026, 8, 10),
+      deliverables: [
+        deliverable({ id: 'old', cycleId: 'cycle-0', status: 'Delivered', deliveredAt: '2026-09-09T08:00:00.000Z' }),
+        deliverable({ id: 'ready', status: 'Ready', deliveredAt: '2026-09-09T08:00:00.000Z' }),
+        deliverable({ id: 'delivered-now', status: 'Delivered', deliveredAt: '2026-09-09T08:00:00.000Z' }),
+        deliverable({ id: 'planned-later', status: 'Planned' }),
+      ] });
+    // The August delivery that landed this week stays visible but is not counted;
+    // September's planned work still counts in the week view.
+    expect(summary.deliverables.map(item => item.id)).toContain('old');
+    expect(summary).toMatchObject({ included: 3, delivered: 2 });
+    expect(summary.progress).toBeLessThan(100);
   });
   it('recomputes task statistics and hides unrelated rows for a task search', () => {
     const [summary] = buildClientDeliverySummaries({ clientNames: ['Acme'], users, cycles: [], deliverables: [],

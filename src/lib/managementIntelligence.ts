@@ -16,6 +16,7 @@ import type {
 import { getClientTaskStage } from './clientPortal';
 import { assessProjectHealth, getPortfolioReviewQueues } from './pmDashboard';
 import { projectStatus } from './projectManagement';
+import { isDeliverableWorkDone } from './serviceManagement';
 import { isTaskCompleted } from './taskCompletion';
 import { isTaskOpen, isTaskOverdue } from './taskReporting';
 import { parseOptionalDate } from './utils';
@@ -367,11 +368,13 @@ export const getMonthlyOperationalReport = ({
   });
   const completedTasks = monthTasks.filter(task => isTaskCompleted(task) && inMonth(task.completedAt));
   const outstandingTasks = monthTasks.filter(task => isTaskOpen(task));
-  const completedDeliverables = deliverables.filter(item => item.status === 'Delivered' && inMonth(item.deliveredAt));
   const reportDeliverables = deliverables.filter(item => {
     const cycle = serviceCycles.find(candidate => candidate.id === item.cycleId);
     return Boolean(cycle && (inMonth(cycle.periodStart) || inMonth(cycle.periodEnd)));
   });
+  // Same rule as the portfolio, client home and delivery tracker: this month's
+  // deliveries, with finished work (Ready) counted the same as Delivered.
+  const completedDeliverables = reportDeliverables.filter(isDeliverableWorkDone);
   const pendingApprovals = getPortfolioReviewQueues(monthTasks).waitingCount;
   const renewals = clientPlans.filter(plan => inMonth(plan.nextCycleStart || plan.contractEndDate)).length;
   const projectRows = projects.map(project => {

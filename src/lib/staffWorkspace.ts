@@ -52,6 +52,15 @@ export const getUnavailableTaskDependencyCount = (task: Task, visibleTasks: Task
   return [...new Set(task.predecessorTaskIds || [])].filter(id => !visibleIds.has(id)).length;
 };
 
+/**
+ * Whether a task still waits on earlier steps: one you can see is open, or one
+ * you cannot see is not confirmed done by the server (role audit, 10 Nov 2026).
+ */
+export const isTaskWaitingOnEarlierSteps = (task: Task, visibleTasks: Task[]): boolean => (
+  getTaskBlockers(task, visibleTasks).length > 0
+  || (getUnavailableTaskDependencyCount(task, visibleTasks) > 0 && task.workflowDependenciesReady !== true)
+);
+
 const REVISION_NOTE_PREFIX = 'Revision requested: ';
 /** The reviewer's note from the latest revision request, shown on list cards. */
 export const getLatestRevisionNote = (task: Pick<Task, 'comments' | 'revisionCount'>): string | undefined => {
@@ -89,7 +98,7 @@ export const compareStaffTasks = (today: string) => (left: Task, right: Task) =>
   return left.id.localeCompare(right.id);
 };
 
-export const buildStaffWorkQueue = (tasks: Task[], today: string, options: { isActionable?: (task: Task) => boolean } = {}): StaffWorkQueue => {
+export const buildStaffWorkQueue = (tasks: Task[], today: string, options: { isActionable?: (task: Task) => boolean; isBlocked?: (task: Task) => boolean; needsAction?: (task: Task) => boolean } = {}): StaffWorkQueue => {
   const queue: StaffWorkQueue = { needs_action: [], up_next: [], waiting: [], done: [] };
 
   tasks.forEach(task => {
@@ -105,6 +114,7 @@ export const buildStaffWorkQueue = (tasks: Task[], today: string, options: { isA
     }
     if (
       task.revisionCount > 0
+      || Boolean(options.needsAction?.(task))
       || Boolean(task.workState?.blocker)
       || task.status === 'In Progress'
       || Boolean(task.dueDate && task.dueDate <= today)
@@ -115,7 +125,11 @@ export const buildStaffWorkQueue = (tasks: Task[], today: string, options: { isA
     queue.up_next.push(task);
   });
 
-  const compare = compareStaffTasks(today);
+  const byUrgency = compareStaffTasks(today);
+  // Work that cannot start yet goes after everything that can.
+  const compare = options.isBlocked
+    ? (left: Task, right: Task) => (Number(options.isBlocked!(left)) - Number(options.isBlocked!(right))) || byUrgency(left, right)
+    : byUrgency;
   queue.needs_action.sort(compare);
   queue.up_next.sort(compare);
   queue.waiting.sort(compare);
@@ -126,7 +140,10 @@ export const buildStaffWorkQueue = (tasks: Task[], today: string, options: { isA
   return queue;
 };
 
-export const getStaffFocusTask = (queue: StaffWorkQueue) => queue.needs_action[0] || queue.up_next[0];
+/** The one task to show first: the most urgent one that can move now. */
+export const getStaffFocusTask = (queue: StaffWorkQueue, isBlocked: (task: Task) => boolean = () => false) => (
+  queue.needs_action.find(task => !isBlocked(task)) || queue.up_next.find(task => !isBlocked(task))
+);
 
 export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[], actor?: User | null, roles: CustomRole[] = [], scope: VisibilityScope = {}): StaffGuidedAction => {
   const options = actor ? getTaskStatusOptions(actor, task, taskStatuses, roles, scope) : taskStatuses;

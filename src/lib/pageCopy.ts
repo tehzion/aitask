@@ -1586,4 +1586,15 @@ registerUiTranslations({
   'Saved': '已保存',
   'Waiting to save': '等待保存',
   'Last used: {choice}': '上次使用：{choice}',
+  // Role audit fixes (10 Nov 2026)
+  'Waiting on': '等待',
+  'No Staff to assign': '没有可分配的员工',
+  'Waits on an earlier step': '等待前一步完成',
+  'an earlier step you cannot see': '您无法查看的前一步',
+  '{title} and {count} more': '{title} 等 {count} 项',
+  'Nothing can start yet': '暂时没有可开始的工作',
+  '{count} task is waiting on an earlier step. It moves here when that step is done.': '{count} 个任务正在等待前一步完成，完成后会出现在这里。',
+  '{count} tasks are waiting on earlier steps. They move here when those steps are done.': '{count} 个任务正在等待前面的步骤完成，完成后会出现在这里。',
+  '{count} task waits on an earlier step you cannot see. Ask your PM if it is urgent.': '{count} 个任务正在等待您无法查看的前一步。如有急需，请联系项目经理。',
+  '{count} tasks wait on earlier steps you cannot see. Ask your PM if one is urgent.': '{count} 个任务正在等待您无法查看的前面步骤。如有急需，请联系项目经理。',
 });
