@@ -21,6 +21,7 @@ const zhCopy: Record<string, string> = {
   'busy': '忙碌',
   'overloaded': '超负荷',
   'due soon': '即将到期',
+  'due this week': '本周到期',
   'projects': '个项目',
   'reviews': '项审核',
   'The next decisions and risks in your scope.': '您负责范围内的下一步决策与风险。',

@@ -87,3 +87,10 @@ A pass through each role's home and lists, checked in the local demo.
 - **Staff focus card:** when the next step takes one click (Start work, Send for review), it is the main button, with Open task beside it.
 - **Account & Finance home:** lists plans for their clients that end in the next 30 days, soonest first, each linking to the company.
 - Not changed: an HOD sees other departments' Staff workload only through project membership, which is a server visibility rule.
+
+## Gap fixes (10 Nov 2026)
+
+- **Bulk approve warns about client sends:** client-approval steps carry a "Sends to client" tag in the list, and the confirmation says "{n} of these will be sent to the client."
+- **One workload window:** the workload card counts work due this work week (`getOperationsPeriod`), the same window as the Team workload table, and labels it "due this week".
+- **Backlog counts:** `getWorkloadSignal` takes an optional total open count; one person with 12 or more open tasks is "busy" on both the card and the table. Department rows are unchanged.
+- **"Not saved" note:** a task's save note shows "Not saved" when its save failed with no automatic retry, and stays that way after a discard until the task is edited again. A later save that lands turns it back to "Saved".

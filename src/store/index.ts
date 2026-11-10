@@ -1,5 +1,5 @@
 import { recordClientEvent } from '../lib/clientTelemetry';
-import { changedTaskIds, clearTaskSaveMarks, markTasksChanged } from '../lib/taskSaveMarks';
+import { changedTaskIds, clearTaskSaveMarks, markTaskSavesFailed, markTasksChanged } from '../lib/taskSaveMarks';
 import { cyclePaymentSummary } from '../lib/cyclePayments';
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
@@ -1464,6 +1464,7 @@ export const useStore = create<StoreState>()(
               if (stateToSave.currentUser) void recordClientEvent(stateToSave.currentUser, { type: 'save_failure', code: result.code });
               const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
               if (!upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) return;
+              markTaskSavesFailed(get().backend.lastSavedAt, false);
               apply((state) => ({
                 backend: {
                   ...state.backend,
@@ -1530,6 +1531,7 @@ export const useStore = create<StoreState>()(
           const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
           if (isWorkspaceSessionCurrent(sessionToken) && get().currentUser) void recordClientEvent(get().currentUser!, { type: 'save_failure', code: offline ? 'OFFLINE' : 'RETRY_REQUIRED' });
           if (scheduleAutomaticRecovery({ code: offline ? 'OFFLINE' : 'RETRY_REQUIRED' }, sessionToken)) return;
+          markTaskSavesFailed(get().backend.lastSavedAt, false);
           apply((state) => ({
             backend: {
               ...state.backend,
@@ -1990,6 +1992,7 @@ export const useStore = create<StoreState>()(
           if (options.automatic && !upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) {
             return { ok: false, code: 'RETRY_REQUIRED', error: 'Saving…' };
           }
+          markTaskSavesFailed(get().backend.lastSavedAt, false);
           if (queuedEditReportedAsSaved) {
             queuedEditReportedAsSaved = false;
             useToastStore.getState().addToast('A change you made earlier could not be saved. Check the message at the top of the page.', 'error');
@@ -2066,6 +2069,7 @@ export const useStore = create<StoreState>()(
         }
         apply(state => ({ backend: { ...state.backend, isRestoring: true } }));
         const discardedCommandId = getRetainedSecureCommand()?.id;
+        const lastSavedBeforeDiscard = get().backend.lastSavedAt;
         try {
           // Keep the overlay, retry identity and mutation lock until the canonical
           // reload succeeds. A failed restore must never turn abandoned edits into
@@ -2081,6 +2085,8 @@ export const useStore = create<StoreState>()(
               return;
             }
           }
+          // The abandoned change will never save: say so on the task (gap audit).
+          markTaskSavesFailed(lastSavedBeforeDiscard, true);
           clearActionFeedback();
           discardSecureWorkspaceCommand({ preserveSession: true });
           discardRetainedSecureMemberMutation();

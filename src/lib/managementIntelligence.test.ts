@@ -192,6 +192,12 @@ describe('management intelligence', () => {
     expect(summaries[0]).toMatchObject({ open: 2, dueSoon: 2, projects: 2, signal: 'available' });
     const overdue = getSharedEmployeeWorkload([task('late', 'a', { assignedTo: 'staff-a', dueDate: '2026-10-01' })], [user('staff-a', 'Staff', 'Staff A')], now);
     expect(overdue[0].signal).toBe('attention');
+    // Next week's work is outside the work week the table uses.
+    const nextWeek = getSharedEmployeeWorkload([task('later', 'a', { assignedTo: 'staff-a', dueDate: '2026-10-27' })], [user('staff-a', 'Staff', 'Staff A')], now);
+    expect(nextWeek[0].dueSoon).toBe(0);
+    // Twelve open tasks are busy even when none is due this week.
+    const backlog = getSharedEmployeeWorkload(Array.from({ length: 12 }, (_, index) => task(`b${index}`, 'a', { assignedTo: 'staff-a', dueDate: '2026-12-15' })), [user('staff-a', 'Staff', 'Staff A')], now);
+    expect(backlog[0]).toMatchObject({ open: 12, dueSoon: 0, signal: 'busy' });
   });
 
   it('keeps monthly report boundaries inclusive and prevents duplicate project rows', () => {

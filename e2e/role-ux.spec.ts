@@ -78,14 +78,20 @@ test('a PM approves several submitted tasks at once', async ({ page }) => {
       assignedTo: staff.id, createdBy: pm.id, predecessorTaskIds: [], dependencies: [], workflowStepId: undefined, workflowStepKind: undefined, generatedFromDeliverable: false,
       deliverableId: undefined, approvalMode: 'pm' as const, reviewAccess: undefined, workState: { reviewRequestedBy: staff.id, reviewRequestedAt: '2026-11-09T00:00:00Z' },
     }));
+    // The second is a client-approval step: approving it shows it to the client (gap audit).
+    submitted[1] = { ...submitted[1], workflowStepKind: 'client_approval' as const };
     useStore.setState({ tasks: [...state.tasks.filter(task => task.status !== 'Waiting Approval'), ...submitted] });
     return submitted.map(task => task.title);
   });
   const panel = page.locator('section', { has: page.getByRole('heading', { name: 'Approve several at once' }) }).last();
   await expect(panel).toBeVisible();
   for (const title of titles) await panel.getByRole('checkbox', { name: `Select: ${title}` }).check();
+  await expect(panel.getByRole('listitem').filter({ hasText: titles[1] })).toContainText('Sends to client');
+  await expect(panel.getByRole('listitem').filter({ hasText: titles[0] })).not.toContainText('Sends to client');
   await panel.getByRole('button', { name: 'Approve selected (2)' }).click();
-  await page.getByRole('dialog', { name: 'Approve 2 tasks?' }).getByRole('button', { name: 'Approve', exact: true }).click();
+  const confirm = page.getByRole('dialog', { name: 'Approve 2 tasks?' });
+  await expect(confirm).toContainText('1 of these will be sent to the client.');
+  await confirm.getByRole('button', { name: 'Approve', exact: true }).click();
   await expect(page.getByRole('status').filter({ hasText: '2 of 2 approved.' })).toBeVisible();
   const statuses = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');

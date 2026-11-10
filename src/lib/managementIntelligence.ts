@@ -18,7 +18,7 @@ import { assessProjectHealth, getPortfolioReviewQueues } from './pmDashboard';
 import { projectStatus } from './projectManagement';
 import { isDeliverableWorkDone } from './serviceManagement';
 import { isTaskCompleted } from './taskCompletion';
-import { getWorkloadSignal, isTaskOpen, isTaskOverdue } from './taskReporting';
+import { getOperationsPeriod, getWorkloadSignal, isTaskOpen, isTaskOverdue } from './taskReporting';
 import { parseOptionalDate } from './utils';
 
 export type ManagementAttentionSeverity = 'information' | 'attention' | 'critical';
@@ -417,17 +417,19 @@ export const getSharedEmployeeWorkload = (
 ) => users
   .filter(user => user.role !== 'Client' && !user.directoryOnly)
   .map(member => {
+    const week = getOperationsPeriod(now);
     const assigned = tasks.filter(task => task.assignedTo === member.id);
     const open = assigned.filter(isTaskOpen);
     const overdue = open.filter(task => isTaskOverdue(task, now));
+    // Due this work week, the same window as the Team workload table (gap audit).
     const dueSoon = open.filter(task => {
       const due = parseOptionalDate(task.dueDate);
-      return Boolean(due && due >= startOfDay(now) && due <= endOfDay(addDays(now, 7)));
+      return Boolean(due && due >= week.start && due <= week.end);
     });
     const projectIds = new Set(assigned.map(task => task.projectId).filter(Boolean));
     // Same rule and words as the Team workload table (week view), so a person
     // is never "Busy" on the card and "Available" in the table (role audit).
-    const signal = getWorkloadSignal('week', dueSoon.length, overdue.length);
+    const signal = getWorkloadSignal('week', dueSoon.length, overdue.length, open.length);
     return { member, open: open.length, overdue: overdue.length, dueSoon: dueSoon.length, projects: projectIds.size, signal } as const;
   });
 

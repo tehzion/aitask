@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { Task } from '../types';
-import { changedTaskIds, clearTaskSaveMarks, getTaskSaveState, markTasksChanged, noteTaskSaveSeen, SAVED_VISIBLE_MS, useTaskSaveMarks } from './taskSaveMarks';
+import { changedTaskIds, clearTaskSaveMarks, getTaskSaveState, markTaskSavesFailed, markTasksChanged, noteTaskSaveSeen, SAVED_VISIBLE_MS, useTaskSaveMarks } from './taskSaveMarks';
 
 const clean = { hasLocalChanges: false, pendingMutations: 0, isSaving: false, status: 'live', lastSavedAt: '2026-11-10T01:00:00Z' };
 const unsaved = { ...clean, hasLocalChanges: true, pendingMutations: 1, status: 'saving' };
@@ -44,5 +44,29 @@ describe('per-task save note', () => {
     markTasksChanged(Array.from({ length: 60 }, (_, index) => `x${index}`), undefined, 10);
     expect(Object.keys(useTaskSaveMarks.getState().marks)).toHaveLength(50);
     expect(useTaskSaveMarks.getState().marks.t1).toBeUndefined();
+  });
+
+  it('shows Not saved after a failed save until a later save lands', () => {
+    markTasksChanged(['a'], clean.lastSavedAt, 1);
+    markTaskSavesFailed(clean.lastSavedAt, false);
+    const failed = useTaskSaveMarks.getState().marks.a;
+    expect(getTaskSaveState(failed, { ...unsaved, status: 'retry_required' })).toBe('failed');
+    expect(getTaskSaveState(failed, clean)).toBe('failed');
+    expect(getTaskSaveState(failed, { ...clean, lastSavedAt: '2026-11-10T01:05:00Z' })).toBe('saved');
+  });
+
+  it('keeps a discarded change as Not saved, and a new edit starts over', () => {
+    markTasksChanged(['a'], clean.lastSavedAt, 1);
+    markTaskSavesFailed(clean.lastSavedAt, true);
+    const discarded = useTaskSaveMarks.getState().marks.a;
+    expect(getTaskSaveState(discarded, { ...clean, lastSavedAt: '2026-11-10T01:05:00Z' })).toBe('failed');
+    markTasksChanged(['a'], '2026-11-10T01:05:00Z', 2);
+    expect(getTaskSaveState(useTaskSaveMarks.getState().marks.a, unsaved)).toBe('saving');
+  });
+
+  it('leaves changes that already saved alone', () => {
+    markTasksChanged(['a'], '2026-11-10T00:00:00Z', 1);
+    markTaskSavesFailed(clean.lastSavedAt, false);
+    expect(useTaskSaveMarks.getState().marks.a.failed).toBeUndefined();
   });
 });

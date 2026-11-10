@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, CloudOff, Loader2 } from 'lucide-react';
+import { AlertCircle, Check, CloudOff, Loader2 } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { getTaskSaveState, noteTaskSaveSeen, SAVED_VISIBLE_MS, useTaskSaveMarks } from '../lib/taskSaveMarks';
@@ -11,7 +11,8 @@ const isOffline = () => typeof navigator !== 'undefined' && navigator.onLine ===
 /**
  * Quiet save note next to a task the person just changed (role UX, 10 Nov 2026):
  * "Saving…" while it is unsaved, "Waiting to save" when it cannot go through
- * yet, then "Saved" for a few seconds. Renders nothing for untouched tasks.
+ * yet, "Not saved" when it failed and will not retry on its own, then "Saved"
+ * for a few seconds. Renders nothing for untouched tasks.
  */
 const TaskSaveNote = ({ taskId, className }: { taskId: string; className?: string }) => {
   const { t } = useI18n();
@@ -46,14 +47,14 @@ const TaskSaveNote = ({ taskId, className }: { taskId: string; className?: strin
   }, [state]);
 
   if (!state) return null;
-  const Icon = state === 'saved' ? Check : state === 'waiting' ? CloudOff : Loader2;
-  const label = state === 'saved' ? t('Saved') : state === 'waiting' ? t('Waiting to save') : t('Saving…');
+  const Icon = state === 'saved' ? Check : state === 'failed' ? AlertCircle : state === 'waiting' ? CloudOff : Loader2;
+  const label = state === 'saved' ? t('Saved') : state === 'failed' ? t('Not saved') : state === 'waiting' ? t('Waiting to save') : t('Saving…');
   return <span
     role="status"
     data-task-save-note={state}
     className={cn(
       'inline-flex items-center gap-1 text-xs font-medium',
-      state === 'saved' ? 'text-emerald-700 dark:text-emerald-300' : state === 'waiting' ? 'text-amber-700 dark:text-amber-300' : 'text-muted',
+      state === 'saved' ? 'text-emerald-700 dark:text-emerald-300' : state === 'failed' ? 'text-red-700 dark:text-red-300' : state === 'waiting' ? 'text-amber-700 dark:text-amber-300' : 'text-muted',
       className,
     )}
   >

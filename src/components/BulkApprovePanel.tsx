@@ -4,7 +4,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import type { Task } from '../types';
 import { REJECTION_CODES, resolveQuickTaskAction } from '../hooks/useQuickTaskAction';
-import { Button, CountLabel, Surface } from './ui';
+import { Button, CountLabel, StatusChip, Surface } from './ui';
 import ConfirmDialog from './ConfirmDialog';
 import { useI18n } from './I18nProvider';
 
@@ -38,6 +38,8 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
     [state, tasks],
   );
   const chosen = approvable.filter(task => selected.has(task.id));
+  // Approving a client-approval step shows it to the client, so say so first (gap audit).
+  const toClient = chosen.filter(task => task.workflowStepKind === 'client_approval').length;
   const locked = state.backend.upgradeRequired === true || state.backend.isSaving || Boolean(state.backend.pendingMutations) || state.backend.hasLocalChanges;
 
   if (approvable.length < 2 && !result) return null;
@@ -107,12 +109,13 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
           <span data-i18n-skip className="font-medium text-ink">{task.title}</span>
           <span data-i18n-skip className="text-muted"> · {task.clientName}{task.projectName ? ` · ${task.projectName}` : ''}</span>
         </span>
+        {task.workflowStepKind === 'client_approval' && <StatusChip tone="amber" className="shrink-0">{t('Sends to client')}</StatusChip>}
       </li>)}
     </ul>
     {confirming && <ConfirmDialog
       labelledBy={`${titleId}-confirm`}
       title={t('Approve {count} tasks?', { count: chosen.length })}
-      description={t('Each task is approved and saved on its own. Tasks that cannot be approved are left as they are.')}
+      description={`${toClient > 0 ? `${t(toClient === 1 ? '1 of these will be sent to the client.' : '{count} of these will be sent to the client.', { count: toClient })} ` : ''}${t('Each task is approved and saved on its own. Tasks that cannot be approved are left as they are.')}`}
       confirmLabel={t('Approve')}
       cancelLabel={t('Cancel')}
       tone="primary"
