@@ -50,6 +50,13 @@ test('PM re-dates long-overdue work and assigns unowned work from the dashboard'
   }, { pmId, overdueDue });
   await page.goto('/');
 
+  const day = page.getByRole('region', { name: 'My day' });
+  await expect(day.getByRole('heading', { name: 'Awaiting your review' })).toBeVisible();
+  await expect(day.getByRole('heading', { name: 'Ready to finalize' })).toBeVisible();
+  await expect(day.getByRole('heading', { name: 'Overdue', exact: true })).toBeVisible();
+  await expect(day.getByRole('heading', { name: 'Due today', exact: true })).toBeVisible();
+  await expect(day.getByRole('heading', { name: 'Months to publish' })).toBeVisible();
+  await expect(day.getByRole('heading', { name: 'Unlinked work this month' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Stuck work' })).toBeVisible();
   const newDue = isoDaysFromToday(5);
   await page.getByLabel('New due date for Ops overdue artwork').fill(newDue);
@@ -184,4 +191,24 @@ test('Boss Koo marks a past deliverable delivered from the attention list, publi
     return [state.serviceCycles.find(item => item.id === cycleId)?.status, state.deliverables.find(item => item.id === deliverableId)?.status];
   }, ids)).toEqual([expect.stringMatching(/Published|Completed/), 'Delivered']);
   await expect(button).toHaveCount(0);
+});
+
+test('Boss portfolio shows company health even without an active plan', async ({ page }) => {
+  await startApp(page);
+  await signInAs(page, 'boss');
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Weekly company health' })).toBeVisible();
+  await expect(page.getByText('Monthly contract value at risk')).toBeVisible();
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const client = state.createClientProfile({ clientName: 'Health test company' });
+    useStore.setState({ projects: [...useStore.getState().projects, {
+      id: 'health-project', clientId: client.id, clientName: 'Health test company', projectName: 'Health project',
+      services: ['Design'], startDate: '2026-01-01', deadline: '', status: 'Active', hodMemberIds: [],
+    }] });
+  });
+  const health = page.getByRole('region', { name: 'Weekly company health' });
+  await expect(health.getByRole('listitem').filter({ hasText: 'Health test company' })).toContainText('Projects without HOD: 1');
 });

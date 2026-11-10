@@ -1,4 +1,7 @@
+import React from 'react';
 import { DeliveryProgress } from './DeliveryProgress';
+import ClientDeliveryFocus from './ClientDeliveryFocus';
+import { canReviewTaskAsClient } from '../lib/access';
 import { getCycleServiceProgress, isDeliverableWorkDone } from '../lib/serviceManagement';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getCurrentPlanCycle, isAwaitingPublication } from '../lib/dashboardData';
@@ -46,6 +49,8 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
   const { locale, t } = useI18n();
   const today = useLocalToday();
   const currentUser = useStore(state => state.currentUser);
+  const rolePermissions = useStore(state => state.rolePermissions);
+  const [reviewTaskId, setReviewTaskId] = React.useState<string | null>(null);
   const clients = useStore(state => state.clients);
   const clientPlans = useStore(state => state.clientPlans);
   const serviceCycles = useStore(state => state.serviceCycles);
@@ -61,7 +66,8 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
   const groups = groupClientDeliveries(tasks, today);
   const focusTask = getClientFocusTask(tasks, today);
   const focusStage = focusTask ? getClientDeliveryStage(focusTask) : null;
-  const reviewQueue = groups.needs_review.filter(task => task.id !== focusTask?.id).slice(0, 4);
+  const reviewQueue = groups.needs_review.filter(task => canReviewTaskAsClient(currentUser, task, rolePermissions));
+  const selectedReview = reviewTaskId ? tasks.find(task => task.id === reviewTaskId) || null : null;
   const activeQueue = [...groups.timing_changed, ...groups.in_delivery, ...groups.scheduled]
     .filter(task => task.id !== focusTask?.id)
     .slice(0, 6);
@@ -152,13 +158,15 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
 
       <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80" aria-labelledby="needs-review-title">
         <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line/70 px-4 py-4 sm:px-5">
-          <div><h2 id="needs-review-title" className="font-semibold text-ink">{t('clientPortal.needsReview')}</h2><p className="mt-1 text-sm text-muted">{t('clientPortal.reviewCount', { count: groups.needs_review.length })}</p></div>
+          <div><h2 id="needs-review-title" className="font-semibold text-ink">{t('Waiting on you')}</h2><p className="mt-1 text-sm text-muted">{t('clientPortal.reviewCount', { count: reviewQueue.length })}</p></div>
           {groups.needs_review.length > 0 && <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">{t('clientPortal.viewAllReviews', { count: groups.needs_review.length })}<ArrowRight className="h-4 w-4" /></Link>}
         </header>
         <div className="divide-y divide-line/70">
-          {reviewQueue.map(task => deliveryRow(task, t('Review deliverable')))}
-          {reviewQueue.length === 0 && focusStage !== 'needs_review' && <p className="px-5 py-8 text-sm text-muted">{t('clientPortal.nothingWaiting')}</p>}
-          {reviewQueue.length === 0 && focusStage === 'needs_review' && <p className="px-5 py-5 text-sm text-muted">{t('clientPortal.currentReviewHighlighted')}</p>}
+          {reviewQueue.map(task => <article key={task.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+            <div><p data-i18n-skip className="font-semibold text-ink">{getClientTaskTitle(task)}</p><p className="mt-1 text-xs text-muted"><span data-i18n-skip>{task.serviceType}</span> · {expectedDate(task, locale, t('Date to be confirmed'))}</p></div>
+            <button type="button" onClick={() => setReviewTaskId(task.id)} className="min-h-11 rounded-control px-3 text-sm font-semibold text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{t('Review deliverable')} <ArrowRight className="ml-1 inline h-4 w-4" /></button>
+          </article>)}
+          {reviewQueue.length === 0 && <p className="px-5 py-8 text-sm text-muted">{t('clientPortal.nothingWaiting')}</p>}
         </div>
       </section>
 
@@ -185,6 +193,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
           </div>
         </section>
       )}
+      <ClientDeliveryFocus task={selectedReview} onClose={() => setReviewTaskId(null)} />
     </div>
   );
 };

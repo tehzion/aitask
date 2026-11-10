@@ -264,6 +264,13 @@ test('Client Home counts the entire review queue and Reports separate completion
   });
   await page.goto('/');
   await expect(page.getByText('6 deliveries need your review', { exact: true })).toBeVisible();
+  const waiting = page.getByRole('region', { name: 'Waiting on you' });
+  await expect(waiting.locator('article')).toHaveCount(6);
+  await waiting.locator('article').filter({ hasText: 'Review queue 0' }).getByRole('button', { name: 'Review deliverable' }).click();
+  const review = page.getByRole('dialog', { name: 'Delivery details' });
+  await expect(review.getByRole('button', { name: 'Approve delivery' })).toBeVisible();
+  await expect(review.getByRole('button', { name: 'Request changes' })).toBeVisible();
+  await review.getByRole('button', { name: 'Close panel' }).click();
   await page.getByRole('link', { name: 'View all 6 review requests' }).click();
   await expect(page.locator('main article')).toHaveCount(6);
   await page.goto('/reports');

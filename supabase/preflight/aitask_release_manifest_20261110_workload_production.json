@@ -1,0 +1,47 @@
+{
+  "manifestVersion": "2026-11-10.3",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261110_release_notice_production.json",
+  "immutable": false,
+  "capturedAt": "2026-11-10T06:41:32Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "APPLIED 2026-11-10: production records 20261110071019_hod_staff_workload_summary (HOD cross-department Staff workload totals, counts only; approved by Y.L). Repository and production migration history are identical (146/146).",
+  "validatedMigrationTail": [
+    "20261023154255_bind_service_command_entity_types",
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover",
+    "20261102120000_plan_activation_entity_types",
+    "20261102130000_hod_assignee_output_files",
+    "20261102140000_addon_save_entity_types",
+    "20261102150000_task_assigned_at_format",
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign",
+    "20261103125940_hod_department_delegation_disable_staff_creation",
+    "20261103125949_pm_direct_internal_assignment",
+    "20261103143949_service_cycle_payments",
+    "20261104053237_restore_hod_handoff_and_codify_live_grants",
+    "20261104062406_block_project_delete_with_linked_tasks",
+    "20261106041228_optimize_pm_service_access",
+    "20261109141920_r3_s1_project_approval_pm",
+    "20261109193707_aitask_client_events",
+    "20261110015703_release_notice_everyday_saves",
+    "20261110071019_hod_staff_workload_summary"
+  ],
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261110071019_hod_staff_workload_summary",
+    "latestAppliedMigration": "20261110071019_hod_staff_workload_summary"
+  },
+  "changeSummary": {
+    "20261110071019_hod_staff_workload_summary": "Adds a read-only, HOD-authorized staff workload aggregate across departments. It returns member names, departments and counts, not task records, and does not alter existing task visibility."
+  },
+  "qualityGates": {
+    "localDatabase": "PASS: clean replay of all 146 migrations and the full repository database rollout checks; 12 targeted pgTAP assertions; authenticated local HOD API and browser integration; local security advisor reported no warnings.",
+    "productionApply": "APPLIED 2026-11-10 via the Supabase connector; local pgTAP hod_staff_workload 12/12 first; anon cannot execute; a call without an HOD session returns FORBIDDEN; advisors show no new findings."
+  }
+}

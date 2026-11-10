@@ -25,6 +25,7 @@ import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getStaffDashboardMetrics } from '../lib/staffDashboard';
 import { useQuickTaskAction } from '../hooks/useQuickTaskAction';
+import HodStaffWorkload from './HodStaffWorkload';
 
 /**
  * The focus card's main button is the next step when it takes one click, such
@@ -51,7 +52,7 @@ const StaffMyWork: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const scope: HodWorkScope = searchParams.get('scope') === 'mine' ? 'mine' : searchParams.get('scope') === 'delegated' ? 'delegated' : 'department';
   const { locale, t } = useI18n();
-  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans, taskStatuses, serviceCycles, deliverables, setCreateTaskModalOpen } = useStore(useShallow(state => ({
+  const { currentUser, tasks: allTasks, clients, projects, users, rolePermissions, clientPlans, taskStatuses, serviceCycles, deliverables, backend, setCreateTaskModalOpen } = useStore(useShallow(state => ({
     currentUser: state.currentUser,
     tasks: state.tasks,
     clients: state.clients,
@@ -62,6 +63,7 @@ const StaffMyWork: React.FC = () => {
     taskStatuses: state.taskStatuses,
     serviceCycles: state.serviceCycles,
     deliverables: state.deliverables,
+    backend: state.backend,
     setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
   const canCreateTask = canCreateTasksFromAnywhere(currentUser, rolePermissions);
@@ -293,6 +295,8 @@ const StaffMyWork: React.FC = () => {
           {workload.length === 0 && <p className="px-5 py-8 text-sm text-muted">{t('No department members available.')}</p>}
         </Surface>
       </section>}
+
+      {isHod && currentUser && <HodStaffWorkload userId={currentUser.id} mode={backend.mode} tasks={allTasks} users={users} roles={rolePermissions} today={todayDate} />}
 
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <Link to="/calendar" className="inline-flex min-h-11 items-center gap-2 font-semibold text-ink hover:text-accent hover:underline"><CalendarDays className="h-4 w-4" aria-hidden="true" />{t('Open schedule')}</Link>

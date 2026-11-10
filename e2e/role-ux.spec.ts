@@ -219,3 +219,21 @@ test('a task save note shows Saving, then Not saved after a failed save', async 
   });
   await expect(card.locator('[data-task-save-note]')).toHaveText('Not saved');
 });
+
+test('HOD sees other departments’ staff totals without task links', async ({ page }) => {
+  await seedRole(page, '/', { member: 'HOD Demo', tasks: [] });
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const staff = state.users.find(user => user.role === 'Staff')!;
+    const other = { ...staff, id: 'workload-other-staff', name: 'Other department staff', department: 'Video Editor' as const, departments: ['Video Editor' as const] };
+    const base = state.tasks[0] || { status: 'Pending', isCompleted: false };
+    useStore.setState({ users: [...state.users, other], tasks: [{ ...base, id: 'workload-private', title: 'Private other department task', assignedTo: other.id, department: 'Video Editor', dueDate: '2000-01-01', status: 'Pending', isCompleted: false } as never] });
+  });
+  const summary = page.getByRole('region', { name: 'Staff workload across departments' });
+  const other = summary.locator('article').filter({ hasText: 'Other department staff' });
+  await expect(other).toContainText('Active tasks');
+  await expect(other.locator('dd')).toHaveText(['1', '1', '0']);
+  await expect(other.getByRole('link')).toHaveCount(0);
+  await expect(summary).not.toContainText('Private other department task');
+});

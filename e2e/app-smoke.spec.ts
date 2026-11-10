@@ -732,7 +732,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   });
   await page.goto('/');
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Needs your review' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Waiting on you' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'In delivery' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Shared updates' })).toBeVisible();
   await expect(page.getByText('Workspace analytics')).toHaveCount(0);
