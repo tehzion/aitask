@@ -13,6 +13,7 @@ import { isBefore } from 'date-fns/isBefore';
 import { ArrowRight, Plus, FolderKanban } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
+import ShortcutKey from '../components/ShortcutKey';
 import { cardBase, pageShell } from '../components/uiTokens';
 import { getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo, isPortfolioHomeUser, canCreateTasksFromAnywhere } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
@@ -469,9 +470,10 @@ const Dashboard: React.FC = () => {
               </Link>
             )}
             {canCreateTask && (
-              <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
+              <Button data-onboarding-target="create-task" aria-keyshortcuts="N" onClick={() => setCreateTaskModalOpen(true)}>
                 <Plus className="h-4 w-4" />
                 {t('New task')}
+                <ShortcutKey className="ml-1">N</ShortcutKey>
               </Button>
             )}
           </div>

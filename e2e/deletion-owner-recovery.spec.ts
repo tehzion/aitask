@@ -12,7 +12,7 @@ const seed = async (page: Page) => {
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
     localStorage.setItem('aitask:locale', 'en');
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false },
       users: [boss, { id: 'owner-qa-pm', name: 'Owner QA PM', role: 'Project Manager', department: 'Designer', departments: ['Designer'] }],
       clients: [{ id: 'recovery-qa-client', clientName: 'Recovery QA Company', createdAt: '2026-10-01', updatedAt: '2026-10-01' }],
@@ -200,7 +200,7 @@ for (const action of ['owner', 'deletion'] as const) {
       const { useStore } = await import('/src/store/index.ts');
       const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
       enablePasswordResetBypass('other-recovery-boss');
-      localStorage.setItem('aitask:release-notice:2026-08-service-operations:other-recovery-boss', 'acknowledged');
+      localStorage.setItem('aitask:release-notice:2026-11-everyday-saves:other-recovery-boss', 'acknowledged');
       useStore.setState(state => ({ currentUser: { ...state.currentUser!, id: 'other-recovery-boss', mustResetPassword: false },
         tasks: [], clients: [], backend: { ...state.backend, hasLocalChanges: false, pendingMutations: 0 } }));
     });
@@ -218,7 +218,7 @@ test('an owning Project Manager hands the company to another Project Manager', a
     const state = useStore.getState();
     const owner = { id: 'handover-owner-pm', name: 'Ting Ting QA', role: 'Project Manager' as const, department: 'Management', departments: ['Management'] };
     enablePasswordResetBypass(owner.id);
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${owner.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${owner.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...owner, mustResetPassword: false },
       users: [...state.users, owner, { id: 'handover-next-pm', name: 'Jing Yi QA', role: 'Project Manager', department: 'Management', departments: ['Management'] },

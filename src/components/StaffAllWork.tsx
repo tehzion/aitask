@@ -14,6 +14,7 @@ import { buildStaffWorkQueue, getHodScopeTasks, isStaffGuidedActionEnabled } fro
 import { normalizeDepartment } from '../lib/departments';
 import { getTodayInputDate } from '../lib/utils';
 import { Button, PageHeader, SegmentedTabs, Surface } from './ui';
+import ShortcutKey from './ShortcutKey';
 import { inputBase, pageShell } from './uiTokens';
 import SideSheet from './SideSheet';
 import StaffTaskFocus from './StaffTaskFocus';
@@ -201,7 +202,7 @@ const StaffAllWork: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }) 
         hideDescriptionOnMobile
         meta={<><span className="calm-number">{filteredTasks.length} {t(filteredTasks.length === 1 ? 'task' : 'tasks')}</span>{viewsSlot}</>}
         action={<div className="flex flex-wrap items-center gap-2">
-          {canCreateTask && <Button onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+          {canCreateTask && <Button aria-keyshortcuts="N" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}<ShortcutKey className="ml-1">N</ShortcutKey></Button>}
           <Button variant="secondary" onClick={() => setFiltersOpen(true)}><Filter className="h-4 w-4" />{t('Filters')}{activeFilterCount > 0 ? ` · ${activeFilterCount}` : ''}</Button>
         </div>}
       />

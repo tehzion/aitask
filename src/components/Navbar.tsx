@@ -20,6 +20,7 @@ import { LanguageSwitcher, useI18n } from './I18nProvider';
 import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import GlobalSearchResults from './GlobalSearchResults';
 import UserAvatar from './UserAvatar';
+import ShortcutKey from './ShortcutKey';
 
 const NotificationPreviewText = React.lazy(() => import('../modules/notifications/components/NotificationPreviewText'));
 
@@ -267,6 +268,7 @@ const Navbar: React.FC<NavbarProps> = ({
             onChange={event => { setSearchResultsOpen(true); globalSearchInput.inputProps.onChange(event); }}
             onFocus={() => setSearchResultsOpen(true)}
           />
+          {!globalSearchInput.value && <ShortcutKey className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2">/</ShortcutKey>}
           {globalSearchInput.value && (
             <button type="button" aria-label={t('Clear search')} onClick={() => globalSearchInput.commit('')} className="absolute right-1 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-control text-muted hover:bg-inset hover:text-ink">
               <X className="h-4 w-4" />

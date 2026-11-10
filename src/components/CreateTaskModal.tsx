@@ -25,7 +25,7 @@ import { modalFooter } from './uiTokens';
 import { useI18n } from './I18nProvider';
 import ContextualTutorialLink from './ContextualTutorialLink';
 import '../lib/uxEnhancementCopy';
-import { defaultDueDateForMonth, readCreateTaskChoice, rememberCreateTaskChoice } from '../lib/createTaskDefaults';
+import { defaultDueDateForMonth, forgetCreateTaskChoice, readCreateTaskChoice, rememberCreateTaskChoice } from '../lib/createTaskDefaults';
 
 interface Props {
   isOpen: boolean;
@@ -91,6 +91,8 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [website, setWebsite] = useState('');
   const [department, setDepartment] = useState<Department | ''>('');
   const [assignedTo, setAssignedTo] = useState('');
+  /** What this opening pre-filled from the person's last task, shown so they can see and clear it. */
+  const [rememberedFill, setRememberedFill] = useState<{ department: string; assignedTo: string } | null>(null);
   const [serviceType, setServiceType] = useState<ServiceType>('Design');
   const [isAddingCustomService, setIsAddingCustomService] = useState(false);
   const [customServiceInput, setCustomServiceInput] = useState('');
@@ -250,6 +252,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
         && assignableTaskAssignees(currentUser, rememberedDepartment, users, rolePermissions).some(user => user.id === remembered.assignedTo && (canAssignOthers || user.id === currentUser?.id))
         ? remembered.assignedTo : '';
       setAssignedTo(initialMember?.id || rememberedAssignee);
+      setRememberedFill(!initialDepartment && rememberedDepartment ? { department: rememberedDepartment, assignedTo: rememberedAssignee } : null);
       setDepartment(current => (
         initialDepartment
           || rememberedDepartment
@@ -272,6 +275,20 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
 
   if (!isOpen) return null;
+
+  // Visible remembered defaults (role UX): only while the pre-filled values are still in place.
+  const rememberedStillUsed = rememberedFill && department === rememberedFill.department;
+  const rememberedAssigneeName = rememberedStillUsed && rememberedFill.assignedTo && assignedTo === rememberedFill.assignedTo
+    ? users.find(user => user.id === rememberedFill.assignedTo)?.name || ''
+    : '';
+  const rememberedNote = rememberedStillUsed ? [rememberedFill.department, rememberedAssigneeName].filter(Boolean).join(', ') : '';
+  const clearRememberedFill = () => {
+    forgetCreateTaskChoice(currentUser?.id);
+    setRememberedFill(null);
+    setDepartment(departmentChoices.length === 1 ? departmentChoices[0] : '');
+    setAssignedTo('');
+    setAssignmentError('');
+  };
 
   const isValidOptionalUrl = (value: string) => {
     const trimmed = value.trim();
@@ -684,6 +701,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                   )}
                 </div>
               </div>
+              {rememberedNote && <p className="-mt-2 flex flex-wrap items-center gap-x-2 text-xs text-slate-500" data-remembered-defaults>
+                <span>{t('Last used: {choice}', { choice: rememberedNote })}</span>
+                <button type="button" onClick={clearRememberedFill} className="min-h-6 font-medium text-blue-700 underline-offset-2 hover:underline">{t('Clear')}</button>
+              </p>}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>

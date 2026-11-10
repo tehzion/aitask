@@ -1,4 +1,5 @@
 import { recordClientEvent } from '../lib/clientTelemetry';
+import { changedTaskIds, clearTaskSaveMarks, markTasksChanged } from '../lib/taskSaveMarks';
 import { cyclePaymentSummary } from '../lib/cyclePayments';
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
@@ -1203,13 +1204,23 @@ export const useStore = create<StoreState>()(
   persist(
     (rawSet, get) => {
       // Mutation bookkeeping must survive a stopped realtime/auto-sync listener.
-      const set: typeof rawSet = (patch) => rawSet(state => {
-        const next = typeof patch === 'function' ? patch(state) : patch;
-        const changed = workspaceMutationFields.some(key => key in next && next[key] !== state[key]);
-        if (!changed || !state.currentUser || isApplyingRemoteSnapshot || isApplyingNotificationRead || !shouldUseSupabase() || (next.backend && next.backend.hasLocalChanges === false)) return next;
-        localMutationEpoch += 1;
-        return { ...next, backend: { ...(next.backend || state.backend), hasLocalChanges: true, pendingMutations: Math.max(1, (next.backend || state.backend).pendingMutations), status: 'saving' as const } };
-      });
+      const set: typeof rawSet = (patch) => {
+        let changedTasks: string[] = [];
+        let savedBefore: string | undefined;
+        rawSet(state => {
+          const next = typeof patch === 'function' ? patch(state) : patch;
+          const changed = workspaceMutationFields.some(key => key in next && next[key] !== state[key]);
+          if (!changed || !state.currentUser || isApplyingRemoteSnapshot || isApplyingNotificationRead || !shouldUseSupabase() || (next.backend && next.backend.hasLocalChanges === false)) return next;
+          localMutationEpoch += 1;
+          if (next.tasks && next.tasks !== state.tasks) {
+            changedTasks = changedTaskIds(state.tasks, next.tasks);
+            savedBefore = state.backend.lastSavedAt;
+          }
+          return { ...next, backend: { ...(next.backend || state.backend), hasLocalChanges: true, pendingMutations: Math.max(1, (next.backend || state.backend).pendingMutations), status: 'saving' as const } };
+        });
+        // Per-task "Saving…/Saved" notes (role UX); outside the update so no store writes nest.
+        markTasksChanged(changedTasks, savedBefore);
+      };
       return ({
       currentUser: null,
       users: mockUsers.map(user => normalizeUserAccount(user)),
@@ -7057,6 +7068,7 @@ export const stopBackendAutoSync = () => {
 useStore.subscribe((state, previous) => {
   if (previous.currentUser && (state.currentUser?.id !== previous.currentUser.id || state.currentUser?.authUserId !== previous.currentUser.authUserId)) {
     clearRecoveredDrafts(previous.currentUser.authUserId || previous.currentUser.id);
+    clearTaskSaveMarks();
     invalidateWorkspaceSession();
   }
 });

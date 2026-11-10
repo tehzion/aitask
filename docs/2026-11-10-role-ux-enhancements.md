@@ -62,4 +62,12 @@ These enhancements build on features already live, grouped by the role that bene
 - **HOD:** a badge on My work / Department work counts tasks to assign plus reviews where the HOD is the actual reviewer (tooltip "{n} to assign · {m} to review"). An "Assign to…" picker sits on list rows that wait on the HOD. With no Staff in the department, the task shows "Do it myself".
 - **Staff:** Today order is overdue → due today → revisions → in progress → the rest, with blocked work last. The reviewer's latest revision note shows on the card.
 - **Client:** Ready counts as completed in client counts ("x/y completed"); the dashboard lists this month by service (e.g. "Social Posts 6/8") when the month has more than one service.
-- Not built yet: company health line, contract value at risk, "My day" order for PMs, unlinked-work warning, visible remembered defaults, quiet per-task save status, client approve-in-one-place, shared Next wording audit, per-role release notice, shortcut hints.
+
+## Shipped 10 Nov 2026 (everyone)
+
+- **Quiet save status per task:** a task you change shows "Saving…" beside its status, "Waiting to save" when offline or blocked, then "Saved" for 5 seconds once a save lands (`src/lib/taskSaveMarks.ts`, `src/components/TaskSaveNote.tsx`). It appears on list rows, the Staff focus view and the task window. Memory only; the workspace status still covers anything unsaved.
+- **Visible remembered defaults:** Create task shows "Last used: Designer, Mabel" while the reused department (and assignee) are still selected; Clear resets them and forgets the stored choice.
+- **Same Next wording:** guides, onboarding and tutorials now name the buttons people actually see (Start work, Send for review, Resubmit for review, Approve) instead of "submit for approval".
+- **Per-role release notice:** notice `2026-11-everyday-saves` replaces the August one, with separate copy for Boss, PM, HOD, Staff and client (English and Chinese). HOD is detected with the role templates, so custom HOD roles get the HOD copy.
+- **Shortcut hints:** New task buttons show an "N" key on desktop, the search field shows "/", and sidebar links show "Shortcut: G T" (etc.) on hover. Controls carry `aria-keyshortcuts`.
+- Not built yet: company health line, contract value at risk, "My day" order for PMs, unlinked-work warning, client approve-in-one-place.

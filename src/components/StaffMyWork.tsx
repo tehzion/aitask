@@ -16,6 +16,7 @@ import { isTaskAwaitingAcceptance } from '../lib/taskCompletion';
 import { getRelativeDueDateString, getTodayInputDate } from '../lib/utils';
 import { pageShell } from './uiTokens';
 import { Button, MetaLine, SegmentedTabs, StatusChip, Surface } from './ui';
+import ShortcutKey from './ShortcutKey';
 import BackendFreshness from './BackendFreshness';
 import StaffWorkItem from './StaffWorkItem';
 import { formatLocalizedWeekdayDate } from '../lib/i18n';
@@ -125,7 +126,7 @@ const StaffMyWork: React.FC = () => {
           <p className="mt-1 max-w-[55ch] text-sm leading-6 text-muted">{isDepartmentLead ? t('Assignments to delegate, team progress, and reviews waiting on you.') : t('What to work on next, ordered by revisions and deadlines.')}</p>
         </div>
         <div className="flex flex-col items-end gap-2">
-          {canCreateTask && <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}</Button>}
+          {canCreateTask && <Button data-onboarding-target="create-task" aria-keyshortcuts="N" onClick={() => setCreateTaskModalOpen(true)}><Plus className="h-4 w-4" />{t('New task')}<ShortcutKey className="ml-1">N</ShortcutKey></Button>}
           <BackendFreshness />
         </div>
       </header>

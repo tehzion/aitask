@@ -35,6 +35,15 @@ export const rememberCreateTaskChoice = (userId: string | undefined, choice: Cre
   }
 };
 
+export const forgetCreateTaskChoice = (userId: string | undefined) => {
+  if (!userId || typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(storageKey(userId));
+  } catch {
+    // Nothing stored, or storage is blocked: either way nothing is remembered.
+  }
+};
+
 /** A month-end due date for work counted toward a month, never in the past. */
 export const defaultDueDateForMonth = (periodEnd: string | undefined, todayKey: string) => (
   periodEnd && periodEnd >= todayKey ? periodEnd : ''

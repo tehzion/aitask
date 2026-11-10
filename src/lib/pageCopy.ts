@@ -1582,4 +1582,8 @@ registerUiTranslations({
   'Projects with no HOD': '没有部门主管的项目',
   'The PM assigns tasks directly on these projects.': '这些项目由项目经理直接分配任务。',
   'Show {count} more': '再显示 {count} 个',
+  // Everyone UX (10 Nov 2026)
+  'Saved': '已保存',
+  'Waiting to save': '等待保存',
+  'Last used: {choice}': '上次使用：{choice}',
 });

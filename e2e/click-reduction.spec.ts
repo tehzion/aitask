@@ -16,7 +16,7 @@ const seedPublishedMonth = async (page: import('@playwright/test').Page) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
       clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [], addons: [],
@@ -108,7 +108,7 @@ test('Staff start their work from the list without opening the task', async ({ p
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const staff = state.users.find(user => user.role === 'Staff' && user.status !== 'Inactive')!;
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${staff.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${staff.id}`, 'acknowledged');
     const task = state.tasks.find(item => item.assignedTo === staff.id && ['Pending', 'Revision'].includes(item.status) && !item.dependencies?.length)
       || state.tasks.find(item => item.assignedTo === staff.id && item.status === 'In Progress');
     if (!task) throw new Error('no staff task');
@@ -158,5 +158,16 @@ test('Create task remembers the department and defaults month work to month end'
   await page.keyboard.press('Escape');
 
   await open();
-  await expect(page.getByRole('dialog', { name: /^Create task$/i }).getByLabel('Assign to Position/Department')).toHaveValue('Designer');
+  const reopened = page.getByRole('dialog', { name: /^Create task$/i });
+  await expect(reopened.getByLabel('Assign to Position/Department')).toHaveValue('Designer');
+  // The reused choice is visible and can be cleared (role UX).
+  await expect(reopened.getByText('Last used: Designer')).toBeVisible();
+  await reopened.getByRole('button', { name: 'Clear', exact: true }).click();
+  await expect(reopened.getByLabel('Assign to Position/Department')).not.toHaveValue('Designer');
+  await expect(reopened.getByText(/Last used:/)).toHaveCount(0);
+  const stored = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return localStorage.getItem(`aitask:create-task-last:${useStore.getState().currentUser!.id}`);
+  });
+  expect(stored).toBeNull();
 });

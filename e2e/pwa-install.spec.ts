@@ -29,7 +29,7 @@ test('a first-time offline Reports deep link renders the report shell and data f
   await page.waitForURL(url => url.pathname === '/' || url.pathname === '/settings');
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   if (page.url().endsWith('/settings')) await continueButton.click();
-  const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
+  const releaseNotice = page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' });
   await releaseNotice.waitFor({ state: 'visible', timeout: 5000 }).then(() => releaseNotice.getByRole('button', { name: 'Happy working' }).click()).catch(() => undefined);
   await page.evaluate(() => {
     const raw = window.localStorage.getItem('market-task-storage');

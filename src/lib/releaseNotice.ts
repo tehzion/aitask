@@ -1,7 +1,8 @@
-import type { User } from '../types';
-import { getDashboardPersona, type DashboardPersona } from './access';
+import type { CustomRole, User } from '../types';
+import { getDashboardPersona, isHodUser } from './access';
 
-export const RELEASE_NOTICE_ID = '2026-08-service-operations';
+/** Bump for each release people should hear about; each id is acknowledged once per member. */
+export const RELEASE_NOTICE_ID = '2026-11-everyday-saves';
 
 export interface ReleaseNoticeHighlight {
   title: string;
@@ -16,164 +17,156 @@ export interface ReleaseNoticeCopy {
   acknowledgeLabel: string;
 }
 
+/** Who the notice speaks to: only what changed for that role (role UX, 10 Nov 2026). */
+export type ReleaseNoticeAudience = 'boss' | 'projectManager' | 'hod' | 'staff' | 'client';
+
 type ReleaseNoticeLocale = 'en' | 'zh';
 
-const englishCopy: Record<DashboardPersona, ReleaseNoticeCopy> = {
+const savesEn: ReleaseNoticeHighlight = { title: 'Changes save on their own', description: 'If the connection drops, your change is kept and saved automatically. A note beside the task shows Saving… and then Saved.' };
+const savesZh: ReleaseNoticeHighlight = { title: '更改会自动保存', description: '网络中断时，您的更改会被保留并自动保存。任务旁会显示“保存中…”，然后显示“已保存”。' };
+const rowsEn: ReleaseNoticeHighlight = { title: 'Next step on each row', description: 'Task lists offer the next step, such as Start work or Send for review, without opening the task.' };
+const rowsZh: ReleaseNoticeHighlight = { title: '每行直接显示下一步', description: '任务列表直接提供下一步操作，例如“开始工作”或“提交审核”，无需打开任务。' };
+const defaultsEn: ReleaseNoticeHighlight = { title: 'New task remembers your choices', description: 'New task reuses your last department and shows Last used, with Clear to start fresh.' };
+const defaultsZh: ReleaseNoticeHighlight = { title: '新建任务会记住您的选择', description: '新建任务会沿用您上次的部门，并显示“上次使用”，可点击“清除”重新选择。' };
+
+const eyebrowEn = 'What changed for you';
+const eyebrowZh = '与您相关的更新';
+
+const englishCopy: Record<ReleaseNoticeAudience, ReleaseNoticeCopy> = {
   boss: {
-    eyebrow: 'What’s new',
-    title: 'Service operations are now in one calm workspace',
-    description: 'AiTask now connects client scope, monthly delivery, and team execution without changing your existing work.',
+    eyebrow: eyebrowEn,
+    title: 'Dependable saves and a clearer view of staffing',
+    description: 'This update keeps changes from getting lost and shows where the team needs people.',
     highlights: [
-      { title: 'Build client plans your way', description: 'Start from a standard package, duplicate and customise it, or create a fully custom scope.' },
-      { title: 'Keep every agreement intact', description: 'Saved plan, service, workflow, and pricing snapshots stay frozen for that client.' },
-      { title: 'Run monthly delivery with clarity', description: 'Track cycles, deliverables, revisions, progress, and renewal dates from the client workspace.' },
-      { title: 'See the right internal picture', description: 'Role workbenches and protected management values keep operational and financial access separate.' },
+      savesEn,
+      { title: 'Staffing gaps lead to the team', description: 'Select a department in Staffing gaps to open its members, with pending sign-ups first.' },
+      rowsEn,
+      defaultsEn,
     ],
     acknowledgeLabel: 'Happy working',
   },
   projectManager: {
-    eyebrow: 'What’s new',
-    title: 'Service operations are now in one calm workspace',
-    description: 'AiTask now connects client scope, monthly delivery, and team execution without changing your existing work.',
+    eyebrow: eyebrowEn,
+    title: 'Approve faster and stop worrying about saves',
+    description: 'Fewer clicks for everyday reviews, and changes that save themselves.',
     highlights: [
-      { title: 'Build client plans your way', description: 'Start from a standard package, duplicate and customise it, or create a fully custom scope.' },
-      { title: 'Keep every agreement intact', description: 'Saved plan, service, workflow, and pricing snapshots stay frozen for that client.' },
-      { title: 'Run monthly delivery with clarity', description: 'Track cycles, deliverables, revisions, progress, and renewal dates from the client workspace.' },
-      { title: 'See the right internal picture', description: 'Role workbenches and protected management values keep operational and financial access separate.' },
+      { title: 'Approve several at once', description: 'On your dashboard, tick submitted tasks and approve them together. To return work with a note, open the task.' },
+      rowsEn,
+      savesEn,
+      defaultsEn,
     ],
     acknowledgeLabel: 'Happy working',
   },
-  operation: {
-    eyebrow: 'What’s new',
-    title: 'A clearer way to run client delivery',
-    description: 'Your operations workspace now keeps each client’s recurring work, execution steps, and approvals together.',
+  hod: {
+    eyebrow: eyebrowEn,
+    title: 'See what waits on you and hand it out faster',
+    description: 'Your department’s assignments and reviews are easier to find and act on.',
     highlights: [
-      { title: 'Plan monthly delivery', description: 'Work from client service cycles, deliverable slots, and Included, Completed, and Remaining progress.' },
-      { title: 'Generate per-service task chains', description: 'Create the defined task steps for a deliverable, then assign the right people and keep dependencies visible.' },
-      { title: 'Publish with confidence', description: 'Move work through internal review and client approval before publishing a cycle for the client portal.' },
-      { title: 'Stay inside your delivery scope', description: 'You can work with assigned clients and deliverables while commercial details remain protected.' },
+      { title: 'What waits on you', description: 'The badge on My work counts tasks to assign and reviews where you are the reviewer.' },
+      { title: 'Assign from the list', description: 'Use Assign to… on a task row to hand work to your Staff without opening the task.' },
+      { title: 'Do it myself', description: 'When your department has no Staff, take the task yourself in one click.' },
+      savesEn,
     ],
     acknowledgeLabel: 'Happy working',
   },
-  production: {
-    eyebrow: 'What’s new',
-    title: 'Your production work is easier to follow',
-    description: 'Assigned delivery work now carries its service context and the steps needed to take it from idea to output.',
+  staff: {
+    eyebrow: eyebrowEn,
+    title: 'Your list now starts with what to do today',
+    description: 'Urgent work comes first, and your changes save even on a weak connection.',
     highlights: [
-      { title: 'Work from clear task steps', description: 'See your assigned content, scripting, production, editing, review, revision, and posting work in order.' },
-      { title: 'Keep dependencies visible', description: 'Soft dependency prompts show what is still waiting without preventing you from starting when needed.' },
-      { title: 'See the delivery context', description: 'Tasks stay linked to the client cycle and deliverable so each output has a clear purpose.' },
-      { title: 'Share the right status', description: 'Internal review and client-visible steps are clearly distinguished for the right audience.' },
-    ],
-    acknowledgeLabel: 'Happy working',
-  },
-  account: {
-    eyebrow: 'What’s new',
-    title: 'A clearer account view of client service',
-    description: 'Your workspace now brings package scope, renewal planning, and production output into one account-focused view.',
-    highlights: [
-      { title: 'Review active client packages', description: 'See the agreed service scope alongside each client’s active plan and delivery progress.' },
-      { title: 'Plan ahead for renewals', description: 'Contract end dates and renewal reminders are visible where you manage the relationship.' },
-      { title: 'Understand management value', description: 'Permitted internal monthly management values remain separate from day-to-day delivery work.' },
-      { title: 'Follow production output', description: 'Use delivered work and completed tasks to understand team and supplier output.' },
+      { title: 'Today first', description: 'Your list starts with overdue work, then due today, revisions and work in progress. Blocked work goes last.' },
+      { title: 'Reviewer note on the card', description: 'When work comes back for a revision, the reviewer’s note shows on the task card.' },
+      rowsEn,
+      savesEn,
     ],
     acknowledgeLabel: 'Happy working',
   },
   client: {
-    eyebrow: 'What’s new',
-    title: 'Your client workspace is easier to follow',
-    description: 'AiTask now gives you a clearer view of the service work your team has published for your company.',
+    eyebrow: eyebrowEn,
+    title: 'Your progress is easier to read',
+    description: 'Your dashboard now shows each service’s progress for the month.',
     highlights: [
-      { title: 'See your active service scope', description: 'Review the services included in your active plan without internal commercial details.' },
-      { title: 'Follow published monthly delivery', description: 'See current cycles, deliverables, and progress once your agency publishes them.' },
-      { title: 'Review the right work', description: 'Client-visible task steps and approval points make it clear when your feedback is needed.' },
-      { title: 'Find updates in one place', description: 'Read client-visible comments and download shared files from the activity area.' },
+      { title: 'This month by service', description: 'See how far each service has come this month, such as 6 of 8 completed.' },
+      { title: 'Ready counts as completed', description: 'Work your team has marked Ready now counts toward your completed total.' },
+      { title: 'Your feedback is kept', description: 'If the connection drops while you leave feedback, it is kept and saved automatically.' },
     ],
     acknowledgeLabel: 'Happy working',
   },
 };
 
-const chineseCopy: Record<DashboardPersona, ReleaseNoticeCopy> = {
+const chineseCopy: Record<ReleaseNoticeAudience, ReleaseNoticeCopy> = {
   boss: {
-    eyebrow: '最新更新',
-    title: '客户服务运营现已集中在一个清晰的工作区',
-    description: 'AiTask 现可将客户服务范围、月度交付与团队执行连接在一起，同时保留您原有的工作方式。',
+    eyebrow: eyebrowZh,
+    title: '保存更可靠，人员情况更清晰',
+    description: '本次更新避免更改丢失，并显示团队哪里缺人。',
     highlights: [
-      { title: '按需要建立客户方案', description: '可使用标准配套、复制后自定义，或从零建立完全自定义的服务范围。' },
-      { title: '保留每一份约定', description: '已保存方案、服务、任务步骤与价格快照会为该客户冻结保留。' },
-      { title: '清晰管理月度交付', description: '可在客户工作区追踪周期、交付物、修订、进度与续约日期。' },
-      { title: '查看合适的内部信息', description: '不同岗位工作台与受保护的管理数值，让运营及财务访问保持分隔。' },
+      savesZh,
+      { title: '从人员缺口直达团队', description: '在“人员缺口”中选择部门即可打开其成员，待审核的注册申请排在最前。' },
+      rowsZh,
+      defaultsZh,
     ],
     acknowledgeLabel: '开始工作吧',
   },
   projectManager: {
-    eyebrow: '最新更新',
-    title: '客户服务运营现已集中在一个清晰的工作区',
-    description: 'AiTask 现可将客户服务范围、月度交付与团队执行连接在一起，同时保留您原有的工作方式。',
+    eyebrow: eyebrowZh,
+    title: '更快审批，不再担心保存',
+    description: '日常审核步骤更少，更改也会自动保存。',
     highlights: [
-      { title: '按需要建立客户方案', description: '可使用标准配套、复制后自定义，或从零建立完全自定义的服务范围。' },
-      { title: '保留每一份约定', description: '已保存方案、服务、任务步骤与价格快照会为该客户冻结保留。' },
-      { title: '清晰管理月度交付', description: '可在客户工作区追踪周期、交付物、修订、进度与续约日期。' },
-      { title: '查看合适的内部信息', description: '不同岗位工作台与受保护的管理数值，让运营及财务访问保持分隔。' },
+      { title: '批量批准', description: '在您的仪表板中勾选已提交的任务并一次批准。如需附说明退回，请打开任务。' },
+      rowsZh,
+      savesZh,
+      defaultsZh,
     ],
     acknowledgeLabel: '开始工作吧',
   },
-  operation: {
-    eyebrow: '最新更新',
-    title: '以更清晰的方式管理客户交付',
-    description: '运营工作区现可将每位客户的周期性工作、执行步骤与审批集中管理。',
+  hod: {
+    eyebrow: eyebrowZh,
+    title: '看清待您处理的工作，更快分配',
+    description: '部门的分配与审核更容易找到和处理。',
     highlights: [
-      { title: '规划月度交付', description: '依据客户服务周期、交付物槽位和包含、完成、剩余进度开展工作。' },
-      { title: '为每项服务生成任务链', description: '为交付物生成已定义的任务步骤，再分配合适的成员并保持依赖关系可见。' },
-      { title: '安心发布', description: '在向客户门户发布周期前，完成内部审核及客户审批。' },
-      { title: '只处理自己的交付范围', description: '可处理已分配客户与交付物，同时商务资料会受到保护。' },
+      { title: '待您处理', description: '“我的工作”上的标记会统计待分配任务，以及由您审核的任务。' },
+      { title: '在列表中分配', description: '在任务行使用“分配给…”，无需打开任务即可交给员工。' },
+      { title: '我自己来做', description: '部门没有员工时，一键由您自己接手任务。' },
+      savesZh,
     ],
     acknowledgeLabel: '开始工作吧',
   },
-  production: {
-    eyebrow: '最新更新',
-    title: '制作工作更容易跟进',
-    description: '已分配的交付工作现在会带有服务背景，以及从创意到成品所需的任务步骤。',
+  staff: {
+    eyebrow: eyebrowZh,
+    title: '列表现在先显示今天要做的事',
+    description: '紧急工作排在最前，网络不稳时您的更改也会保存。',
     highlights: [
-      { title: '按清晰步骤完成任务', description: '可依序查看已分配的内容、脚本、制作、剪辑、审核、修改及发布工作。' },
-      { title: '保持依赖关系可见', description: '软依赖提示会说明仍在等待的前置工作，但不会在需要时阻止您开始。' },
-      { title: '了解交付背景', description: '任务会关联到客户周期和交付物，让每项产出都有明确目的。' },
-      { title: '分享正确的状态', description: '内部审核和客户可见步骤会被清楚区分，并向合适的对象展示。' },
-    ],
-    acknowledgeLabel: '开始工作吧',
-  },
-  account: {
-    eyebrow: '最新更新',
-    title: '更清晰地掌握客户服务',
-    description: '您的工作区现可将服务配套、续约规划与制作产出集中在以客户关系为核心的视图中。',
-    highlights: [
-      { title: '查看启用中的客户配套', description: '可在客户的启用方案与交付进度旁查看已约定的服务范围。' },
-      { title: '提前规划续约', description: '在管理客户关系的位置即可查看合同结束日期与续约提醒。' },
-      { title: '了解管理服务价值', description: '获授权的内部月度管理数值会与日常交付工作保持分隔。' },
-      { title: '追踪制作产出', description: '通过已交付工作和已完成任务了解团队与供应商的产出。' },
+      { title: '今天优先', description: '列表依次显示逾期工作、今天到期、修订和进行中的工作，被阻塞的工作排在最后。' },
+      { title: '卡片上显示审核意见', description: '工作被退回修订时，审核人的意见会显示在任务卡片上。' },
+      rowsZh,
+      savesZh,
     ],
     acknowledgeLabel: '开始工作吧',
   },
   client: {
-    eyebrow: '最新更新',
-    title: '您的客户工作区更容易跟进',
-    description: 'AiTask 现在可让您更清楚地查看团队已为贵公司发布的服务工作。',
+    eyebrow: eyebrowZh,
+    title: '进度更容易查看',
+    description: '您的仪表板现在会显示每项服务本月的进度。',
     highlights: [
-      { title: '查看启用中的服务范围', description: '可查看启用方案中包含的服务，但不会显示内部商务资料。' },
-      { title: '跟进已发布的月度交付', description: '团队发布后，您可以查看当前周期、交付物和进度。' },
-      { title: '审阅需要您参与的工作', description: '客户可见任务步骤和审批节点会清楚说明何时需要您的反馈。' },
-      { title: '在一个位置找到更新', description: '可在动态区域查看客户可见评论并下载共享文件。' },
+      { title: '本月各项服务', description: '查看每项服务本月的进度，例如已完成 6/8。' },
+      { title: '“待交付”计为已完成', description: '团队标记为“待交付”的工作现在会计入已完成总数。' },
+      { title: '您的反馈会被保留', description: '留下反馈时如果网络中断，反馈会被保留并自动保存。' },
     ],
     acknowledgeLabel: '开始工作吧',
   },
 };
 
-export const getReleaseNoticePersona = (user: User): DashboardPersona => getDashboardPersona(user);
+export const getReleaseNoticeAudience = (user: User, roles: CustomRole[] = []): ReleaseNoticeAudience => {
+  const persona = getDashboardPersona(user);
+  if (persona === 'boss' || persona === 'projectManager' || persona === 'client') return persona;
+  return isHodUser(user, roles) ? 'hod' : 'staff';
+};
 
 export const getReleaseNoticeCopy = (
   user: User,
   locale: ReleaseNoticeLocale,
-): ReleaseNoticeCopy => (locale === 'zh' ? chineseCopy : englishCopy)[getReleaseNoticePersona(user)];
+  roles: CustomRole[] = [],
+): ReleaseNoticeCopy => (locale === 'zh' ? chineseCopy : englishCopy)[getReleaseNoticeAudience(user, roles)];
 
 export const getLocalReleaseNoticeKey = (userId: string, noticeId = RELEASE_NOTICE_ID) => (
   `aitask:release-notice:${noticeId}:${userId}`

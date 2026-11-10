@@ -95,7 +95,7 @@ test('first login reaches the app and critical responsive routes remain usable',
 
   await page.getByRole('button', { name: 'Continue for now' }).click();
   await expect(page).toHaveURL(/\/$/);
-  const releaseNotice = page.getByRole('dialog', { name: 'Service operations are now in one calm workspace' });
+  const releaseNotice = page.getByRole('dialog', { name: 'Dependable saves and a clearer view of staffing' });
   await expect(releaseNotice).toBeVisible();
   await releaseNotice.getByRole('button', { name: 'Happy working' }).click();
 
@@ -723,7 +723,7 @@ test('first login reaches the app and critical responsive routes remain usable',
       approvalHistory: [],
       updatedAt: '2026-08-02T04:00:00.000Z',
     };
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${client.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${client.id}`, 'acknowledged');
     useStore.setState({
       users: current.users.some(user => user.id === contact.id) ? current.users : [...current.users, contact],
       tasks: [...current.tasks.filter(task => task.id !== clientTask.id), clientTask],
@@ -820,7 +820,7 @@ test('first login reaches the app and critical responsive routes remain usable',
       stored.state.currentUser,
     ];
     localStorage.setItem(
-      'aitask:release-notice:2026-08-service-operations:e2e-task-only-role',
+      'aitask:release-notice:2026-11-everyday-saves:e2e-task-only-role',
       'acknowledged',
     );
     window.localStorage.setItem('market-task-storage', JSON.stringify(stored));

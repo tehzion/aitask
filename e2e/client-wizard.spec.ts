@@ -8,7 +8,7 @@ const seedAdminAndPackage = async (page: Page) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
       clients: [],
@@ -46,7 +46,7 @@ const seedProjectManager = async (page: Page) => {
     const state = useStore.getState();
     const pm = state.users.find(user => user.name === 'Project Manager Demo' && !user.isSuperAdmin);
     if (!pm) throw new Error('Project Manager demo account is missing.');
-    localStorage.setItem(`aitask:release-notice:2026-08-service-operations:${pm.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${pm.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...pm, mustResetPassword: false },
       clients: [],

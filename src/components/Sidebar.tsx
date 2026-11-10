@@ -2,6 +2,7 @@ import '../lib/pageCopy';
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { NAVIGATION_SHORTCUTS } from '../lib/keyboard';
 import { ChevronDown, LogOut, MoreHorizontal, PanelLeftClose, PanelLeftOpen, Plus, X } from 'lucide-react';
 import { clearWorkspaceSession, useStore } from '../store';
 import clsx from 'clsx';
@@ -106,6 +107,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
 
   const renderNavItem = (item: NavigationItem) => {
     const label = t(item.label);
+    // Shortcut hint on hover (role UX): the same G-then-key shortcuts as the help dialog.
+    const navShortcut = NAVIGATION_SHORTCUTS.find(shortcut => shortcut.path === item.path);
+    const shortcutHint = navShortcut ? t('Shortcut: {keys}', { keys: `G ${navShortcut.key.toUpperCase()}` }) : '';
     const badge = item.path === '/' && hodWaiting.total > 0
       ? { count: hodWaiting.total, title: t('{assign} to assign · {review} to review', { assign: hodWaiting.toAssign, review: hodWaiting.toReview }) }
       : null;
@@ -117,7 +121,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
           onClick={onClose}
           {...(onboardingTarget ? { 'data-onboarding-target': onboardingTarget } : {})}
           aria-label={isCollapsed ? (badge ? `${label}, ${badge.title}` : label) : undefined}
-          title={isCollapsed ? label : undefined}
+          title={isCollapsed ? [label, shortcutHint].filter(Boolean).join(' · ') : shortcutHint || undefined}
           className={({ isActive }) => clsx(
             'group relative flex min-h-11 items-center rounded-control px-3 py-2.5 transition-[background-color,color,box-shadow] duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
             isCollapsed && 'md:justify-center md:px-2',
@@ -294,7 +298,8 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                       type="button"
                       onClick={() => { setCreateTaskModalOpen(true); onClose(); }}
                       aria-label={isCollapsed ? t('New task') : undefined}
-                      title={isCollapsed ? t('New task') : undefined}
+                      aria-keyshortcuts="N"
+                      title={`${isCollapsed ? `${t('New task')} · ` : ''}${t('Shortcut: {keys}', { keys: 'N' })}`}
                       className={clsx('group flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-accent transition-[background-color,color,box-shadow] duration-160 hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface', isCollapsed && 'md:justify-center md:px-2')}
                     >
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control text-accent"><Plus aria-hidden="true" className="h-[18px] w-[18px]" /></span>
