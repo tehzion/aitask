@@ -2,6 +2,51 @@
 
 Written 10 Nov 2026 for the next agent. It covers one session: a gap review of the role UX work, then a read-only performance check of production Supabase, then a drafted (not applied) row-security speed-up.
 
+## 0. Update (later on 10 Nov): what was done since this was written
+
+Read this first. Sections 1 to 6 below are the original handoff; where they disagree with this update, this update wins.
+
+**Done, committed on `codex/role-enhancements-20261110`, nothing applied to production:**
+
+| What | Where |
+| --- | --- |
+| Row-security read speed-up, tested | `supabase/migrations/20261110170000_rls_read_speedup.sql` |
+| Avatar removed from audit history snapshots | `supabase/migrations/20261110180000_audit_history_actor_snapshot_without_avatar.sql` |
+| Pending release manifest listing all three pending migrations | `supabase/preflight/aitask_release_manifest_20261110_workload_rls_read_speedup_production.json` |
+| Tests | `rls_read_speedup.test.sql` (17), `audit_history_actor_snapshot.test.sql` (5); two old text-matching tests updated |
+
+**Test evidence (local replay of all 148 migrations, no production writes):** pgTAP suite 92 files, 1,285 assertions, 0 failures. Deliberately broken policies fail the new equivalence test (7 and 2 failures), so it does catch regressions.
+
+**Corrections to the original handoff**
+
+1. **The first draft did not speed anything up.** Run unchanged on a replay with production-shaped data, it returned identical rows but no faster: the set functions were built twice and each candidate still paid for `aitask_can_view_task`. The shipped version uses one combined `aitask_rls_visible_entities()` referenced once. Measured by shared buffer hits (stable under machine load) for a full workspace read: Project Manager 34,971 to 17,985, HOD 59,166 to 24,539, Staff 64,880 to 33,194, Client 4,090 to 1,098. The "485 to 600 ms" Staff figure in section 5 came from inlined SQL and should not be quoted; real Staff gain is about 49% less work, not 3x.
+2. **`aitask_read_notifications` is fixed by the same migration.** It reads through row security, so each notification row paid for about six helper calls. Helper calls per read fell from roughly 6,000 to 8,800 down to 140 to 190.
+3. **The history table is 83 MB because of the avatar, not before/after copies.** 73 MB of it is the actor's avatar (about 33 kB) copied into `actor_snapshot` on 2,276 of 2,722 rows. Before and after values total about 2 MB. The new avatar migration stops the growth. Old rows are append-only and untouched; shrinking them is still an owner decision.
+4. **No schema.sql or fingerprint regeneration is needed.** `supabase/schema.sql` is the legacy snapshot importer and `preflight/schema_fingerprint.sql` is a query, not a stored output. The release gate is the manifest plus `verify-supabase-rollout`.
+5. **`verify:release-db-alignment` fails on purpose** while migrations are pending. It already failed before this work because of the HOD workload migration.
+6. **The two SQL errors on 9 Nov** match no statement in the repo or in any function body, and look like one-off ad-hoc queries on `aitask_members`.
+7. **The signed-out "permission denied" bursts are the project's own check.** `pnpm verify:supabase` probes production anonymously and expects denial: 14 denied calls per run. A burst at 07:32 UTC matches a run made during this session; earlier bursts match earlier runs.
+
+**Second performance pass: `aitask_get_workflow_task_context` (not fixed)**
+
+Call counts for one invocation on the seeded replay (counts, not timings):
+
+- Staff: 400 tasks scanned, `aitask_can_view_task` called 620 times (the review helpers call it again), `aitask_has_permission` 356, `aitask_role_is_department_scoped` 356.
+- Project Manager: 103 tasks returned, `aitask_can_view_task` 1,008 times, `aitask_can_sign_task_review` 206 (twice per task), `aitask_task_reviewers` 186, and `aitask_review_member_can_lead` **3,182 times, about 31 per task**.
+
+Suggested next step: resolve the actor once per call and pass it down, and compute the review decision once per task. It needs its own check that the returned jsonb is identical for every role before and after.
+
+**Review of `b6f4e7a`:** no blocking defects. Money figure reuses the existing `contractedMonthly` lookup and price gate; currency is typed `'MYR'`. Type check, lint, i18n (0 findings), 1,119 unit tests and `verify:bundle` (271.8 KiB gzip of 300) pass. Minor, not fixed: the client "View all N" link counts all review tasks while the list counts only those the client may review; the company health card is titled "Weekly" and "updated daily" but is computed live and lists every client including zero-issue rows; "Unlinked work this month" is not memoised and loops tasks by deliverables on every render. E2E: 7 of 8 specs pass. `client-workspace-v2.spec.ts:5` fails, but it fails identically at `4c560cf` (before that commit), where the app stays on "Loading AiTask…" after the test seeds its state.
+
+**Still needs the owner**
+
+- Approve applying, in a quiet period, the three pending migrations in timestamp order. The RLS migration holds an exclusive lock on `aitask_entities` while it verifies each login (10 s `lock_timeout`). After it is live, reset query statistics so new numbers reflect new code.
+- Retention for the 2,722 existing history rows (about 74 MB is avatar copies). Options: leave as is, or a one-off scrub in a controlled maintenance step, because the table is append-only by design.
+- Drop `private.r3_backup_20261109_entities` (952 kB), `_members` (152 kB), `_workspaces` (16 kB)? They are small, so there is no urgency.
+- Four never-scanned indexes (all under 110 kB, so not worth dropping yet) and one missing index on `aitask_tutorial_feedback.auth_user_id`: low value, left alone.
+- Whether to announce the 10 Nov role changes. `RELEASE_NOTICE_ID` is checked against a list inside a database function, so a new notice needs its own migration and would re-show a popup to everyone.
+- Alerting: timeouts are only visible by reading logs.
+
 ## 1. Where things stand
 
 | Item | State |
