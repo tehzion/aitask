@@ -10,6 +10,7 @@ import {
   getClientDeliveryStage,
   getClientDeliveryStageLabel,
   getClientFocusTask,
+  getClientTaskTitle,
   getClientLatestUpdates,
   groupClientDeliveries,
 } from '../lib/clientPortal';
@@ -76,7 +77,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-2">
           <Link data-i18n-skip to={taskPath(task)} className="truncate text-sm font-semibold text-ink transition-colors duration-160 hover:text-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-            {task.title}
+            {getClientTaskTitle(task)}
           </Link>
           <StatusChip tone={stageTone(task)}>{getLocalizedDeliveryStage(getClientDeliveryStageLabel(task), locale)}</StatusChip>
         </div>
@@ -101,7 +102,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
                 {focusStage === 'needs_review' ? <FileCheck2 className="h-4 w-4" /> : focusStage === 'timing_changed' ? <TimerReset className="h-4 w-4" /> : <CalendarDays className="h-4 w-4" />}
                 <p className="calm-eyebrow text-current">{focusStage === 'needs_review' ? t('clientPortal.needsReview') : focusStage === 'timing_changed' ? t('clientPortal.timingChanged') : t('clientPortal.nextDelivery')}</p>
               </div>
-              <h2 id="client-focus-title" data-i18n-skip className="mt-4 max-w-[22ch] text-pretty text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-3xl">{focusTask.title}</h2>
+              <h2 id="client-focus-title" data-i18n-skip className="mt-4 max-w-[22ch] text-pretty text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-3xl">{getClientTaskTitle(focusTask)}</h2>
               <p className="mt-3 max-w-[62ch] text-pretty text-sm leading-6 text-muted">
                 {focusTask.description ? <span data-i18n-skip>{focusTask.description}</span> : t(focusStage === 'needs_review' ? 'clientPortal.deliveryReadyDescription' : 'clientPortal.agencyPreparing')}
               </p>
@@ -170,7 +171,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
         <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80" aria-labelledby="shared-updates-title">
           <header className="border-b border-line/70 px-4 py-4 sm:px-5"><div className="flex items-center gap-2"><MessageSquareText className="h-4 w-4 text-accent" /><h2 id="shared-updates-title" className="font-semibold text-ink">{t('clientPortal.sharedUpdates')}</h2></div><p className="mt-1 text-sm text-muted">{t('clientPortal.latestMovement')}</p></header>
           <div className="divide-y divide-line/70">
-            {updates.map(task => <Link key={task.id} to={taskPath(task)} className="group flex min-h-16 items-center justify-between gap-4 px-4 py-3 transition-colors duration-160 hover:bg-inset sm:px-5"><span className="min-w-0"><span data-i18n-skip className="block truncate text-sm font-medium text-ink">{task.title}</span><span className="mt-1 block text-xs text-muted">{getLocalizedDeliveryStage(getClientDeliveryStageLabel(task), locale)}</span></span><span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted"><Clock3 className="h-3.5 w-3.5" />{task.updatedAt ? formatLocalizedDistanceToNow(new Date(task.updatedAt), locale) : ''}</span></Link>)}
+            {updates.map(task => <Link key={task.id} to={taskPath(task)} className="group flex min-h-16 items-center justify-between gap-4 px-4 py-3 transition-colors duration-160 hover:bg-inset sm:px-5"><span className="min-w-0"><span data-i18n-skip className="block truncate text-sm font-medium text-ink">{getClientTaskTitle(task)}</span><span className="mt-1 block text-xs text-muted">{getLocalizedDeliveryStage(getClientDeliveryStageLabel(task), locale)}</span></span><span className="inline-flex shrink-0 items-center gap-1 text-xs text-muted"><Clock3 className="h-3.5 w-3.5" />{task.updatedAt ? formatLocalizedDistanceToNow(new Date(task.updatedAt), locale) : ''}</span></Link>)}
             {updates.length === 0 && <p className="px-5 py-8 text-sm text-muted">{t('clientPortal.updatesProgress')}</p>}
           </div>
         </section>
@@ -180,7 +181,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
         <section aria-labelledby="recently-delivered-title">
           <div className="mb-3 flex items-center justify-between"><h2 id="recently-delivered-title" className="font-semibold text-ink">{t('clientPortal.recentlyDelivered')}</h2><Link to="/tasks?stage=delivered" className="text-sm font-semibold text-accent">{t('clientPortal.viewHistory')}</Link></div>
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {delivered.slice(0, 3).map(task => <Link key={task.id} to={taskPath(task)} className="group rounded-panel bg-surface p-4 ring-1 ring-line/80 transition duration-160 hover:-translate-y-0.5 hover:ring-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"><CheckCircle2 className="h-5 w-5 text-emerald-600" /><p data-i18n-skip className="mt-3 truncate text-sm font-semibold text-ink">{task.title}</p><p data-i18n-skip className="mt-1 text-xs text-muted">{task.serviceType}</p></Link>)}
+            {delivered.slice(0, 3).map(task => <Link key={task.id} to={taskPath(task)} className="group rounded-panel bg-surface p-4 ring-1 ring-line/80 transition duration-160 hover:-translate-y-0.5 hover:ring-accent/30 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"><CheckCircle2 className="h-5 w-5 text-emerald-600" /><p data-i18n-skip className="mt-3 truncate text-sm font-semibold text-ink">{getClientTaskTitle(task)}</p><p data-i18n-skip className="mt-1 text-xs text-muted">{task.serviceType}</p></Link>)}
           </div>
         </section>
       )}

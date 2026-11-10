@@ -109,8 +109,11 @@ export const getWorkloadSignal = (
   period: TeamWorkloadPeriod,
   periodOpen: number,
   overdue: number,
+  /** All open work for one person; a long backlog is busy whatever is due (gap audit). */
+  totalOpen?: number,
 ): TeamWorkloadSignal => {
   if (overdue > 0) return 'attention';
+  if (totalOpen !== undefined && totalOpen >= 12) return 'busy';
   const busyThreshold = period === 'today' ? 4 : period === 'week' ? 8 : 12;
   const balancedThreshold = period === 'today' ? 1 : period === 'week' ? 3 : 5;
   if (periodOpen >= busyThreshold) return 'busy';
@@ -240,7 +243,7 @@ export const getTeamWorkloadSummaries = (
         waitingApproval: openTasks.filter(task => task.status === 'Waiting Approval').length,
         completedThisWeek,
         periodOpen,
-        signal: getWorkloadSignal(period, periodOpen, overdue),
+        signal: getWorkloadSignal(period, periodOpen, overdue, openTasks.length),
       };
     });
 };

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task, User } from '../types';
-import { buildStaffWorkQueue, getLatestRevisionNote, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks, getUnavailableTaskDependencyCount, isStaffGuidedActionEnabled } from './staffWorkspace';
+import { buildStaffWorkQueue, getLatestRevisionNote, getStaffFocusTask, getStaffGuidedAction, getTaskBlockers, getHodScopeTasks, getUnavailableTaskDependencyCount, isStaffGuidedActionEnabled, isTaskWaitingOnEarlierSteps } from './staffWorkspace';
 import { getTaskStatusControls } from './taskStatusControls';
 
 const task = (overrides: Partial<Task>): Task => ({
@@ -225,5 +225,42 @@ describe('revision note on the card', () => {
     expect(getLatestRevisionNote(task({ revisionCount: 2, comments }))).toBe('Use the new colours');
     expect(getLatestRevisionNote(task({ revisionCount: 0, comments }))).toBeUndefined();
     expect(getLatestRevisionNote(task({ revisionCount: 1, comments: [comments[1]] }))).toBeUndefined();
+  });
+});
+
+describe('work waiting on earlier steps (role audit, 10 Nov 2026)', () => {
+  const shooting = task({ id: 'shooting', title: '5. Shooting' });
+  const editing = task({ id: 'editing', predecessorTaskIds: ['shooting'], dueDate: '2026-08-20' });
+  const hidden = task({ id: 'hidden-pred', predecessorTaskIds: ['not-visible'], dueDate: '2026-08-21' });
+  const hiddenDone = task({ id: 'hidden-done', predecessorTaskIds: ['not-visible'], workflowDependenciesReady: true });
+
+  it('waits on open visible steps and on hidden steps the server has not confirmed done', () => {
+    const visible = [shooting, editing, hidden, hiddenDone];
+    expect(isTaskWaitingOnEarlierSteps(editing, visible)).toBe(true);
+    expect(isTaskWaitingOnEarlierSteps(hidden, visible)).toBe(true);
+    expect(isTaskWaitingOnEarlierSteps(hiddenDone, visible)).toBe(false);
+    expect(isTaskWaitingOnEarlierSteps(shooting, visible)).toBe(false);
+    expect(isTaskWaitingOnEarlierSteps(editing, [{ ...shooting, status: 'Completed', isCompleted: true }, editing])).toBe(false);
+    // Started work is never held back, even with an earlier step still open.
+    expect(isTaskWaitingOnEarlierSteps({ ...editing, status: 'In Progress' }, visible)).toBe(false);
+    expect(isTaskWaitingOnEarlierSteps({ ...hidden, status: 'Revision' }, visible)).toBe(true);
+  });
+
+  it('sorts waiting work last and never picks it as the focus task', () => {
+    const later = task({ id: 'later', dueDate: '2026-09-10' });
+    const visible = [shooting, editing, hidden, later];
+    const isBlocked = (item: Task) => isTaskWaitingOnEarlierSteps(item, visible);
+    const queue = buildStaffWorkQueue([editing, hidden, later], '2026-08-26', { isBlocked });
+    expect(queue.needs_action.map(item => item.id)).toEqual(['editing', 'hidden-pred']);
+    expect(getStaffFocusTask(queue, isBlocked)?.id).toBe('later');
+    const allBlocked = buildStaffWorkQueue([editing, hidden], '2026-08-26', { isBlocked });
+    expect(getStaffFocusTask(allBlocked, isBlocked)).toBeUndefined();
+  });
+
+  it('puts an HOD\'s hand-out decisions under Needs action', () => {
+    const toAssign = task({ id: 'assign-me', dueDate: '2026-09-20', assignmentState: 'pending_hod', assignedTo: 'hod-1', responsibleHodId: 'hod-1' });
+    const queue = buildStaffWorkQueue([toAssign], '2026-08-26', { needsAction: item => item.id === 'assign-me' });
+    expect(queue.needs_action.map(item => item.id)).toEqual(['assign-me']);
+    expect(buildStaffWorkQueue([toAssign], '2026-08-26').up_next.map(item => item.id)).toEqual(['assign-me']);
   });
 });

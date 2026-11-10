@@ -4,6 +4,7 @@ import {
   getClientCurrentCycle,
   getClientApprovalDate,
   getClientServicePlan,
+  getClientTaskTitle,
   getClientDeliveryStage,
   getClientDeliveryStageLabel,
   getClientDeliveryStageTone,
@@ -225,5 +226,14 @@ describe('recorded client approval timing', () => {
     expect(getClientApprovalDate(makeTask({ clientApprovalStatus: 'Rejected', approvalHistory: [
       { id: 'old', userId: 'client', status: 'Approved', createdAt: '2026-10-02T12:00:00Z' },
     ] }))).toBeNull();
+  });
+});
+
+describe('client task titles', () => {
+  it('drops the internal step number only', () => {
+    expect(getClientTaskTitle({ title: '4. Client Script Approval' })).toBe('Client Script Approval');
+    expect(getClientTaskTitle({ title: '10. Posting' })).toBe('Posting');
+    expect(getClientTaskTitle({ title: '2026 launch video' })).toBe('2026 launch video');
+    expect(getClientTaskTitle({ title: 'Plan v1.5 review' })).toBe('Plan v1.5 review');
   });
 });

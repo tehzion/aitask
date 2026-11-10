@@ -10,7 +10,8 @@ const screenshotOptions = (page: import('@playwright/test').Page) => ({
   animations: 'disabled' as const,
   caret: 'hide' as const,
   scale: 'css' as const,
-  mask: [page.getByAltText('Staff Demo')],
+  // The per-task save note fades on a timer, so it is masked rather than raced.
+  mask: [page.getByAltText('Staff Demo'), page.locator('[data-task-save-note]')],
 });
 
 const openStaffWorkspace = async (page: import('@playwright/test').Page) => {
@@ -66,13 +67,15 @@ test('staff v2 puts assigned action ahead of manager controls', async ({ page })
   await page.locator('main').getByRole('button', { name: 'Clear search' }).click();
   await expect(workSearch).toHaveValue('');
   await expect(page).toHaveURL(/\/tasks$/);
+  // Clearing the search can leave the main panel slightly scrolled.
+  await page.locator("main").evaluate(element => { element.scrollTop = 0; });
   if (hasCommittedVisualBaseline) {
     await expect(page).toHaveScreenshot('staff-v2-all-work-desktop-light.png', screenshotOptions(page));
   }
 
   // The task card shows its flags beside the title button that opens it.
   const taskRow = page.locator('article').filter({ has: page.getByRole('button', { name: /6\. Video Editing/ }) });
-  await expect(taskRow).toContainText('Dependency status unavailable');
+  await expect(taskRow).toContainText('Waits on an earlier step');
   await taskRow.getByRole('button', { name: /6\. Video Editing/ }).click();
   await expect(page.getByRole('button', { name: /^(Send|Resubmit) for review$/ })).toBeVisible();
   const taskFocusAxe = await new AxeBuilder({ page }).include('[role="dialog"]').analyze();

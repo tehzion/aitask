@@ -14,6 +14,11 @@ export interface TaskSaveMark {
   savedSeenAt?: number;
   /** Local time (ms) of the change, used only to keep the newest marks. */
   at: number;
+  /**
+   * Set when the save failed with no automatic retry (gap audit). `final` means
+   * the change was discarded; otherwise a later landed save clears it.
+   */
+  failed?: { savedBefore?: string; final: boolean };
 }
 
 interface TaskSaveMarksState {
@@ -48,9 +53,23 @@ export const noteTaskSaveSeen = (id: string, at = Date.now()) => useTaskSaveMark
   return { marks: { ...state.marks, [id]: { ...mark, savedSeenAt: at } } };
 });
 
+/** Mark every change that has not saved yet as failed. */
+export const markTaskSavesFailed = (lastSavedAt: string | undefined, final: boolean) => useTaskSaveMarks.setState(state => {
+  let changed = false;
+  const marks = { ...state.marks };
+  for (const [id, mark] of Object.entries(marks)) {
+    // Only changes no save has covered yet; one already saved stays saved.
+    if (mark.savedBefore !== lastSavedAt || mark.savedSeenAt) continue;
+    if (mark.failed?.final && !final) continue;
+    marks[id] = { ...mark, failed: { savedBefore: lastSavedAt, final } };
+    changed = true;
+  }
+  return changed ? { marks } : state;
+});
+
 export const clearTaskSaveMarks = () => useTaskSaveMarks.setState({ marks: {} });
 
-export type TaskSaveState = 'saving' | 'waiting' | 'saved' | null;
+export type TaskSaveState = 'saving' | 'waiting' | 'saved' | 'failed' | null;
 
 /** How long "Saved" stays visible once the save has landed. */
 export const SAVED_VISIBLE_MS = 5_000;
@@ -67,8 +86,9 @@ const WAITING_STATUSES = ['offline', 'retry_required', 'conflict', 'refresh_requ
 
 /**
  * The note for one task: "saving" while its change is unsaved, "waiting" when
- * the save cannot go through right now, "saved" briefly once a save after the
- * change has landed, otherwise nothing.
+ * the save cannot go through right now, "failed" when it did not save and will
+ * not retry on its own, "saved" briefly once a save after the change has
+ * landed, otherwise nothing.
  */
 export const getTaskSaveState = (
   mark: TaskSaveMark | undefined,
@@ -77,6 +97,11 @@ export const getTaskSaveState = (
 ): TaskSaveState => {
   if (!mark) return null;
   const unsaved = backend.hasLocalChanges || backend.pendingMutations > 0 || backend.isSaving;
+  if (mark.failed) {
+    // A discarded change never saves; a failed one shows "Not saved" until a later save lands.
+    const landedSince = !unsaved && Boolean(backend.lastSavedAt) && backend.lastSavedAt !== mark.failed.savedBefore;
+    if (mark.failed.final || !landedSince) return 'failed';
+  }
   if (unsaved) return options.offline || WAITING_STATUSES.includes(backend.status) ? 'waiting' : 'saving';
   // A change discarded or reloaded without a save never shows "Saved".
   if (!backend.lastSavedAt || backend.lastSavedAt === mark.savedBefore) return null;

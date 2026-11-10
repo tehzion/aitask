@@ -170,3 +170,9 @@ export const getClientApprovalDate = (task: Task): Date | null => {
     .filter((date): date is Date => Boolean(date));
   return dates.sort((left, right) => right.getTime() - left.getTime())[0] || null;
 };
+
+/**
+ * A task title as a client should read it: the agency's internal step number
+ * ("4. Client Script Approval") is dropped (role audit, 10 Nov 2026).
+ */
+export const getClientTaskTitle = (task: Pick<Task, 'title'>) => (task.title || '').replace(/^\s*\d{1,3}\.\s+/, '') || task.title;

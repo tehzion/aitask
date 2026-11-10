@@ -39,15 +39,18 @@ export const getStaffDashboardMetrics = (
     const key = getClientKey(plan);
     return plan.status === 'Active' && key !== undefined && clientKeys.has(key);
   });
+  const renewalPlans = activePlans
+    .map(plan => ({ plan, daysLeft: getContractDaysRemaining(plan.contractEndDate, today) }))
+    .filter((item): item is { plan: ClientServicePlan; daysLeft: number } => item.daysLeft !== null && item.daysLeft >= 0 && item.daysLeft <= 30)
+    .sort((left, right) => left.daysLeft - right.daysLeft);
   return {
     blockedCount: tasks.filter(task => getTaskBlockers(task, visibleTasks).length > 0 || (isTaskOpen(task) && task.workState?.blocker)).length,
     unavailableDependencyTaskCount: tasks.filter(task => getUnavailableTaskDependencyCount(task, visibleTasks) > 0).length,
     assignedClientCount: clientKeys.size,
     activePlanCount: activePlans.length,
-    renewals: activePlans.filter(plan => {
-      const days = getContractDaysRemaining(plan.contractEndDate, today);
-      return days !== null && days >= 0 && days <= 30;
-    }).length,
+    renewals: renewalPlans.length,
+    /** Plans ending in the next 30 days, soonest first (Account home, role audit). */
+    renewalPlans,
     linkedOutputs: new Set(tasks.filter(task => task.status !== 'Cancelled').map(task => task.deliverableId).filter(Boolean)).size,
     dueToday: tasks.filter(task => isTaskOpen(task) && task.dueDate === todayKey).length,
     waitingReview: tasks.filter(task => isTaskOpen(task) && task.status === 'Waiting Approval').length,

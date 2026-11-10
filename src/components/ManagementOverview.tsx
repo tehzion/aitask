@@ -78,8 +78,9 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
         </div>
         <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
           {workload.map(row => {
-            const tone = row.signal === 'overloaded' ? 'text-red-700 bg-red-50' : row.signal === 'busy' ? 'text-amber-700 bg-amber-50' : 'text-emerald-700 bg-emerald-50';
-            return <div key={row.member.id} className="rounded-control border border-line/70 bg-inset/30 p-3"><div className="flex items-start justify-between gap-3"><p className="truncate text-sm font-semibold text-ink" data-i18n-skip>{row.member.name}</p><span className={cn('shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold capitalize', tone)}>{t(row.signal)}</span></div><p className="mt-2 text-xs text-muted">{row.open} {t('open')} · {row.dueSoon} {t('due soon')} · {row.projects} {t('projects')}</p></div>;
+            const tone = row.signal === 'attention' ? 'text-red-700 bg-red-50' : row.signal === 'busy' ? 'text-amber-700 bg-amber-50' : row.signal === 'balanced' ? 'text-blue-700 bg-blue-50' : 'text-emerald-700 bg-emerald-50';
+            const label = row.signal === 'attention' ? 'Attention' : row.signal === 'busy' ? 'Busy' : row.signal === 'balanced' ? 'Balanced' : 'Available';
+            return <div key={row.member.id} className="rounded-control border border-line/70 bg-inset/30 p-3"><div className="flex items-start justify-between gap-3"><p className="truncate text-sm font-semibold text-ink" data-i18n-skip>{row.member.name}</p><span className={cn('shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold', tone)}>{t(label)}</span></div><p className="mt-2 text-xs text-muted">{row.open} {t('open')} · {row.dueSoon} {t('due this week')} · {row.projects} {t('projects')}</p></div>;
           })}
           {workload.length === 0 && <p className="text-sm text-muted">{t('No internal capacity data yet.')}</p>}
         </div>

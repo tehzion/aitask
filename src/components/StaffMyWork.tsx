@@ -8,8 +8,9 @@ import { AlertTriangle, ArrowRight, CalendarDays, CheckCircle2, Clock3, ListChec
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
+import type { Task } from '../types';
 import { getDashboardPersona, getVisibleTasks, isDepartmentScopedUser, isHodUser, canCreateTasksFromAnywhere } from '../lib/access';
-import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, getUnavailableTaskDependencyCount, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, isStaffGuidedActionEnabled, type StaffWorkBucketKey } from '../lib/staffWorkspace';
+import { buildStaffWorkQueue, getHodScopeTasks, getTaskBlockers, getUnavailableTaskDependencyCount, type HodWorkScope, getStaffBucketLabel, getStaffFocusTask, isStaffGuidedActionEnabled, isTaskWaitingOnEarlierSteps, type StaffWorkBucketKey } from '../lib/staffWorkspace';
 import { getMemberDepartments, isMemberInDepartment } from '../lib/departments';
 import { getTeamWorkloadSummaries, isTaskOpen } from '../lib/taskReporting';
 import { isTaskAwaitingAcceptance } from '../lib/taskCompletion';
@@ -23,6 +24,25 @@ import { formatLocalizedWeekdayDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getStaffDashboardMetrics } from '../lib/staffDashboard';
+import { useQuickTaskAction } from '../hooks/useQuickTaskAction';
+
+/**
+ * The focus card's main button is the next step when it takes one click, such
+ * as Start work or Send for review; opening the task stays beside it (role audit).
+ */
+const FocusTaskActions: React.FC<{ task: Task; openLabel: string; onOpen: () => void }> = ({ task, openLabel, onOpen }) => {
+  const { t } = useI18n();
+  const quickAction = useQuickTaskAction(task);
+  if (!quickAction) {
+    return <Button onClick={onOpen} className="w-full lg:w-auto">{openLabel} <ArrowRight className="h-4 w-4" /></Button>;
+  }
+  return (
+    <div className="flex w-full flex-col gap-2 sm:flex-row lg:w-auto lg:flex-col">
+      <Button onClick={() => { void quickAction.run(); }} disabled={quickAction.busy} aria-busy={quickAction.busy} aria-describedby="staff-focus-title" className="w-full lg:w-auto">{t(quickAction.label)} <ArrowRight className="h-4 w-4" /></Button>
+      <Button variant="secondary" onClick={onOpen} className="w-full lg:w-auto">{openLabel}</Button>
+    </div>
+  );
+};
 
 const bucketOrder: StaffWorkBucketKey[] = ['needs_action', 'up_next', 'waiting', 'done'];
 
@@ -74,13 +94,19 @@ const StaffMyWork: React.FC = () => {
     return getTeamWorkloadSummaries(departmentTasks, members, 'overall', todayDate)
       .sort((left, right) => right.overdue - left.overdue || right.open - left.open || left.member.name.localeCompare(right.member.name));
   }, [currentUser, departmentTasks, isDepartmentLead, todayDate, users]);
+  // Work waiting on earlier steps sorts last and never becomes the focus card.
+  const isBlocked = React.useCallback((task: Task) => isTaskWaitingOnEarlierSteps(task, accessibleTasks), [accessibleTasks]);
   const queue = React.useMemo(
     () => buildStaffWorkQueue(tasks, today, {
       isActionable: task => isStaffGuidedActionEnabled(task, taskStatuses, currentUser, rolePermissions, { users, clients, projects }, { tasks: allTasks, cycles: serviceCycles, deliverables }),
+      isBlocked,
+      // An HOD's own hand-out decisions are action items, not "up next".
+      needsAction: task => isHod && Boolean(currentUser) && task.assignedTo === currentUser?.id && isAwaitingHodAssignment(task),
     }),
-    [allTasks, clients, currentUser, deliverables, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
+    [allTasks, clients, currentUser, deliverables, isBlocked, isHod, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
   );
-  const focusTask = getStaffFocusTask(queue);
+  const focusTask = getStaffFocusTask(queue, isBlocked);
+  const waitingOnEarlierSteps = [...queue.needs_action, ...queue.up_next].filter(isBlocked).length;
   // Finished work never opens by default; Done stays one tab away as history.
   const defaultBucket = queue.needs_action.length > 0 ? 'needs_action' : queue.up_next.length > 0 ? 'up_next' : queue.waiting.length > 0 ? 'waiting' : 'needs_action';
   const [activeBucket, setActiveBucket] = React.useState<StaffWorkBucketKey>(defaultBucket);
@@ -95,7 +121,7 @@ const StaffMyWork: React.FC = () => {
     if (!hasSelectedBucketRef.current) setActiveBucket(defaultBucket);
   }, [defaultBucket, scope]);
 
-  const { blockedCount, unavailableDependencyTaskCount, assignedClientCount, activePlanCount, renewals, linkedOutputs, dueToday, waitingReview, revisions } = React.useMemo(
+  const { blockedCount, unavailableDependencyTaskCount, assignedClientCount, activePlanCount, renewals, renewalPlans, linkedOutputs, dueToday, waitingReview, revisions } = React.useMemo(
     () => getStaffDashboardMetrics(tasks, accessibleTasks, clientPlans, todayDate, clients),
     [accessibleTasks, clientPlans, clients, tasks, todayDate],
   );
@@ -193,16 +219,16 @@ const StaffMyWork: React.FC = () => {
                 </div>
               )}
             </div>
-            <Button onClick={() => openTask(focusTask.id)} className="w-full lg:w-auto">
-              {t('Open task')} <ArrowRight className="h-4 w-4" />
-            </Button>
+            <FocusTaskActions task={focusTask} openLabel={isHod && focusTask.assignedTo === currentUser?.id && isAwaitingHodAssignment(focusTask) ? t('Assign to…') : t('Open task')} onOpen={() => openTask(focusTask.id)} />
           </div>
         </section>
       ) : (
         <Surface variant="raised" className="p-6 sm:p-8">
-          {queue.waiting.length > 0 ? <Clock3 aria-hidden="true" className="h-9 w-9 text-accent" /> : <CheckCircle2 aria-hidden="true" className="h-9 w-9 text-accent" />}
-          <h2 className="mt-4 text-xl font-semibold text-ink">{queue.waiting.length > 0 ? t('Waiting for review') : isHod && scope === 'department' ? t('Your department queue is clear') : t('Your assigned queue is clear')}</h2>
-          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">{queue.waiting.length > 0 ? <>{queue.waiting.length} {t('Waiting review')}</> : isHod ? t('New department work will appear here. Finished tasks stay under Done.') : t('New assignments will appear here. Finished tasks stay under Done.')}</p>
+          {queue.waiting.length > 0 || waitingOnEarlierSteps > 0 ? <Clock3 aria-hidden="true" className="h-9 w-9 text-accent" /> : <CheckCircle2 aria-hidden="true" className="h-9 w-9 text-accent" />}
+          <h2 className="mt-4 text-xl font-semibold text-ink">{waitingOnEarlierSteps > 0 ? t('Nothing can start yet') : queue.waiting.length > 0 ? t('Waiting for review') : isHod && scope === 'department' ? t('Your department queue is clear') : t('Your assigned queue is clear')}</h2>
+          <p className="mt-1 max-w-[52ch] text-sm leading-6 text-muted">{waitingOnEarlierSteps > 0
+            ? t(waitingOnEarlierSteps === 1 ? '{count} task is waiting on an earlier step. It moves here when that step is done.' : '{count} tasks are waiting on earlier steps. They move here when those steps are done.', { count: waitingOnEarlierSteps })
+            : queue.waiting.length > 0 ? <>{queue.waiting.length} {t('Waiting review')}</> : isHod ? t('New department work will appear here. Finished tasks stay under Done.') : t('New assignments will appear here. Finished tasks stay under Done.')}</p>
         </Surface>
       )}
 
@@ -238,8 +264,19 @@ const StaffMyWork: React.FC = () => {
         <div className="grid grid-cols-3 divide-x divide-line border-t border-line bg-surface/60">
           {roleInsight.values.map(([label, value]) => <div key={label} className="px-3 py-4 sm:px-5"><p className="calm-number text-xl font-semibold text-ink">{value}</p><p className="mt-1 text-xs leading-4 text-muted">{label}</p></div>)}
         </div>
-        {contextUnavailableDependencyTaskCount > 0 && <p className="flex items-start gap-2 border-t border-line px-5 py-3 text-sm text-muted"><AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" /><span>{t('Dependency status unavailable')} · {t('Tasks')}: {contextUnavailableDependencyTaskCount}</span></p>}
+        {contextUnavailableDependencyTaskCount > 0 && <p className="flex items-start gap-2 border-t border-line px-5 py-3 text-sm text-muted"><AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" /><span>{t(contextUnavailableDependencyTaskCount === 1 ? '{count} task waits on an earlier step you cannot see. Ask your PM if it is urgent.' : '{count} tasks wait on earlier steps you cannot see. Ask your PM if one is urgent.', { count: contextUnavailableDependencyTaskCount })}</span></p>}
       </Surface>
+
+      {persona === 'account' && !isDepartmentLead && renewalPlans.length > 0 && <section aria-labelledby="account-renewals-title">
+        <h2 id="account-renewals-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{t('Upcoming renewals')}</h2>
+        <p className="mt-1 text-sm text-muted">{t('Plans for your clients that end in the next 30 days.')}</p>
+        <Surface className="mt-4 divide-y divide-line/70 overflow-hidden">
+          {renewalPlans.map(({ plan, daysLeft }) => <Link key={plan.id} to={`/clients/${encodeURIComponent(plan.clientId)}`} className="flex items-center justify-between gap-3 px-5 py-4 hover:bg-inset/65 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
+            <span className="min-w-0"><span data-i18n-skip className="block truncate font-semibold text-ink">{plan.clientName}</span><span data-i18n-skip className="block truncate text-sm text-muted">{plan.name}</span></span>
+            <span className="shrink-0 text-sm font-medium text-ink">{daysLeft === 0 ? t('Ends today') : daysLeft === 1 ? t('Ends tomorrow') : t('Ends in {count} days', { count: daysLeft })}</span>
+          </Link>)}
+        </Surface>
+      </section>}
 
       {isHod && <section aria-labelledby="hod-workload-title">
         <h2 id="hod-workload-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{t('Department workload')}</h2>

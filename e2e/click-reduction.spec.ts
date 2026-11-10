@@ -112,7 +112,7 @@ test('Staff start their work from the list without opening the task', async ({ p
     const task = state.tasks.find(item => item.assignedTo === staff.id && ['Pending', 'Revision'].includes(item.status) && !item.dependencies?.length)
       || state.tasks.find(item => item.assignedTo === staff.id && item.status === 'In Progress');
     if (!task) throw new Error('no staff task');
-    const ready = { ...task, status: 'Pending' as const, isCompleted: false, dependencies: [], revisionCount: 0, title: 'List quick start task' };
+    const ready = { ...task, status: 'Pending' as const, isCompleted: false, dependencies: [], predecessorTaskIds: [], revisionCount: 0, title: 'List quick start task' };
     useStore.setState({
       currentUser: { ...staff, mustResetPassword: false },
       tasks: state.tasks.map(item => item.id === task.id ? ready : item),

@@ -71,3 +71,26 @@ These enhancements build on features already live, grouped by the role that bene
 - **Per-role release notice:** notice `2026-11-everyday-saves` replaces the August one, with separate copy for Boss, PM, HOD, Staff and client (English and Chinese). HOD is detected with the role templates, so custom HOD roles get the HOD copy.
 - **Shortcut hints:** New task buttons show an "N" key on desktop, the search field shows "/", and sidebar links show "Shortcut: G T" (etc.) on hover. Controls carry `aria-keyshortcuts`.
 - Not built yet: company health line, contract value at risk, "My day" order for PMs, unlinked-work warning, client approve-in-one-place.
+
+## Role audit fixes (10 Nov 2026)
+
+A pass through each role's home and lists, checked in the local demo.
+
+- **One progress count:** the delivery tracker, client home and management report all count delivered work the same way (`isDeliverableWorkDone`, so Ready counts). The tracker's week and month views count the whole current month instead of only the items with a task.
+- **Blocked work waits:** a Staff task whose earlier step is still open, or hidden and not confirmed done by the server (`workflowDependenciesReady`), shows "Waiting on: {step}" instead of Start work. It sorts last and never becomes the focus task. One-click Start follows the same rule.
+- **HOD assigns first:** an HOD's own hand-out tasks count as needing action, and the focus button reads "Assign to…".
+- **Workload label:** the shared employee workload uses the same week signal as the team view (available / balanced / busy / attention).
+- **Reports:** on-time rates show "—" when nothing has been tracked yet instead of 0%.
+- **Client & project monitor:** each company shows its project PMs as owners rather than "Unassigned".
+- **Client step names:** clients see "Client Approval" rather than "8. Client Approval" on the home page and delivery tracker.
+- **Send to client:** a PM approving a client-approval step sees "Send to client", since that is what makes the step visible to the client.
+- **Staff focus card:** when the next step takes one click (Start work, Send for review), it is the main button, with Open task beside it.
+- **Account & Finance home:** lists plans for their clients that end in the next 30 days, soonest first, each linking to the company.
+- Not changed: an HOD sees other departments' Staff workload only through project membership, which is a server visibility rule.
+
+## Gap fixes (10 Nov 2026)
+
+- **Bulk approve warns about client sends:** client-approval steps carry a "Sends to client" tag in the list, and the confirmation says "{n} of these will be sent to the client."
+- **One workload window:** the workload card counts work due this work week (`getOperationsPeriod`), the same window as the Team workload table, and labels it "due this week".
+- **Backlog counts:** `getWorkloadSignal` takes an optional total open count; one person with 12 or more open tasks is "busy" on both the card and the table. Department rows are unchanged.
+- **"Not saved" note:** a task's save note shows "Not saved" when its save failed with no automatic retry, and stays that way after a discard until the task is edited again. A later save that lands turns it back to "Saved".

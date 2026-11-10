@@ -36,6 +36,7 @@ import { useImeSafeInput } from '../hooks/useImeSafeInput';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import PersonalTaskViews from '../components/PersonalTaskViews';
+import ShortcutKey from '../components/ShortcutKey';
 import { taskPreferencesKey } from '../lib/personalTaskViews';
 import { shouldApplyTaskListScope, TASK_LIST_SCOPE_PARAM } from '../lib/taskListScope';
 
@@ -481,9 +482,10 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
         hideDescriptionOnMobile
         meta={viewsSlot}
         action={canCreateTasksFromAnywhere(currentUser, rolePermissions) ? (
-          <Button data-onboarding-target="create-task" onClick={() => setCreateTaskModalOpen(true)}>
+          <Button data-onboarding-target="create-task" aria-keyshortcuts="N" onClick={() => setCreateTaskModalOpen(true)}>
             <Plus className="h-4 w-4" />
             {t('New task')}
+            <ShortcutKey className="ml-1">N</ShortcutKey>
           </Button>
         ) : null}
       />

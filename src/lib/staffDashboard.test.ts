@@ -119,4 +119,15 @@ describe('Staff dashboard scoped metrics', () => {
       .toMatchObject({ unavailableDependencyTaskCount: 1, blockedCount: 0 });
     expect(getStaffDashboardMetrics([predecessor], [predecessor], [], today).unavailableDependencyTaskCount).toBe(0);
   });
+
+  it('lists renewals from today through 30 days, soonest first', () => {
+    const assigned = task();
+    const ending = (id: string, contractEndDate: string) => plan({ id, contractEndDate });
+    // today is 7 Oct 2026: 0, 1, 30 and 31 days away, plus one already ended.
+    const plans = [ending('d30', '2026-11-06'), ending('d1', '2026-10-08'), ending('d0', '2026-10-07'), ending('d31', '2026-11-07'), ending('past', '2026-10-06')];
+    const metrics = getStaffDashboardMetrics([assigned], [assigned], plans, today);
+    expect(metrics.renewalPlans.map(item => [item.plan.id, item.daysLeft])).toEqual([['d0', 0], ['d1', 1], ['d30', 30]]);
+    expect(metrics.renewals).toBe(3);
+    expect(getStaffDashboardMetrics([assigned], [assigned], [ending('none', '')], today).renewalPlans).toEqual([]);
+  });
 });

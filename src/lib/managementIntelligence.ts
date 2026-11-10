@@ -16,8 +16,9 @@ import type {
 import { getClientTaskStage } from './clientPortal';
 import { assessProjectHealth, getPortfolioReviewQueues } from './pmDashboard';
 import { projectStatus } from './projectManagement';
+import { isDeliverableWorkDone } from './serviceManagement';
 import { isTaskCompleted } from './taskCompletion';
-import { isTaskOpen, isTaskOverdue } from './taskReporting';
+import { getOperationsPeriod, getWorkloadSignal, isTaskOpen, isTaskOverdue } from './taskReporting';
 import { parseOptionalDate } from './utils';
 
 export type ManagementAttentionSeverity = 'information' | 'attention' | 'critical';
@@ -367,11 +368,13 @@ export const getMonthlyOperationalReport = ({
   });
   const completedTasks = monthTasks.filter(task => isTaskCompleted(task) && inMonth(task.completedAt));
   const outstandingTasks = monthTasks.filter(task => isTaskOpen(task));
-  const completedDeliverables = deliverables.filter(item => item.status === 'Delivered' && inMonth(item.deliveredAt));
   const reportDeliverables = deliverables.filter(item => {
     const cycle = serviceCycles.find(candidate => candidate.id === item.cycleId);
     return Boolean(cycle && (inMonth(cycle.periodStart) || inMonth(cycle.periodEnd)));
   });
+  // Same rule as the portfolio, client home and delivery tracker: this month's
+  // deliveries, with finished work (Ready) counted the same as Delivered.
+  const completedDeliverables = reportDeliverables.filter(isDeliverableWorkDone);
   const pendingApprovals = getPortfolioReviewQueues(monthTasks).waitingCount;
   const renewals = clientPlans.filter(plan => inMonth(plan.nextCycleStart || plan.contractEndDate)).length;
   const projectRows = projects.map(project => {
@@ -414,19 +417,19 @@ export const getSharedEmployeeWorkload = (
 ) => users
   .filter(user => user.role !== 'Client' && !user.directoryOnly)
   .map(member => {
+    const week = getOperationsPeriod(now);
     const assigned = tasks.filter(task => task.assignedTo === member.id);
     const open = assigned.filter(isTaskOpen);
     const overdue = open.filter(task => isTaskOverdue(task, now));
+    // Due this work week, the same window as the Team workload table (gap audit).
     const dueSoon = open.filter(task => {
       const due = parseOptionalDate(task.dueDate);
-      return Boolean(due && due >= startOfDay(now) && due <= endOfDay(addDays(now, 7)));
+      return Boolean(due && due >= week.start && due <= week.end);
     });
     const projectIds = new Set(assigned.map(task => task.projectId).filter(Boolean));
-    const signal = overdue.length > 0 || dueSoon.length >= 5 || open.length >= 12
-      ? 'overloaded'
-      : dueSoon.length >= 2 || open.length >= 6
-        ? 'busy'
-        : 'available';
+    // Same rule and words as the Team workload table (week view), so a person
+    // is never "Busy" on the card and "Available" in the table (role audit).
+    const signal = getWorkloadSignal('week', dueSoon.length, overdue.length, open.length);
     return { member, open: open.length, overdue: overdue.length, dueSoon: dueSoon.length, projects: projectIds.size, signal } as const;
   });
 
