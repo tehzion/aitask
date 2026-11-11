@@ -5,7 +5,7 @@ import { registerUiTranslations } from './i18n';
 // loads with the first page instead of in the startup bundle (300 KiB gzip
 // cap). Shared, store and startup copy stays in i18n.ts.
 registerUiTranslations({
-  "Running plans": "进行中的方案",
+  "Running plans": "运行中的方案",
   "Starting this month lets the team begin work and makes its deliverables visible to the client.": "开始本月后，团队可以开始工作，客户也能看到本月的交付内容。",
   "This starts the plan. Its first month begins on {date}.": "这将启动方案。首月将于 {date} 开始。",
   "This starts the plan and this month. The team can begin work, and the client will see this month's deliverables.": "这将启动方案并开始本月。团队可以开始工作，客户也能看到本月的交付内容。",
@@ -35,7 +35,7 @@ registerUiTranslations({
   "Done": "已完成",
   "In progress": "进行中",
   "Not started": "未开始",
-  "Running": "进行中",
+  "Running": "运行中",
   'This change could not be saved because access was denied.': '由于访问被拒绝，此更改未能保存。',
   'The task shown may include your unsaved change.': '当前显示的任务可能包含您尚未保存的更改。',
   'Save needs attention': '保存需要处理',
@@ -646,7 +646,7 @@ registerUiTranslations({
   'Registrations waiting for approval': '等待审批的注册申请',
   'pending registrations need your review.': '个待审批注册需要您处理。',
   'Contract renewals': '合同续约提醒',
-  'Running plans ending within 30 days.': '30 天内到期的进行中方案。',
+  'Running plans ending within 30 days.': '30 天内到期的运行中方案。',
   'Ends today': '今日到期',
   'days left': '天后到期',
   'Search pages and actions...': '搜索页面与操作…',
