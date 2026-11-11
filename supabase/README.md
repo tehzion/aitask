@@ -10,7 +10,7 @@ Production AiTask uses Supabase Auth and the authenticated, row-scoped workspace
 4. Apply every file under `supabase/migrations/` in timestamp order.
 5. Deploy the `invite-aitask-member` Edge Function with JWT verification enabled.
 6. Deploy the public `aitask-feedback` Edge Function with gateway JWT verification disabled; its submit and reviewer branches enforce their own validation and authorization.
-7. Set `AITASK_PUBLIC_URL` to the canonical HTTPS application origin and set `AITASK_FEEDBACK_REVIEWER_EMAILS` to the private comma-separated developer reviewer emails.
+7. Set `AITASK_PUBLIC_URL` to the canonical HTTPS application origin and set `AITASK_FEEDBACK_REVIEWER_AUTH_USER_IDS` to the private comma-separated developer reviewer Auth user IDs.
 8. Configure custom SMTP for Auth invitations, recovery email, and feedback reviewer magic links. The built-in Supabase mailer is not a production delivery service.
 9. Configure the frontend:
 
@@ -29,7 +29,7 @@ Until production SMTP is configured, Super Admin onboarding may skip email deliv
 
 The public checklist is available at `/feedback`; role-specific links use `?role=Staff`, `?role=Client`, `?role=Project%20Manager`, or `?role=Super%20Admin`. Responses close operationally on 30 July 2026, with later responses retained and marked late.
 
-Feedback is stored outside the synchronized workspace in `aitask_feedback_submissions`. Anonymous and normal authenticated roles have no direct table privileges. The `aitask-feedback` Edge Function accepts validated public submissions and returns read-only results only to Boss Koo or an email in `AITASK_FEEDBACK_REVIEWER_EMAILS`. `adminmojo` has a linked, non-Super-Admin workspace account and may also use the allowlisted reviewer email flow at `/feedback/results`.
+Feedback is stored outside the synchronized workspace in `aitask_feedback_submissions`. Anonymous and normal authenticated roles have no direct table privileges. The `aitask-feedback` Edge Function accepts validated public submissions and returns read-only results only to Boss Koo or an Auth user ID in `AITASK_FEEDBACK_REVIEWER_AUTH_USER_IDS`. `adminmojo` has a linked, non-Super-Admin workspace account and may also use the allowlisted reviewer identity flow at `/feedback/results`.
 
 ## v1.6.0 Command Cutover
 

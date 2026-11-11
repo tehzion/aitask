@@ -379,7 +379,7 @@ export interface StoreState {
   requestPasswordRecovery: (email: string) => Promise<{ ok: boolean; error?: string }>;
   completePasswordSetup: (data: { newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'email' | 'avatar'>) => { ok: boolean; error?: string };
-  updateCurrentUserEmail: (email: string, currentPassword: string) => Promise<{ ok: boolean; error?: string }>;
+  updateCurrentUserEmail: (email: string, currentPassword: string) => Promise<{ ok: boolean; error?: string; pendingConfirmation?: boolean }>;
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => MutationActionResult;
   updateTaskWork: (taskId: string, intent: TaskWorkIntent) => MutationActionResult;
@@ -2508,20 +2508,13 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Your secure session has expired. Sign out, then sign in again.' };
         }
 
-        const { error } = await supabase.functions.invoke('invite-aitask-member', {
+        const { data, error } = await supabase.functions.invoke('invite-aitask-member', {
           headers: { Authorization: `Bearer ${session.access_token}` },
           body: { action: 'update_self_email', email, currentPassword },
         });
         if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to update the login email.') };
-
-        const { error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError) {
-          return { ok: false, error: 'Email updated, but your session could not be refreshed. Sign out, then sign in again.' };
-        }
-        if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
-          await get().pullBackendNow({ force: true, silent: true });
-        }
-        return { ok: true };
+        if (data?.pendingConfirmation !== true) return { ok: false, error: 'Unable to start email confirmation. Please try again.' };
+        return { ok: true, pendingConfirmation: true };
       },
 
       updateCurrentUserPassword: async (data) => {
