@@ -1,6 +1,6 @@
 # Email and comment-file security release
 
-Production migration and deployment are pending owner approval. Do not run the SQL or alter production configuration without that approval.
+Applied to production on 11 Nov 2026 as migration 20261111111631 after owner approval. The Edge Functions were deployed first. No client-visible comment had attachments at apply time.
 
 ## Deployment sequence
 

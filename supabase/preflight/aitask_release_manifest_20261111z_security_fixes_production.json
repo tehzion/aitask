@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-10T17:05:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "PENDING owner approval; production history remains at 20261110174255.",
+  "status": "APPLIED 2026-11-11: production records 20261111111631_security_email_and_comment_files (owner approved); repository and production migration versions match (151/151).",
   "validatedMigrationTail": [
     "20261028120000_pm_no_hod_assignment_fallback",
     "20261028130000_service_command_guard_direct_writes",
@@ -33,21 +33,23 @@
     "20261110114150_audit_history_actor_snapshot_without_avatar",
     "20261110130438_remove_service_addons",
     "20261110174255_release_notice_start_wording",
-    "20261111072503_security_email_and_comment_files"
+    "20261111111631_security_email_and_comment_files"
   ],
-  "pendingProductionMigrations": [
-    "20261111072503_security_email_and_comment_files"
-  ],
+  "pendingProductionMigrations": [],
   "productionVerification": {
-    "historyAligned": false,
-    "historyThrough": "20261110174255_release_notice_start_wording",
-    "historyCount": 150
+    "historyAligned": true,
+    "historyThrough": "20261111111631_security_email_and_comment_files",
+    "latestAppliedMigration": "20261111111631_security_email_and_comment_files",
+    "historyCount": 151,
+    "beforeHistoryCount": 150,
+    "checks": "Email sync trigger on auth.users and comment publication guard on aitask_entities installed; aitask_can_read_service_file requires aitask_comment_file_approved; authenticated cannot execute aitask_authorize_email_change or read private.aitask_authorized_email_changes; anon cannot execute aitask_approve_comment_file; service_role can execute aitask_verified_email_change_ready.",
+    "legacyCommentAttachments": 0
   },
   "changeSummary": {
-    "20261111072503_security_email_and_comment_files": "Require confirmed Auth email synchronization and restrict publication of unreviewed cycle-comment files."
+    "20261111111631_security_email_and_comment_files": "Require confirmed Auth email synchronization and restrict publication of unreviewed cycle-comment files."
   },
   "qualityGates": {
-    "productionApply": "NOT APPLIED. Owner approval required for the exact SQL.",
+    "productionApply": "APPLIED via Supabase connector after owner approval, after the fail-closed invite-aitask-member and aitask-feedback functions were live. No client-visible comment had attachments, so no historical file needs super-admin approval.",
     "releaseOrder": "Deploy the fail-closed Edge Functions first; apply the approved migration before deploying the UI."
   }
 }
