@@ -1,0 +1,53 @@
+{
+  "manifestVersion": "2026-11-11.security-1",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261111_start_wording_notice_production.json",
+  "immutable": false,
+  "capturedAt": "2026-11-10T17:05:00Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "PENDING owner approval; production history remains at 20261110174255.",
+  "validatedMigrationTail": [
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover",
+    "20261102120000_plan_activation_entity_types",
+    "20261102130000_hod_assignee_output_files",
+    "20261102140000_addon_save_entity_types",
+    "20261102150000_task_assigned_at_format",
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign",
+    "20261103125940_hod_department_delegation_disable_staff_creation",
+    "20261103125949_pm_direct_internal_assignment",
+    "20261103143949_service_cycle_payments",
+    "20261104053237_restore_hod_handoff_and_codify_live_grants",
+    "20261104062406_block_project_delete_with_linked_tasks",
+    "20261106041228_optimize_pm_service_access",
+    "20261109141920_r3_s1_project_approval_pm",
+    "20261109193707_aitask_client_events",
+    "20261110015703_release_notice_everyday_saves",
+    "20261110071019_hod_staff_workload_summary",
+    "20261110114105_rls_read_speedup",
+    "20261110114150_audit_history_actor_snapshot_without_avatar",
+    "20261110130438_remove_service_addons",
+    "20261110174255_release_notice_start_wording",
+    "20261111072503_security_email_and_comment_files"
+  ],
+  "pendingProductionMigrations": [
+    "20261111072503_security_email_and_comment_files"
+  ],
+  "productionVerification": {
+    "historyAligned": false,
+    "historyThrough": "20261110174255_release_notice_start_wording",
+    "historyCount": 150
+  },
+  "changeSummary": {
+    "20261111072503_security_email_and_comment_files": "Require confirmed Auth email synchronization and restrict publication of unreviewed cycle-comment files."
+  },
+  "qualityGates": {
+    "productionApply": "NOT APPLIED. Owner approval required for the exact SQL.",
+    "releaseOrder": "Deploy the fail-closed Edge Functions first; apply the approved migration before deploying the UI."
+  }
+}

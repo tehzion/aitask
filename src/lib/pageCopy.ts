@@ -609,6 +609,7 @@ registerUiTranslations({
   'Use Remove to switch source': '使用“移除照片”切换来源',
   'Remove the uploaded photo if you want to paste a web image URL instead.': '如果要粘贴网页图片链接，请先移除上传的照片。',
   'This changes both your Supabase login email and AiTask profile email.': '这会同时更改您的 Supabase 登录邮箱和 AiTask 个人资料邮箱。',
+  'Your login and profile email will change after you confirm the new address.': '确认新邮箱地址后，您的登录邮箱和个人资料邮箱才会更改。',
   'Avatar URL': '头像链接',
   'Base role': '基础角色',
   'Not assigned': '未分配',

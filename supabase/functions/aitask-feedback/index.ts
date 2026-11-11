@@ -224,8 +224,7 @@ Deno.serve(async request => {
     );
   }
 
-  const email = authData.user.email?.trim().toLowerCase() || '';
-  const reviewerEmails = new Set((Deno.env.get('AITASK_FEEDBACK_REVIEWER_EMAILS') || '')
+  const reviewerIds = new Set((Deno.env.get('AITASK_FEEDBACK_REVIEWER_AUTH_USER_IDS') || '')
     .split(',').map(value => value.trim().toLowerCase()).filter(Boolean));
   const { data: boss } = await admin.from('aitask_members')
     .select('id,is_super_admin')
@@ -233,7 +232,7 @@ Deno.serve(async request => {
     .eq('is_super_admin', true)
     .maybeSingle();
   const isBoss = Boolean(boss);
-  const isDeveloper = reviewerEmails.has(email);
+  const isDeveloper = reviewerIds.has(authData.user.id.toLowerCase());
   if (!isBoss && !isDeveloper) return json(origin, { error: 'Feedback reviewer access required' }, 403);
 
   const { data, error } = await admin.from('aitask_feedback_submissions')

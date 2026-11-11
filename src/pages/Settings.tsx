@@ -150,7 +150,7 @@ const Settings: React.FC = () => {
   const [avatarUploadMessage, setAvatarUploadMessage] = React.useState<{ tone: UiFeedback['tone']; text: UiFeedback['message'] } | null>(null);
   const { busy: isPreparingAvatar, run: runAvatar } = useSaveAction();
   const [avatarPreviewFailed, setAvatarPreviewFailed] = React.useState(false);
-  const [profileRetryDraft, setProfileRetryDraft] = React.useState<Pick<User, 'name' | 'email' | 'avatar'> | null>(null);
+  const [profileRetryDraft, setProfileRetryDraft] = React.useState<(Pick<User, 'name' | 'email' | 'avatar'> & { pendingEmailConfirmation?: boolean }) | null>(null);
   const avatarFileInputRef = React.useRef<HTMLInputElement>(null);
   const profileFormRef = React.useRef<HTMLFormElement>(null);
   const [soundEnabled, setSoundEnabledState] = React.useState(getSoundEnabled);
@@ -351,15 +351,17 @@ const Settings: React.FC = () => {
     if (isProfileSaving || isPreparingAvatar) return;
     const submitted = profileRetryDraft || { name: profileName, email: profileEmail, avatar: avatarUrl };
     let staged = Boolean(profileRetryDraft);
+    let emailPending = Boolean(profileRetryDraft?.pendingEmailConfirmation);
     const saved = await runProfile(async isCurrent => {
       if (!staged) {
         const emailChanged = submitted.email?.trim().toLowerCase() !== (currentUser?.email || '').trim().toLowerCase();
         if (backend.mode === 'supabase' && emailChanged) {
           const result = await updateCurrentUserEmail(submitted.email || '', profileCurrentPassword);
           if (!isCurrent() || !result.ok) return result;
+          emailPending = Boolean(result.pendingConfirmation);
           setProfileCurrentPassword('');
         }
-        const result = updateCurrentUserProfile(submitted);
+        const result = updateCurrentUserProfile({ ...submitted, email: emailPending ? (currentUser?.email || '') : submitted.email });
         if (!result.ok) return result;
         staged = true;
       }
@@ -367,17 +369,20 @@ const Settings: React.FC = () => {
     });
     if (!saved) return;
     if (!saved.ok) {
-      if (staged) setProfileRetryDraft(submitted);
-      setProfileMessage({ tone: 'error', text: saved.error || 'Profile not saved. Use Retry save to try again.' });
+      if (staged) setProfileRetryDraft({ ...submitted, pendingEmailConfirmation: emailPending });
+      setProfileMessage({ tone: 'error', text: emailPending
+        ? 'An email confirmation was sent, but the other profile changes were not saved. Review and retry your profile save.'
+        : saved.error || 'Profile not saved. Use Retry save to try again.' });
       return;
     }
     const latest = useStore.getState().currentUser;
     setProfileRetryDraft(null);
-    if (!latest || latest.name !== submitted.name.trim() || (latest.email || '').toLowerCase() !== (submitted.email || '').trim().toLowerCase() || (latest.avatar || '') !== (submitted.avatar || '').trim()) {
+    if (!latest || latest.name !== submitted.name.trim() || (!emailPending && (latest.email || '').toLowerCase() !== (submitted.email || '').trim().toLowerCase()) || (latest.avatar || '') !== (submitted.avatar || '').trim()) {
       setProfileMessage({ tone: 'error', text: 'The pending profile change is no longer available. Review your draft before saving again.' });
       return;
     }
-    setProfileMessage({ tone: 'success', text: msg('feedback.profileSaved') });
+    if (emailPending) setProfileEmail(latest.email || '');
+    setProfileMessage({ tone: 'success', text: emailPending ? 'Check your email to confirm the change. Your login and profile email will update after confirmation.' : msg('feedback.profileSaved') });
     setAvatarUploadMessage(null);
   };
 
@@ -703,7 +708,7 @@ const Settings: React.FC = () => {
                       required
                     />
                     <p className="mt-1 text-xs leading-5 text-muted">
-                      {t('This changes both your Supabase login email and AiTask profile email.')}
+                      {t('Your login and profile email will change after you confirm the new address.')}
                     </p>
                   </div>
                 )}
