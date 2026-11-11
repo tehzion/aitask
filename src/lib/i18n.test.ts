@@ -20,6 +20,7 @@ import './pageCopy';
 
 describe('Chinese UI translations', () => {
   it('keeps English as the default and translates shared interface copy to Simplified Chinese', () => {
+    expect(translateUiText('Start next month', 'zh')).toBe('开始下个月');
     expect(translateUiText('Clients', 'en')).toBe('Clients');
     expect(translateUiText('Clients', 'zh')).toBe('客户');
     expect(translateUiText('Delivery tracker', 'en')).toBe('Delivery tracker');

@@ -159,7 +159,7 @@ registerUiTranslations({
   'This revision takes over automatically in its scheduled month.': '此修订将在预定月份自动生效。',
   'Each billing day starts a new month with new deliverables. Shorter months use their last day.': '每个账单日都会开始新的月份并生成新的交付物。较短的月份使用当月最后一天。',
   'First month': '首月',
-  'Activate next month': '启用下个月计划',
+  'Start next month': '开始下个月',
   'Carry forward': '转入下周期',
   'Retry carried work': '重试保存转入的工作',
   'Month closeout': '月度结算',

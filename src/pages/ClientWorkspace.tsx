@@ -670,7 +670,7 @@ const OperationsClientWorkspace = () => {
                       {cycle.planRevision}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     <Badge
                       tone={
                         cycle.status === "Published" ||
@@ -683,7 +683,6 @@ const OperationsClientWorkspace = () => {
                     </Badge>
                     {canManageCycles && cycle.status === "Draft" && (
                       <Button
-                        title={t("Starting this month lets the team begin work and makes its deliverables visible to the client.")}
                         onClick={() =>
                           void saveAndCommit(
                             store.setServiceCycleStatus(cycle.id, "Published"),
@@ -695,6 +694,7 @@ const OperationsClientWorkspace = () => {
                         {t("Start month")}
                       </Button>
                     )}
+                    {canManageCycles && cycle.status === "Draft" && <p className="basis-full text-xs text-muted sm:text-right">{t("Starting this month lets the team begin work and makes its deliverables visible to the client.")}</p>}
                   </div>
                 </div>
                 <div className="border-b border-line bg-inset/70 px-5 py-5">
