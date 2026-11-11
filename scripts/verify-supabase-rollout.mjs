@@ -1,5 +1,5 @@
 import {
-  appendFileSync,
+  writeFileSync,
   cpSync,
   existsSync,
   mkdtempSync,
@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { startWithRetry } from './supabase-start-retry.mjs';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const supabaseSource = join(projectRoot, 'supabase');
@@ -119,24 +120,29 @@ cpSync(supabaseSource, validationSupabase, {
 
 // The developer stack may already own Supabase's default local ports. Give the
 // disposable release gate an isolated port block so it never interrupts it.
-appendFileSync(join(validationSupabase, 'config.toml'), `
+const configPath = join(validationSupabase, 'config.toml');
+const originalConfig = readFileSync(configPath, 'utf8');
+const configurePorts = (attempt) => {
+  const port = validationPortBase + (attempt - 1) * 8;
+  writeFileSync(configPath, originalConfig + `
 
 [api]
-port = ${validationPortBase}
+port = ${port}
 
 [db]
-port = ${validationPortBase + 1}
+port = ${port + 1}
 
 [studio]
-port = ${validationPortBase + 2}
+port = ${port + 2}
 
 [inbucket]
-port = ${validationPortBase + 3}
+port = ${port + 3}
 
 [analytics]
-port = ${validationPortBase + 4}
-vector_port = ${validationPortBase + 5}
+port = ${port + 4}
+vector_port = ${port + 5}
 `);
+};
 
 const supabase = (...args) => run(supabaseCli, ['--workdir', validationRoot, ...args], {
   cwd: validationRoot,
@@ -146,8 +152,13 @@ try {
   console.log(`[rollout] Validating ${validatedMigrations.join(', ')} in ${validationRoot}`);
   const excludedServices = ['imgproxy', 'postgres-meta', 'studio', 'edge-runtime', 'logflare', 'vector', 'supavisor'];
   if (process.env.AITASK_PHASE5_UAT !== 'true') excludedServices.unshift('realtime');
-  run(supabaseCli, ['--workdir', validationRoot, 'start', '--exclude', excludedServices.join(',')], {
-    cwd: validationRoot, capture: true, suppressStdoutOnError: true,
+  startWithRetry({
+    configure: configurePorts,
+    start: () => run(supabaseCli, ['--workdir', validationRoot, 'start', '--exclude', excludedServices.join(',')], {
+      cwd: validationRoot, capture: true, suppressStdoutOnError: true,
+    }),
+    cleanup: () => run(supabaseCli, ['--workdir', validationRoot, 'stop', '--no-backup'], { cwd: validationRoot }),
+    wait: ms => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms),
   });
   // Startup output includes disposable service keys; never retain it in CI artifacts.
   console.log('[rollout] Disposable Supabase stack started.');
