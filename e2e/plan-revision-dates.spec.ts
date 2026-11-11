@@ -52,6 +52,18 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   expect(saved.original).toMatchObject({ startDate: '2026-09-30', contractEndDate: '2026-10-03', name: 'RM2250 PACKAGE' });
   expect(saved.cycles).toEqual(seeded.previousCycles);
 
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, status: 'Ended' as const } : plan) }));
+  }, seeded.originalId);
+  await revision.getByRole('button', { name: locale === 'zh' ? '查看更改' : 'Review changes', exact: true }).click();
+  await expect(revision.getByRole('button', { name: locale === 'zh' ? /开始下个月/ : /Start next month/ })).toBeVisible();
+  await revision.getByRole('button', { name: locale === 'zh' ? '返回草稿' : 'Back to draft', exact: true }).click();
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, status: 'Active' as const } : plan) }));
+  }, seeded.originalId);
+
   await date.fill('2026-09-29');
   await revision.getByRole('button', { name: locale === 'zh' ? '保存草稿' : 'Save draft', exact: true }).click();
   expect(await date.evaluate(input => (input as HTMLInputElement).validity.rangeUnderflow)).toBe(true);

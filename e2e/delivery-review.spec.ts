@@ -33,6 +33,8 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   await panel.getByRole('button', { name: locale === 'en' ? /^Link completed tasks to deliverables \(optional\)/ : /^将已完成任务关联到交付物（可选）/ }).click();
   await expect(page.getByText('0%', { exact: true })).toHaveCount(0);
   await expect(panel.getByRole('button', { name: locale === 'en' ? 'Start month' : '开始本月', exact: true })).toBeVisible();
+  await expect(panel.getByText(locale === 'en' ? 'Starting this month lets the team begin work and makes its deliverables visible to the client.' : '开始本月后，团队可以开始工作，客户也能看到本月的交付内容。', { exact: true })).toBeVisible();
+  await expect(page.getByText(locale === 'en' ? 'Starting this month lets the team begin work and makes its deliverables visible to the client.' : '开始本月后，团队可以开始工作，客户也能看到本月的交付内容。', { exact: true })).toHaveCount(2);
   const selectors = panel.getByRole('combobox');
   await selectors.nth(0).selectOption('review-deliverable');
   await selectors.nth(1).selectOption('review-deliverable');
