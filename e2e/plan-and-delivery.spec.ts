@@ -101,6 +101,31 @@ const seedPublishedMonth = async (page: import('@playwright/test').Page) => {
   return clientId;
 };
 
+test('plan history includes the current month and links to its delivery details', async ({ page }) => {
+  const clientId = await seedPublishedMonth(page);
+  await page.goto(`/clients/${clientId}?tab=plan`);
+  const schedule = page.getByRole('region', { name: 'Monthly update schedule' });
+  const history = schedule.getByRole('table');
+  const current = history.getByRole('row').filter({ hasText: 'This month' });
+  await expect(current).toHaveCount(1);
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const month = state.serviceCycles.find(item => item.clientId === id && item.status === 'Published')!;
+    const upcoming = Array.from({ length: 7 }, (_, i) => ({ ...month, id: `history-future-${i}`, periodStart: `2099-${String(i + 1).padStart(2, '0')}-01`, periodEnd: `2099-${String(i + 1).padStart(2, '0')}-28`, status: 'Draft' as const }));
+    useStore.setState({ serviceCycles: [...state.serviceCycles, ...upcoming] });
+  }, clientId);
+  await expect(history.getByRole('row')).toHaveCount(7); // header plus six months
+  await expect(current).toHaveCount(1);
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ serviceCycles: state.serviceCycles.map(item => item.clientId === id && item.status === 'Published' ? { ...item, status: 'Completed' as const } : item) }));
+  }, clientId);
+  await expect(current.getByText('Done', { exact: true })).toBeVisible();
+  await current.getByRole('button', { name: 'View', exact: true }).click();
+  await expect(page).toHaveURL(/cycleId=/);
+});
+
 // Added on the loaded page: seeding a project before a reload is not restored by this local setup.
 const addProject = (page: import('@playwright/test').Page, clientId: string) => page.evaluate(async id => {
   const { useStore } = await import('/src/store/index.ts');
