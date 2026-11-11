@@ -33,10 +33,11 @@ const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManage
   const previousCycle = cycles
     .filter(item => item.clientId === plan.clientId && item.periodEnd < todayKey)
     .sort((left, right) => right.periodEnd.localeCompare(left.periodEnd))[0];
-  const history = cycles
+  const otherMonths = cycles
     .filter(item => item.clientId === plan.clientId && item.id !== cycle?.id)
-    .sort((left, right) => right.periodStart.localeCompare(left.periodStart))
-    .slice(0, 6);
+    .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
+  const history = (cycle ? [cycle, ...otherMonths.slice(0, 5)] : otherMonths.slice(0, 6))
+    .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
   const dateLabel = (value: string) => {
     const date = parseOptionalDate(value);
     return date ? formatLocalizedDate(date, locale) : t('Not scheduled');
@@ -57,7 +58,7 @@ const MonthlyPlanSchedule = ({ plan, cycles, deliverables = [], today, canManage
     if (housekeeping.kind === 'never-published') return <div className="flex flex-wrap items-center gap-2"><StatusChip tone="amber">{t('Never started')}</StatusChip>{act('Published', 'Start late')}{act('Cancelled', 'Cancel month')}</div>;
     if (housekeeping.kind === 'ready-to-close') return <div className="flex flex-wrap items-center gap-2"><StatusChip tone="emerald">{t('Ready to close')}</StatusChip>{act('Completed', 'Close month')}</div>;
     if (housekeeping.kind === 'overdue') return <StatusChip tone="red">{t('Overdue: {count} not done', { count: housekeeping.notDone })}</StatusChip>;
-    if (item.status === 'Completed') return <StatusChip tone="slate">{t(cycleStatusLabel(item.status))}</StatusChip>;
+    if (item.status === 'Completed') return <div className="flex flex-wrap gap-2">{item.id === cycle?.id && <StatusChip tone="emerald">{t('This month')}</StatusChip>}<StatusChip tone="slate">{t(cycleStatusLabel(item.status))}</StatusChip></div>;
     if (item.status === 'Cancelled') return <StatusChip tone="slate">{t('Cancelled')}</StatusChip>;
     const state = cycleState(item);
     return <StatusChip tone={state === 'This month' ? 'emerald' : state === 'Coming up' ? 'amber' : 'slate'}>{t(state)}</StatusChip>;
