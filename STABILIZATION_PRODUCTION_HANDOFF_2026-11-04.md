@@ -1,0 +1,37 @@
+# Stabilization production handoff — 4 November 2026
+
+## Decision and scope
+
+**Not ready for deployment.** The owner authorized production deployment after the combined candidate passes the release gates. The owner previously directed the release work to ignore staging. Do not interpret this as permission to skip local database tests or production verification.
+
+The objective is to reconcile the older modular stabilization work onto the exact current production source, preserve subsequent production changes, test the combined candidate, and deploy only after its database and application gates pass. No production deployment, migration, or data change was made in this handoff work.
+
+## Verified state
+
+- At the last live check, `https://aitask-virid.vercel.app` pointed to Vercel deployment `dpl_7Hp8Ddz8C6vLbeWcRDrdtBSaPaFg`, READY, commit `d5d1b0e7b3ee1d72fd42149d17b54a1618c9453c` (PM plan save recovery and project deletion). Recheck the alias and commit before acting.
+- The exact deployed source was recovered from `/private/tmp/aitask-pm-production-20261104`. An isolated clone at `/private/tmp/aitask-stabilization-candidate` is on branch `codex/stabilization-production-ready` at that same commit. It has no tracked edits. Its `node_modules` is a symlink to the recovered checkout. Temporary directories are not durable; preserve or recreate them before relying on them.
+- The original workspace `/Users/user/Downloads/aitask-master` is on `codex/release-stabilization-2026-10-26`, commit `89a487a`, with significant pre-existing uncommitted changes and untracked files. Preserve all of them. Do not deploy this older checkout over production.
+- Live Supabase project `ohjhwyiffgzyatcmmdql` migration history included `20261103143949_service_cycle_payments` at the last read. The deployment record is `output/pm-plan-production-20261104.json`; the production deletion verification record is `output/production-delete-verification-20261104.json`. These are evidence, not a substitute for a fresh live check.
+- The original checkout's `pnpm check`, lint, 980 unit tests, architecture and strict i18n checks passed. Its focused payment, PM recovery and project deletion browser suite passed 17 tests. These results are **not** results for a combined production candidate.
+- A production build of the recovered live baseline passed the bundle budget at **299.8 KiB gzip / 300 KiB**. The older workspace build failed at 300.6 KiB. An experiment with a third Terser compression pass failed to improve it and was reverted. Recheck on the final candidate; do not raise the budget.
+- Docker was unavailable. `/Applications/Docker.app` and its nested application failed to launch, and invoking the nested executable exited with code 134. No disposable database rollout or new database compatibility test was completed. Restore a working Docker runtime before the required local rollout.
+
+## Reconciliation findings
+
+- The production baseline includes the monthly payments release (`298ace5`), followed by PM recovery and project deletion (`d5d1b0e`). Keep those changes and the newer production assignment and automatic save-retry behavior.
+- The unique older stabilization commits include `35f46d6` (large modular refactor) and `89a487a` (preserved stabilization work). A trial merge of `89a487a` into the payment baseline produced 121 unresolved conflicts: 70 source, 34 browser-test, 13 Supabase and 4 script paths. The assessment clone `/private/tmp/aitask-release-reconcile` is left in this conflicted state and is **not** a candidate. Do not resolve by accepting a whole side.
+- Inventory functionality individually: task creation and assignment, internal review and progress, private supporting files, project workspace, dashboards, onboarding and release notices. Record whether current production already implements each item, has a newer alternative, or needs a targeted port.
+- Current production source still changes `clientApprovalStatus` during some internal task transitions (`src/store/index.ts`, around lines 2592, 2798 and 3218). The stabilization branch intends to separate internal revision from the client's decision. This is a candidate for a coordinated application and database port, not a frontend-only change.
+- Six migration files occur in the stabilization checkout but not the payment-release source: `20261024090000_security_boundary_hardening`, `20261026120000_separate_internal_revision_from_client_approval`, `20261026123000_enforce_project_assignment_membership`, `20261026130000_private_task_supporting_files`, `20261026135000_preserve_revision_stage_progress`, and `20261026141000_allow_current_release_notice_acknowledgement`. Filename absence does not establish that the behavior is absent in production. Inspect live definitions and migration aliases. Several migrations use exact text replacement of function bodies; do not replay them unchanged on a newer schema without compatibility analysis.
+- The old checkout's `pnpm verify:release-db-alignment` fails because its October 23 manifest records `20261024090000_security_boundary_hardening` as pending. That manifest is stale relative to later production history; do not mark it aligned or apply the migration without verifying the actual live schema and any alias mapping.
+
+## Next steps and gates
+
+1. Reconfirm the live Vercel alias, exact source commit, Supabase project and migration history. Recreate an isolated release branch from the exact live source if it has changed. Preserve the original dirty workspace.
+2. Compare the two unique stabilization commits and the uncommitted workspace changes against the live source by behavior. Port missing changes and their tests in small groups. Keep production's newer changes. Update the candidate's release manifest only from verified live evidence.
+3. Review each of the six migrations against current live function definitions, policies and storage configuration. Document equivalent existing behavior; create new forward migrations for missing behavior using the current schema. Avoid mutating production while investigating.
+4. Restore Docker, replay the complete migration chain on a disposable production-like database, and run authorization, storage, concurrency, migration, advisor and rollback checks. Validate migration compatibility and backup/rollback readiness before any production database write.
+5. Run type-check, lint, all unit and permission tests, architecture and i18n checks, production build, bundle and PWA checks, and the complete browser suite on the **final combined commit**. Include focused regression tests for ported features and production payment and recovery flows. Verify build provenance and database alignment for that exact commit.
+6. Once all gates pass, apply only verified forward migrations and deploy the matching build under the owner's existing authorization. Verify production build identity and authenticated role, task, payment and storage flows; monitor application and database errors and use the documented rollback path if smoke checks fail. Do not deploy if source identity, database compatibility, or any release gate remains unresolved.
+
+The earlier handoff `AITASK_STABILIZATION_HANDOFF_2026-10-28.md` describes a separate release branch and historical CI status; its production state and head are not current. The payment and PM recovery documents under `docs/` describe their respective changes and local test boundaries.
