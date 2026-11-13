@@ -631,6 +631,10 @@ export const canAssignTasksToOthers = (
 ) => {
   if (user?.role === 'Project Manager' && task?.projectId
     && !ownedProjectIds(user, scope, customRoles).has(task.projectId)) return false;
+  if (user && task && isHodUser(user, customRoles) && !isBossKoo(user)) {
+    return (task.assignedTo === user.id || task.responsibleHodId === user.id)
+      && hasPermission(user, 'manageCreatedTasks', customRoles);
+  }
   if (isHodUser(user, customRoles) && task?.projectId
     && !isProjectInHodScope(user, task.projectId, scope, customRoles)) return false;
   if (task && user && isDepartmentScopedUser(user, customRoles)
@@ -663,7 +667,7 @@ export const canViewTask = (
     return getClientKey(task.clientName) === getClientKey(user.companyName) && task.visibility !== 'internal';
   }
   if (isBossKoo(user)) return true;
-  if (task.assignedTo === user.id) return true;
+  if (task.assignedTo === user.id || (isHodUser(user, customRoles) && task.responsibleHodId === user.id)) return true;
   if (user.role === 'Project Manager') {
     if (task.projectId) return ownedProjectIds(user, scope, customRoles).has(task.projectId);
     return task.assignedTo === user.id
@@ -702,7 +706,7 @@ export const canEditTask = (
 ) => {
   if (!user) return false;
   if (task.projectId && isClosedProject(scope.projects?.find(project => project.id === task.projectId))) return false;
-  if (task.assignedTo === user.id && user.role !== 'Client') return true;
+  if ((task.assignedTo === user.id && user.role !== 'Client') || (isHodUser(user, customRoles) && task.responsibleHodId === user.id)) return true;
   if (user.role === 'Project Manager' && task.projectId
     && !ownedProjectIds(user, scope, customRoles).has(task.projectId)) return false;
   if (isHodUser(user, customRoles) && task.projectId && !isProjectInHodScope(user, task.projectId, scope, customRoles)) return false;

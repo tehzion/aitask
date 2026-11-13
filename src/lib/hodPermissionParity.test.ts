@@ -8,12 +8,12 @@ const task = (values: Partial<Task> = {}) => ({ id: 'task', clientName: 'Visible
 describe('HOD permission parity', () => {
   it.each(['Editor', 'video-editor', 'video editing', 'editing'])('recognizes the legacy department %s and grants scoped HOD execution management', department => {
     const work = task({ department: department as Task['department'] });
-    expect(getTaskAccess(hod, work)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: false, canAssign: true });
+    expect(getTaskAccess(hod, work)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: false, canAssign: false });
   });
-  it('keeps HOD delegation inside the member department', () => {
-    expect(canAssignTasksToOthers(hod, [], task())).toBe(true);
+  it('limits HOD delegation to owned tasks', () => {
+    expect(canAssignTasksToOthers(hod, [], task())).toBe(false);
     expect(canAssignTasksToOthers(hod, [], task({ assignedTo: hod.id }))).toBe(true);
-    expect(canAssignTasksToOthers(hod, [], task({ createdBy: hod.id }))).toBe(true);
+    expect(canAssignTasksToOthers(hod, [], task({ createdBy: hod.id }))).toBe(false);
     expect(canAssignTasksToOthers({ ...hod, permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: false } }, [], task({ assignedTo: hod.id }))).toBe(false);
     expect(canEditTask(hod, task({ department: 'Designer' }))).toBe(false);
   });
@@ -91,10 +91,10 @@ describe('HOD permission parity', () => {
     expect(canLinkTaskToProject(staff, { ...project, createdBy: 'pm' }, [task({ projectId: 'p' })], [], users)).toBe(false);
   });
 
-  it('keeps foreign-department assigned tasks editable without offering a rejected reassignment', () => {
+  it('allows reassignment of an owned task outside the HOD department', () => {
     const foreign = task({ department: 'Designer', assignedTo: hod.id });
-    expect(getTaskAccess(hod, foreign)).toMatchObject({ canView: true, canEdit: true, canAssign: false });
-    expect(canAssignTasksToOthers(hod, [], { ...foreign, createdBy: hod.id })).toBe(false);
+    expect(getTaskAccess(hod, foreign)).toMatchObject({ canView: true, canEdit: true, canAssign: true });
+    expect(canAssignTasksToOthers(hod, [], { ...foreign, createdBy: hod.id })).toBe(true);
   });
 
 });

@@ -178,7 +178,22 @@ export const resolveTaskAssignmentState = (
   return responsibleHodId ? 'pending_hod' : undefined;
 };
 
-/** Active Staff eligible for HOD delegation within the department. */
+/** HOD delegation targets: account ban status is enforced by the server. */
+export const isEligibleHodDelegationTarget = (user: User, roles: CustomRole[] = []) => {
+  const customRole = user.customRoleId ? roles.find(role => role.id === user.customRoleId) : undefined;
+  return user.hasLogin !== false
+    && user.hodDelegationEligible !== false
+    && user.role === 'Staff'
+    && !isHodUser(user, roles)
+    && customRole?.baseRole !== 'HOD'
+    && !user.directoryOnly;
+};
+
+export const eligibleHodDelegationStaff = (users: readonly User[], roles: CustomRole[] = []) =>
+  users.filter(user => isEligibleHodDelegationTarget(user, roles))
+    .sort((left, right) => left.name.localeCompare(right.name) || left.id.localeCompare(right.id));
+
+/** Active Staff eligible within the department. */
 export const eligibleTaskStaff = (
   department: Department | undefined,
   _project: Project | undefined,
@@ -217,9 +232,10 @@ export const assignableTaskAssignees = (
   department: Department | undefined,
   users: readonly User[],
   roles: CustomRole[] = [],
-  options: { allowDirectStaff?: boolean } = {},
+  options: { allowDirectStaff?: boolean; task?: Pick<Task, 'assignedTo' | 'responsibleHodId'> } = {},
 ): User[] => {
   if (!department) return [];
+  if (actor && options.task && isHodUser(actor, roles) && (options.task.assignedTo === actor.id || options.task.responsibleHodId === actor.id)) return eligibleHodDelegationStaff(users, roles);
   return users.filter(user => user.hasLogin !== false
     && isMemberInDepartment(user, department)
     && isEligibleTaskAssignee(user, department)

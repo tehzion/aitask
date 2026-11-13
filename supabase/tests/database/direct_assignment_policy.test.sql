@@ -49,7 +49,7 @@ select ok(private.aitask_task_assignment_is_valid('direct-policy-test','update',
 select set_config('request.jwt.claim.sub','',true);
 update public.aitask_members set departments=array['Video Editor'] where workspace_id='direct-policy-test' and id='policy-staff';
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000008802',true);
-select ok(not private.aitask_task_assignment_is_valid('direct-policy-test','update','{"department":"Designer","assignedTo":"policy-hod","responsibleHodId":"policy-hod","assignmentState":"pending_hod","projectId":"policy-own-project","createdBy":"policy-pm"}','{"department":"Designer","assignedTo":"policy-staff","responsibleHodId":"policy-hod","assignmentState":"assigned_staff","projectId":"policy-own-project","createdBy":"policy-pm"}'),'HOD cannot delegate outside department');
+select ok(private.aitask_task_assignment_is_valid('direct-policy-test','update','{"department":"Designer","assignedTo":"policy-hod","responsibleHodId":"policy-hod","assignmentState":"pending_hod","projectId":"policy-own-project","createdBy":"policy-pm"}','{"department":"Designer","assignedTo":"policy-staff","responsibleHodId":"policy-hod","assignmentState":"assigned_staff","projectId":"policy-own-project","createdBy":"policy-pm"}'),'HOD can delegate outside department');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000008803',true);
 select ok(not private.aitask_has_permission('direct-policy-test','createTasks'),'Staff cannot create tasks even through an override');
 select * from finish();

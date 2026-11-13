@@ -351,6 +351,8 @@ registerUiTranslations({
   'Phone Number': '电话号码',
   'Facebook Page': 'Facebook 页面',
   'Assign this task to another team member in your department.': '将此任务分配给您部门的其他团队成员。',
+  'Assign this task to any eligible Staff member.': '将此任务分配给任何符合条件的员工。',
+  'No eligible Staff available. You can do this task yourself, or ask your project manager for help.': '目前没有符合条件的员工。您可以自行完成此任务，或向项目经理寻求帮助。',
   'Choose a team member': '选择团队成员',
   'Created By': '创建人',
   'Posting Date': '发布日期',

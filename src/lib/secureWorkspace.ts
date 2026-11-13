@@ -1927,7 +1927,20 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: WorkspaceLoa
     assertWorkspaceSession(sessionToken);
     portalProjection = projectClientPortalWorkspace(clientPortal, currentUser, entityRows, authenticatedMemberRow.custom_role_id, SECURE_WORKSPACE_ID);
   }
-  const users = portalProjection?.users || memberRows.map(memberToUser);
+  let users = portalProjection?.users || memberRows.map(memberToUser);
+  if (currentUser.role === 'HOD' || (currentUser.role === 'Staff' && currentUser.customRoleId === 'builtin-hod')) {
+    // Fail closed if the eligibility lookup is unavailable. The mutation
+    // validator independently rechecks account status when a save is made.
+    let eligibleIds = new Set<string>();
+    try {
+      const { data, error } = await withSyncTimeout(supabase.rpc('aitask_hod_eligible_staff', { p_workspace_id: SECURE_WORKSPACE_ID }));
+      if (!error && Array.isArray(data)) eligibleIds = new Set(data.map(row => row.id).filter((id): id is string => typeof id === 'string'));
+    } catch {
+      // Continue loading the workspace without offering unverified assignees.
+    }
+    assertWorkspaceSession(sessionToken);
+    users = users.map(user => ({ ...user, hodDelegationEligible: eligibleIds.has(user.id) }));
+  }
   const clientTaskIds = portalProjection?.clientTaskIds || new Set<string>();
   const visibleEntityRows = portalProjection?.visibleEntityRows || entityRows;
   const projectedEntityRows = portalProjection?.projectedEntityRows || [];

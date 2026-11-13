@@ -1131,7 +1131,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
                   >
                     {(canAssignOthers
                       ? (() => {
-                          const options = assignableTaskAssignees(currentUser, currentTask.department, users, rolePermissions);
+                          const options = assignableTaskAssignees(currentUser, currentTask.department, users, rolePermissions, { task: currentTask });
                           const current = users.find(u => u.id === currentTask.assignedTo);
                           return current && !options.some(u => u.id === current.id) ? [current, ...options] : options;
                         })()

@@ -54,6 +54,11 @@ describe('application feedback', () => {
     expect(userFacingText(undefined, 'Unable to send the invitation.')).toBe('Unable to send the invitation.');
   });
 
+  it('localizes a known department denial without masking it', () => {
+    expect(userFacingMessage('FORBIDDEN: Zi Yin is not in the Video Editor department.')).toEqual(msg('errors.assigneeDepartment', { name: 'Zi Yin', department: 'Video Editor' }));
+    expect(render('Zi Yin is not in the Video Editor department.', 'zh')).toContain('Zi Yin');
+  });
+
   it('distinguishes saved-data recovery from software updates in both languages', () => {
     expect(render('Restore saved data', 'zh')).toBe('恢复已保存数据');
     expect(render('Reload saved data', 'zh')).toBe('重新加载已保存数据');

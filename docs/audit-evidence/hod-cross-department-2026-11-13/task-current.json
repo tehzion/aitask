@@ -1,0 +1,45 @@
+{
+  "accountableLeadId": "e30941ff-d813-408c-885f-51d0875ffefe",
+  "approvalMode": "pm",
+  "assignedAt": "2026-11-03T09:14:37.693Z",
+  "assignedBy": "e30941ff-d813-408c-885f-51d0875ffefe",
+  "assignedTo": "326b6b5e-fe78-4f81-acbe-7dcd0324ea2a",
+  "assignmentState": "pending_hod",
+  "clientApprovalStatus": "Pending",
+  "clientId": "CL-1790583320197-zyug8",
+  "clientName": "GH FURNITURE DESIGN & RENOVATION",
+  "completionPercentage": 30,
+  "createdBy": "e30941ff-d813-408c-885f-51d0875ffefe",
+  "department": "Video Editor",
+  "description": "",
+  "dueDate": "2026-11-12",
+  "dueReminderSent": false,
+  "generatedFromDeliverable": false,
+  "id": "T-1793697276711-uc19q",
+  "isCompleted": false,
+  "isRecurring": false,
+  "predecessorTaskIds": [],
+  "priority": "Medium",
+  "projectId": "P-1793611322587-9yyqt",
+  "projectName": "C11-03v 新屋扩建",
+  "recurrenceFrequency": "None",
+  "requiresInternalApproval": true,
+  "responsibleHodId": "326b6b5e-fe78-4f81-acbe-7dcd0324ea2a",
+  "revisionCount": 0,
+  "serviceType": "Video",
+  "startDate": "2026-11-02",
+  "status": "In Progress",
+  "title": "C11-03v 新屋扩建",
+  "visibility": "client-visible",
+  "workHistory": [
+    {
+      "createdAt": "2026-11-03T09:15:04.299Z",
+      "fields": [
+        "status"
+      ],
+      "id": "cb120cf0-d0c1-40b5-a66e-f8dfa442cc60",
+      "userId": "e30941ff-d813-408c-885f-51d0875ffefe"
+    }
+  ],
+  "workState": {}
+}

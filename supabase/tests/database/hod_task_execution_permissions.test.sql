@@ -103,12 +103,12 @@ select ok(not private.aitask_hod_task_execution_patch_is_valid(
     'assignedAt', '2020-01-01T00:00:00.000Z', 'assignmentState', 'assigned_staff'
   ) from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
 ), 'HOD route attribution cannot be forged by the client');
-select ok(not private.aitask_task_assignment_is_valid(
+select ok(private.aitask_task_assignment_is_valid(
   'pgtap-hod-execution', 'update',
   (select data from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-other-task'),
   (select data || jsonb_build_object('assignedTo', 'staff-execution-b', 'assignedBy', 'hod-execution', 'assignmentState', 'assigned_staff')
    from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-other-task')
-), 'HOD cannot route a task from a project outside the HOD project scope');
+), 'responsible HOD can route owned work outside the HOD project scope');
 
 set local role authenticated;
 select is((public.aitask_execute_command(
@@ -182,7 +182,7 @@ select is((public.aitask_execute_command(
     'data', (select data || jsonb_build_object('assignedTo', 'staff-execution-b', 'assignedBy', 'hod-execution', 'assignmentState', 'assigned_staff')
              from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-other-task')
   ))
-)->>'ok')::boolean, false, 'the command boundary also rejects a cross-project HOD handoff');
+)->>'ok')::boolean, true, 'the command boundary allows handoff of owned work outside project scope');
 
 select is((public.aitask_execute_command(
   'pgtap-hod-execution', gen_random_uuid(), 'task.update',

@@ -8,7 +8,7 @@ import SystemMessage from './SystemMessage';
 import SessionRecoveryButton from './SessionRecoveryButton';
 import '../lib/staffWorkflowCopy';
 import { getTaskProgress } from '../lib/taskProgress';
-import { formatTaskAssigneeName, assignableTaskAssignees, canRequestTaskRevision, eligibleTaskStaff, getAssignmentStateLabel, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { formatTaskAssigneeName, assignableTaskAssignees, canRequestTaskRevision, eligibleHodDelegationStaff, eligibleTaskStaff, getAssignmentStateLabel, getTaskAssignmentUnavailableReason, isTaskAssignmentLocked, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { getTaskStatusControls } from '../lib/taskStatusControls';
 import { getStaffGuidedAction } from '../lib/staffWorkspace';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
@@ -289,7 +289,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const canDelegateAssignedTask = Boolean(
     canAssignOthers
     && isDepartmentScopedUser(currentUser, rolePermissions)
-    && task.assignedTo === currentUser?.id
+    && (task.assignedTo === currentUser?.id || (isHodTaskEditor && task.responsibleHodId === currentUser?.id))
   );
   const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { users, clients, projects });
   const incompletePredecessors = getTaskBlockers(task, visibleTasks);
@@ -311,9 +311,8 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     : undefined;
   const assigneeOptions = canAssignOthers
     ? (() => {
-        const project = projects.find(item => item.id === task.projectId);
         const options = isHodTaskEditor
-          ? eligibleTaskStaff(editForm.department, project, users, rolePermissions)
+          ? eligibleHodDelegationStaff(users, rolePermissions)
           : assignableTaskAssignees(currentUser, editForm.department, users, rolePermissions);
         const currentAssignee = editForm.assignedTo ? users.find(user => user.id === editForm.assignedTo) : undefined;
         return currentAssignee && !options.some(user => user.id === currentAssignee.id)
@@ -322,7 +321,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
       })()
     : users.filter(user => user.id === editForm.assignedTo);
   const taskProject = task.projectId ? projects.find(project => project.id === task.projectId) : undefined;
-  const delegationOptions = eligibleTaskStaff(task.department, taskProject, users, rolePermissions)
+  const delegationOptions = (isHodTaskEditor ? eligibleHodDelegationStaff(users, rolePermissions) : eligibleTaskStaff(task.department, taskProject, users, rolePermissions))
     .filter(user => user.id !== currentUser?.id);
 
   const linkedDeliverable = getTaskDeliverable(task, workflow.deliverables);
@@ -1075,7 +1074,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     <UsersRound className="mt-0.5 h-4 w-4 shrink-0 text-accent" aria-hidden="true" />
                     <div>
                       <h3 id={`${titleId}-delegation-heading`} className="text-sm font-semibold text-ink">{t('Task Delegation')}</h3>
-                      <p className="mt-1 text-xs leading-5 text-muted">{t('Assign this task to another team member in your department.')}</p>
+                      <p className="mt-1 text-xs leading-5 text-muted">{t(isHodTaskEditor ? 'Assign this task to any eligible Staff member.' : 'Assign this task to another team member in your department.')}</p>
                     </div>
                   </div>
                   {delegationOptions.length > 0 ? (
@@ -1105,7 +1104,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <p role="status" className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{t('No Staff in {department} yet. You can do this task yourself, or ask your project manager to add Staff to this department.', { department: t(task.department) })}</p>
+                      <p role="status" className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{isHodTaskEditor ? t('No eligible Staff available. You can do this task yourself, or ask your project manager for help.') : t('No Staff in {department} yet. You can do this task yourself, or ask your project manager to add Staff to this department.', { department: t(task.department) })}</p>
                       {/* Role UX: with no Staff to hand to, starting it yourself is the next step. */}
                       {canEditTask && guidedAction.kind === 'advance' && guidedAction.targetStatus === 'In Progress' && <Button
                         type="button"

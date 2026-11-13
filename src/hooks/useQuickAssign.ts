@@ -3,8 +3,8 @@ import { useShallow } from 'zustand/react/shallow';
 import { isPendingMutationResolution, useStore } from '../store';
 import { useToastStore } from '../store/useToastStore';
 import type { Task, User } from '../types';
-import { getTaskAccess, isDepartmentScopedUser } from '../lib/access';
-import { eligibleTaskStaff, isAwaitingHodAssignment, isTaskAssignmentLocked } from '../lib/taskWorkflowAccess';
+import { getTaskAccess, isDepartmentScopedUser, isHodUser } from '../lib/access';
+import { eligibleHodDelegationStaff, eligibleTaskStaff, isAwaitingHodAssignment, isTaskAssignmentLocked } from '../lib/taskWorkflowAccess';
 import { REJECTION_CODES } from './useQuickTaskAction';
 
 export interface QuickAssign {
@@ -16,7 +16,7 @@ export interface QuickAssign {
 /**
  * "Assign to…" from the list for an HOD (role UX, 10 Nov 2026). It mirrors the
  * task drawer's delegation form: only tasks that wait on this HOD, only
- * eligible Staff of the task's department, and only while nothing else saves.
+ * eligible Staff, and only while nothing else saves.
  * With no Staff, it returns no options and the row keeps "Start work".
  */
 export const useQuickAssign = (task: Task): QuickAssign | null => {
@@ -37,7 +37,7 @@ export const useQuickAssign = (task: Task): QuickAssign | null => {
     if (backend.upgradeRequired === true || isPendingMutationResolution(backend) || backend.isSaving || backend.hasLocalChanges || Boolean(backend.pendingMutations)) return null;
     if (!getTaskAccess(currentUser, task, rolePermissions, { users, clients, projects }).canAssign) return null;
     const project = task.projectId ? projects.find(item => item.id === task.projectId) : undefined;
-    const staff = eligibleTaskStaff(task.department, project, users, rolePermissions).filter(user => user.id !== currentUser.id);
+    const staff = (isHodUser(currentUser, rolePermissions) ? eligibleHodDelegationStaff(users, rolePermissions) : eligibleTaskStaff(task.department, project, users, rolePermissions)).filter(user => user.id !== currentUser.id);
     return staff.length ? staff : null;
   }, [state, task]);
 

@@ -252,6 +252,7 @@ const parseUser = (value: unknown): User | null => {
     version: Math.max(1, Number(value.version) || 1),
     authUserId: optionalText(value.authUserId, 160),
     hasLogin: typeof value.hasLogin === 'boolean' ? value.hasLogin : undefined,
+    hodDelegationEligible: typeof value.hodDelegationEligible === 'boolean' ? value.hodDelegationEligible : undefined,
     workspaceId: optionalText(value.workspaceId, 160),
     name,
     email: optionalText(value.email, 320),

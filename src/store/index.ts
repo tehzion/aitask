@@ -4,7 +4,7 @@ import { cyclePaymentSummary } from '../lib/cyclePayments';
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
-import { canRequestTaskRevision, eligibleTaskHods, eligibleTaskStaff, getDepartmentReviewers, resolveTaskAssignmentState, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { canRequestTaskRevision, eligibleHodDelegationStaff, eligibleTaskHods, eligibleTaskStaff, getDepartmentReviewers, resolveTaskAssignmentState, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { clearRecoveredDrafts } from '../lib/draftRecovery';
 import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { create } from 'zustand';
@@ -2912,21 +2912,20 @@ export const useStore = create<StoreState>()(
           result = { ok: false, error: 'Choose a valid internal assignee.' };
           return state;
         }
-        const project = task.projectId ? state.projects.find(item => item.id === task.projectId) : undefined;
-        const responsibleHodId = task.responsibleHodId
+        const hodDelegation = isHodUser(currentUser, state.rolePermissions);
+        if (hodDelegation && (task.assignedTo !== currentUser!.id && task.responsibleHodId !== currentUser!.id)) {
+          result = { ok: false, error: 'You can only delegate tasks you own.' };
+          return state;
+        }
+        const responsibleHodId = hodDelegation ? currentUser!.id : task.responsibleHodId
           || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions)
             ? task.assignedTo
             : isHodUser(currentUser, state.rolePermissions) && isMemberInDepartment(currentUser, task.department)
               ? currentUser.id
               : undefined);
-        if (assigneeUser && assigneeUser.role === 'Staff' && !isHodUser(assigneeUser, state.rolePermissions)
-          && isHodUser(currentUser, state.rolePermissions)) {
-          const eligibleStaff = eligibleTaskStaff(task.department, project, state.users, state.rolePermissions);
-          if (!eligibleStaff.some(user => user.id === assigneeUser.id)
-            || (responsibleHodId && responsibleHodId !== currentUser.id)) {
-            result = { ok: false, error: 'Choose active Staff in this department.' };
-            return state;
-          }
+        if (hodDelegation && assignedTo && (!assigneeUser || !eligibleHodDelegationStaff(state.users, state.rolePermissions).some(user => user.id === assigneeUser.id))) {
+          result = { ok: false, error: 'Choose active internal Staff with a login.' };
+          return state;
         }
         if (!assignedTo && isHodUser(currentUser, state.rolePermissions) && responsibleHodId) {
           assignedTo = responsibleHodId;
@@ -2934,7 +2933,7 @@ export const useStore = create<StoreState>()(
         if (!assignedTo && currentUser.role !== 'Project Manager' && task.assignmentState === 'pending_hod' && responsibleHodId) {
           assignedTo = responsibleHodId;
         }
-        if (assigneeUser && (assigneeUser.hasLogin === false || (currentUser.role !== 'Project Manager' && !isEligibleTaskAssignee(assigneeUser, task.department)))) {
+        if (assigneeUser && (assigneeUser.hasLogin === false || (currentUser.role !== 'Project Manager' && !hodDelegation && !isEligibleTaskAssignee(assigneeUser, task.department)))) {
           useToastStore.getState().addToast(msg('errors.assigneeDepartment', { name: assigneeUser.name, department: task.department }), 'warning');
           result = { ok: false, error: `${assigneeUser.name} is not in the ${task.department} department.` };
           return state;
@@ -3204,7 +3203,7 @@ export const useStore = create<StoreState>()(
         if (!canAssignOthers && nextDepartment !== task.department) {
           return { ok: false, error: 'You do not have permission to change the task department.' };
         }
-        if (canAssignOthers && ['Staff', 'HOD'].includes(currentUser.role) && !isBossKoo(currentUser) && !isMemberInDepartment(currentUser, nextDepartment)) {
+        if (canAssignOthers && nextDepartment !== task.department && ['Staff', 'HOD'].includes(currentUser.role) && !isBossKoo(currentUser) && !isMemberInDepartment(currentUser, nextDepartment)) {
           return { ok: false, error: 'You can only manage tasks within your departments.' };
         }
         const requestedClientName = data.clientName !== undefined ? data.clientName.trim() : task.clientName;
@@ -3219,27 +3218,34 @@ export const useStore = create<StoreState>()(
         const assignee = nextAssigneeId ? state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client') : undefined;
         if (nextAssigneeId && !assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
         const assignmentChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
-        if (assignmentChanged && assignee && (assignee.hasLogin === false || (currentUser.role !== 'Project Manager' && !isEligibleTaskAssignee(assignee, nextDepartment)))) {
-          return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
+        const hodDelegation = isHodUser(currentUser, state.rolePermissions);
+        if (assignmentChanged && hodDelegation && task.assignedTo !== currentUser.id && task.responsibleHodId !== currentUser.id) {
+          return { ok: false, error: 'You can only delegate tasks you own.' };
+        }
+        if (assignmentChanged && hodDelegation && (!assignee || !eligibleHodDelegationStaff(state.users, state.rolePermissions).some(user => user.id === assignee.id))) {
+          return { ok: false, error: 'Choose active internal Staff with a login.' };
+        }
+        if (assignmentChanged && assignee && (assignee.hasLogin === false || (currentUser.role !== 'Project Manager' && !hodDelegation && !isEligibleTaskAssignee(assignee, nextDepartment)))) {
+          return { ok: false, error: `${assignee.name} is not in the ${nextDepartment} department.` };
         }
         const nextProjectForAssignment = (data.projectId ?? task.projectId)
           ? state.projects.find(item => item.id === (data.projectId ?? task.projectId))
           : undefined;
         const nextEligibleHods = eligibleTaskHods(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions);
-        const currentResponsibleHodId = task.responsibleHodId
+        const currentResponsibleHodId = (hodDelegation && assignmentChanged ? currentUser.id : task.responsibleHodId)
           || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions) ? task.assignedTo : undefined)
           || (assignmentChanged && isHodUser(currentUser, state.rolePermissions) && isMemberInDepartment(currentUser, task.department) ? currentUser.id : undefined);
         const nextResponsibleHodId = !assignmentChanged ? task.responsibleHodId
           : currentUser.role === 'Project Manager' ? undefined
           : assignee && isHodUser(assignee, state.rolePermissions) ? assignee.id : currentResponsibleHodId;
         const shouldPersistAssignmentRouting = Boolean(task.assignmentState || task.responsibleHodId || nextResponsibleHodId);
-        if (assignmentChanged && nextResponsibleHodId && !nextEligibleHods.some(user => user.id === nextResponsibleHodId)) {
+        if (assignmentChanged && !hodDelegation && nextResponsibleHodId && !nextEligibleHods.some(user => user.id === nextResponsibleHodId)) {
           return { ok: false, error: 'Choose an HOD assigned to this project and department.' };
         }
         if (assignmentChanged && assignee && assignee.role === 'Staff' && !isHodUser(assignee, state.rolePermissions)
           && isHodUser(currentUser, state.rolePermissions)
-          && !eligibleTaskStaff(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions).some(user => user.id === assignee.id)) {
-          return { ok: false, error: 'Choose active Staff in this department.' };
+          && !eligibleHodDelegationStaff(state.users, state.rolePermissions).some(user => user.id === assignee.id)) {
+          return { ok: false, error: 'Choose active internal Staff with a login.' };
         }
         if (assignmentChanged) {
           // Submitted, approved, finished or cancelled work cannot change hands,
