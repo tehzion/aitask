@@ -1054,7 +1054,7 @@ const OperationsClientWorkspace = () => {
               </div>
             )}
           </section>
-          {canManagePlans && scheduledRevision && revisionSource && (
+          {canManagePlans && scheduledRevision && revisionSource && !detailsPlan && (
             <DraftServicePlanEditor key={`${store.currentUser?.authUserId || store.currentUser?.id}:${scheduledRevision.id}`} plan={scheduledRevision} source={revisionSource} />
           )}
         </div>
