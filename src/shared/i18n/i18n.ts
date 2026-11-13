@@ -115,6 +115,7 @@ const zhCopy: Record<string, string> = {
   'Confirm closure with the outstanding checklist warnings.': '请确认已知悉关闭清单中的未解决提醒。',
   'Milestone name is required.': '里程碑名称为必填项。',
   'Only Boss Koo or an assigned Project Manager can change project team membership.': '只有 Boss Koo 或已分配的项目经理可以更改项目团队成员。',
+  'HODs can update project work, but not the company link.': 'HOD 可以更新项目工作，但不能更改公司关联。',
   'Only an assigned Project Manager or Boss Koo can change the project status.': '只有已分配的项目经理或 Boss Koo 可以更改项目状态。',
   'Project Manager access is required.': '需要项目经理权限。',
   'Project Managers can invite only HOD and Staff accounts.': '项目经理只能邀请部门主管和员工账号。',

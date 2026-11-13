@@ -171,6 +171,53 @@ describe('company store authorization', () => {
     expect(useStore.getState().projects.find(project => project.id === projectA.id)?.hodMemberIds).toEqual([hod.id]);
   });
 
+  it('lets an assigned HOD update project details and staff without changing ownership', () => {
+    const hod: User = { id: 'scope-assigned-hod', name: 'Assigned HOD', role: 'HOD', departments: ['Designer'], department: 'Designer' };
+    const pm: User = { id: 'scope-assigned-pm', name: 'Assigned PM', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    const project: Project = {
+      ...company,
+      id: 'assigned-hod-project',
+      createdBy: 'scope-boss',
+      clientId: 'scope-client',
+      projectManagerIds: [pm.id],
+      hodMemberIds: [hod.id],
+      staffMemberIds: [],
+    };
+    useStore.setState({
+      ...initialState,
+      currentUser: hod,
+      users: [hod, pm, staff],
+      projects: [project],
+      clients: [{ id: 'scope-client', clientName: 'Acme', createdBy: pm.id, createdAt: '', updatedAt: '' }],
+      tasks: [],
+      rolePermissions: [],
+    }, true);
+
+    expect(useStore.getState().updateProject(project.id, {
+      projectName: 'Assigned HOD launch',
+      staffMemberIds: [staff.id],
+      memberResponsibilities: { [staff.id]: 'Delivery lead' },
+    })).toMatchObject({ ok: true });
+    expect(useStore.getState().projects[0]).toMatchObject({
+      projectName: 'Assigned HOD launch',
+      staffMemberIds: [staff.id],
+      hodMemberIds: [hod.id],
+      projectManagerIds: [pm.id],
+    });
+    expect(useStore.getState().updateProject(project.id, { hodMemberIds: [] })).toMatchObject({
+      ok: false,
+      error: 'Only Boss Koo or a Project Manager can change HOD project membership.',
+    });
+    expect(useStore.getState().updateProject(project.id, { projectManagerIds: [] })).toMatchObject({
+      ok: false,
+      error: 'Only Boss Koo can change Project Manager assignments.',
+    });
+    expect(useStore.getState().updateProject(project.id, { clientName: 'Other Co' })).toMatchObject({
+      ok: false,
+      error: 'HODs can update project work, but not the company link.',
+    });
+  });
+
   it('does not let a non-PM project creator edit HOD project membership', () => {
     const hod: User = { id: 'scope-hod-creator', name: 'HOD', role: 'HOD', departments: ['Designer'], department: 'Designer' };
     const project: Project = { ...company, id: 'staff-created-hod-project', createdBy: staff.id, hodMemberIds: [] };
