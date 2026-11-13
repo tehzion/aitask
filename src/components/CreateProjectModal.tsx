@@ -58,6 +58,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const clientSelectId = React.useId();
   const projectNameId = React.useId();
   const isEditing = Boolean(project);
+  const canChangeCompany = !project || isBossKoo(currentUser) || currentUser?.role === 'Project Manager' || project.createdBy === currentUser?.id;
   const pendingResolution = isPendingMutationResolution(backend);
 
   // A company search filter on the Companies page would hide the company this
@@ -389,7 +390,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         deadline: finalDeadline,
         services: allServices,
         ...(isBossKoo(currentUser) ? { projectManagerIds } : {}),
-        hodMemberIds,
+        ...(isBossKoo(currentUser) || currentUser?.role === 'Project Manager' ? { hodMemberIds } : {}),
         staffMemberIds,
         memberResponsibilities,
         defaultApprovalMode,
@@ -477,7 +478,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
               <select
                 required
                 id={clientSelectId}
-                value={clientId} onChange={e => { setClientId(e.target.value); setFormError(''); }}
+                value={clientId} disabled={!canChangeCompany} onChange={e => { setClientId(e.target.value); setFormError(''); }}
                 className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
               >
                 <option value="">{t('Choose a company')}</option>
@@ -543,7 +544,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
               </p>
             )}
 
-            {(isBossKoo(currentUser) || currentUser.role === 'Project Manager') && (
+            {(isBossKoo(currentUser) || currentUser.role === 'Project Manager' || isHodUser(currentUser, rolePermissions)) && (
               <fieldset className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                 <legend className="px-1 text-sm font-semibold text-slate-700">{t('Project staff')}</legend>
                 <p className="mb-2 text-xs leading-5 text-slate-500">{t('Assign shared employee accounts to this project without affecting their other projects.')}</p>
@@ -562,7 +563,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
               </fieldset>
             )}
 
-            {(isBossKoo(currentUser) || currentUser.role === 'Project Manager') && [...hodMemberIds, ...staffMemberIds].length > 0 && (
+            {(isBossKoo(currentUser) || currentUser.role === 'Project Manager' || isHodUser(currentUser, rolePermissions)) && [...hodMemberIds, ...staffMemberIds].length > 0 && (
               <fieldset className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                 <legend className="px-1 text-sm font-semibold text-slate-700">{t('Project responsibilities')}</legend>
                 <p className="mb-3 text-xs leading-5 text-slate-500">{t('Optional project-specific responsibility. This does not change the employee’s global role.')}</p>

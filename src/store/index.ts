@@ -96,6 +96,7 @@ import {
   isNotificationVisible,
   isBossKoo,
   isHodUser,
+  isProjectAssignedToUser,
   canViewTask,
   isHodRole,
   isDepartmentScopedUser,
@@ -3942,6 +3943,8 @@ export const useStore = create<StoreState>()(
         if (!currentUser || !project || !canEditProject(currentUser, project, state.rolePermissions)) {
           return { ok: false, error: 'You do not have permission to edit this project.' };
         }
+        const actorIsProjectHod = isHodUser(currentUser, state.rolePermissions)
+          && isProjectAssignedToUser(currentUser, project, state.rolePermissions);
         if (data.projectManagerIds !== undefined && !isBossKoo(currentUser)) {
           return { ok: false, error: 'Only Boss Koo can change Project Manager assignments.' };
         }
@@ -3949,8 +3952,17 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Only Boss Koo or a Project Manager can change HOD project membership.' };
         }
         if ((data.staffMemberIds !== undefined || data.memberResponsibilities !== undefined)
-          && !isBossKoo(currentUser) && currentUser.role !== 'Project Manager') {
+          && !isBossKoo(currentUser) && currentUser.role !== 'Project Manager' && !actorIsProjectHod) {
           return { ok: false, error: 'Only Boss Koo or an assigned Project Manager can change project team membership.' };
+        }
+        if (actorIsProjectHod && !isBossKoo(currentUser) && currentUser.role !== 'Project Manager'
+          && project.createdBy !== currentUser.id) {
+          const nextClientId = data.clientId !== undefined ? data.clientId || undefined : project.clientId;
+          const nextClientName = data.clientName !== undefined ? data.clientName.trim() : project.clientName;
+          if (nextClientId !== project.clientId
+            || normalizeClientKey(nextClientName) !== normalizeClientKey(project.clientName)) {
+            return { ok: false, error: 'HODs can update project work, but not the company link.' };
+          }
         }
 
         const clientName = data.clientName !== undefined ? data.clientName.trim() : project.clientName;
@@ -3971,8 +3983,11 @@ export const useStore = create<StoreState>()(
         const nextClientId = data.clientId !== undefined ? data.clientId : project.clientId;
         if (nextClientId) {
           const client = state.clients.find(item => item.id === nextClientId && !item.discovered);
+          const clientUnchanged = nextClientId === project.clientId
+            && normalizeClientKey(clientName) === normalizeClientKey(project.clientName);
           const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects }).map(normalizeClientKey));
-          if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) {
+          if (!(actorIsProjectHod && clientUnchanged)
+            && (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName))))) {
             return { ok: false, error: 'You can only link this project to a company you can access.' };
           }
         }
