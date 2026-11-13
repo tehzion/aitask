@@ -3,8 +3,9 @@ import React from 'react';
 import { useStore } from '../store';
 import { canManageServiceCycles, canViewServicePrices } from '../lib/access';
 import { canOpenServiceClient } from '../lib/access';
-import { isPendingMutationResolution } from '../store';
+import { isPendingMutationResolution, isWorkspaceMutationLocked } from '../store';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+import BackendFreshness from './BackendFreshness';
 import { useI18n } from './I18nProvider';
 import ModalShell from './ModalShell';
 import { Button } from './ui';
@@ -14,6 +15,7 @@ import { cyclePaymentSummary, halfPaymentMinor } from '../lib/cyclePayments';
 import { getBillingToday } from '../lib/monthlyRecords';
 import { formatMoney } from '../lib/serviceManagement';
 import { formatLocalizedDate, formatLocalizedDateTime } from '../lib/i18n';
+import { canRetrySave } from '../lib/actionFeedback';
 
 export default function CyclePaymentControl({ cycle }: { cycle: ServiceCycle }) {
   const store = useStore();
@@ -31,7 +33,9 @@ export default function CyclePaymentControl({ cycle }: { cycle: ServiceCycle }) 
   const canSee = canViewServicePrices(store.currentUser, store.rolePermissions) && store.currentUser?.role !== 'Client';
   const canManage = canSee && canManageServiceCycles(store.currentUser, store.rolePermissions) && canOpenServiceClient(store.currentUser, cycle.clientName, store.tasks, store.rolePermissions, store.clients, store.projects);
   const summary = cyclePaymentSummary(cycle, store.servicePricingSnapshots, store.serviceCyclePayments);
-  const blocked = isPendingMutationResolution(store.backend);
+  const needsResolution = isPendingMutationResolution(store.backend);
+  const blocked = needsResolution || isWorkspaceMutationLocked(store) || store.backend.upgradeRequired === true || store.backend.status === 'upgrade_required';
+  const canRetry = canRetrySave(store.backend) && !store.backend.upgradeRequired && store.backend.status !== 'upgrade_required' && !store.backend.isRestoring;
   const money = (value: number) => formatMoney(value, 'MYR', locale);
   const day = (value: string) => {
     const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
@@ -69,6 +73,22 @@ export default function CyclePaymentControl({ cycle }: { cycle: ServiceCycle }) 
       if (isWorkspaceSessionCurrent(session)) setError(failure instanceof Error ? failure.message : 'Unable to save payment.');
     } finally { guard.current = false; if (isWorkspaceSessionCurrent(session)) setBusy(false); }
   };
+  const restoreSaved = async () => {
+    if (guard.current) return;
+    guard.current = true; setBusy(true); setError('');
+    const session = captureWorkspaceSession();
+    try {
+      await store.discardMutation();
+      if (!isWorkspaceSessionCurrent(session)) return;
+      const latest = useStore.getState();
+      if (isWorkspaceMutationLocked(latest) || isPendingMutationResolution(latest.backend) || latest.backend.error) {
+        setError(latest.backend.error || t('Unable to reload saved data. Try again.')); return;
+      }
+      pending.current = null; setVoidId(''); setReason(''); setAmount('');
+    } catch (failure) {
+      if (isWorkspaceSessionCurrent(session)) setError(failure instanceof Error ? failure.message : t('Unable to reload saved data. Try again.'));
+    } finally { guard.current = false; if (isWorkspaceSessionCurrent(session)) setBusy(false); }
+  };
   return <div className="min-w-48 space-y-1 text-xs">
     <p className="font-medium text-ink">{t(summary.status)}</p>
     {summary.receipts.filter(item => !item.voidedAt).map(item => <p key={item.id} data-i18n-skip>{money(item.amountMinor)} · {day(item.paymentDate)}</p>)}
@@ -84,7 +104,9 @@ export default function CyclePaymentControl({ cycle }: { cycle: ServiceCycle }) 
           <Button type="submit" disabled={!voidId && summary.remaining <= 0}>{t(voidId ? 'Void receipt' : 'Record payment')}</Button>{voidId && <Button variant="secondary" onClick={() => setVoidId('')}>{t('Cancel')}</Button>}
         </fieldset></form>}
         {error && <p role="alert" className="mt-3 text-sm">{t(error)}</p>}
-        {pending.current && <Button variant="secondary" disabled={busy} onClick={() => void save(true)}>{t('Retry saved change')}</Button>}
+        {blocked && <div className="mt-3"><BackendFreshness compact onRetry={() => save(true)} onDiscard={restoreSaved} /></div>}
+        {store.backend.error && <p role="alert" className="mt-2 text-sm text-red-700">{t(store.backend.error)}</p>}
+        {canRetry && pending.current && !blocked && <Button variant="secondary" className="mt-3" disabled={busy} onClick={() => void save(true)}>{t('Retry saved change')}</Button>}
         <Button className="mt-4" variant="secondary" disabled={busy} onClick={() => setOpen(false)}>{t('Close')}</Button>
       </div>
     </ModalShell>}

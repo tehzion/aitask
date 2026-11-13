@@ -754,13 +754,22 @@ export const canEditProject = (
   project: Project,
   customRoles: CustomRole[] = []
 ) => {
-  void customRoles;
   if (!user) return false;
   return isBossKoo(user)
-    || (user.role === 'Project Manager' && isProjectAssignedToUser(user, project))
+    || (user.role === 'Project Manager' && isProjectAssignedToUser(user, project, customRoles))
+    || (user.role !== 'Project Manager' && project.createdBy === user.id)
+    || (isHodUser(user, customRoles) && isProjectAssignedToUser(user, project, customRoles));
+};
+export const canDeleteProject = (
+  user: User | null | undefined,
+  project: Project,
+  customRoles: CustomRole[] = []
+) => {
+  if (!user) return false;
+  return isBossKoo(user)
+    || (user.role === 'Project Manager' && isProjectAssignedToUser(user, project, customRoles))
     || (user.role !== 'Project Manager' && project.createdBy === user.id);
 };
-export const canDeleteProject = canEditProject;
 export const canReviewTaskAsClient = (user: User | null | undefined, task: Task, customRoles: CustomRole[] = []) => (
   user?.role === 'Client' &&
   task.visibility !== 'internal' &&

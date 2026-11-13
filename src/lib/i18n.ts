@@ -208,6 +208,7 @@ const zhCopy: Record<string, string> = {
   'Project managers': '项目经理',
   'Only Boss Koo can change Project Manager assignments.': '只有 Boss Koo 可以更改项目经理分配。',
   'Only Boss Koo or a Project Manager can change HOD project membership.': '只有 Boss Koo 或项目经理可以更改部门主管的项目成员资格。',
+  'HODs can update project work, but not the company link.': 'HOD 可以更新项目工作，但不能更改公司关联。',
   'Project health': '项目健康状况',
   'Health uses project and task deadlines, open work, and pending internal reviews.': '健康状况根据项目与任务截止日期、未完成工作及待处理的内部审核计算。',
   'tasks complete': '项任务已完成',
