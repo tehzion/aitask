@@ -163,7 +163,7 @@ test.describe('task detail authorization matrix', () => {
     const hodEditor = page.getByRole('dialog', { name: hodDepartmentTask.title });
     await expect(hodEditor.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await hodEditor.getByRole('button', { name: 'Edit', exact: true }).click();
-    await expect(hodEditor.locator('select').filter({ has: page.locator('option[value="u-staff-demo-local"]') })).toBeEnabled();
+    await expect(hodEditor.locator('select').filter({ has: page.locator('option[value="u-staff-demo-local"]') })).toBeDisabled();
 
     const staffAssignedTask = makeTask({
       id: 'e2e-staff-assigned',

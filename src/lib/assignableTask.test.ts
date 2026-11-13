@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { User } from '../types';
+import type { CustomRole, User } from '../types';
+import { defaultRolePermissions } from './access';
 import { assignableDepartments, STAFF_DEPARTMENTS } from './departments';
 import { assignableTaskAssignees, formatTaskAssigneeName } from './taskWorkflowAccess';
 
@@ -43,6 +44,12 @@ describe('assignableTaskAssignees', () => {
     expect(ids).not.toContain('video');
   });
 
+  it('offers cross-department Staff for an HOD-owned task without changing PM choices', () => {
+    expect(assignableTaskAssignees(hod, 'Designer', users, [], { task: { assignedTo: hod.id } }).map(user => user.id)).toEqual(['staff', 'video']);
+    expect(assignableTaskAssignees(hod, 'Designer', users, [], { task: { assignedTo: staff.id } }).map(user => user.id)).not.toContain('video');
+    expect(assignableTaskAssignees(pm, 'Designer', users, [], { task: { assignedTo: pm.id } }).map(user => user.id)).not.toContain('video');
+  });
+
   it('only offers selected-department members and excludes disabled accounts and Clients', () => {
     const options = assignableTaskAssignees(pm, 'Designer', [...users, { ...staff, id: 'disabled', hasLogin: false }, { ...staff, id: 'client', role: 'Client' }]);
     expect(options.map(user => user.id)).toEqual(['hod', 'staff']);
@@ -62,4 +69,21 @@ it('labels HODs without changing other assignee names', () => {
   expect(formatTaskAssigneeName(staff)).toBe('Staff');
   expect(formatTaskAssigneeName(pm)).toBe('PM');
   expect(formatTaskAssigneeName({ ...staff, customRoleId: 'builtin-hod' })).toBe('Staff (HOD)');
+});
+
+describe('HOD delegation targets', () => {
+  it('includes Staff from any department and excludes HODs, Clients, and unlinked members', async () => {
+    const { eligibleHodDelegationStaff } = await import('./taskWorkflowAccess');
+    const customHodRole: CustomRole = { id: 'custom-hod', name: 'Custom HOD', baseRole: 'HOD', permissions: defaultRolePermissions.HOD, createdAt: '', updatedAt: '' };
+    const options = eligibleHodDelegationStaff([
+      pm, hod, staff, videoStaff,
+      { ...staff, id: 'unlinked', hasLogin: false },
+      { ...staff, id: 'banned', hodDelegationEligible: false },
+      { ...staff, id: 'client', role: 'Client' },
+      { ...staff, id: 'hod-as-staff', customRoleId: 'builtin-hod' },
+      { ...staff, id: 'custom-hod-as-staff', customRoleId: customHodRole.id },
+      { ...staff, id: 'directory', directoryOnly: true },
+    ], [customHodRole]);
+    expect(options.map(user => user.id)).toEqual(['staff', 'video']);
+  });
 });

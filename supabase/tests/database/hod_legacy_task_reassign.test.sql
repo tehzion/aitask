@@ -21,10 +21,10 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000008801'
 select set_config('request.jwt.claim.role','authenticated',true);
 
 -- An older task: Staff A holds it, and no responsible HOD was recorded.
-select ok(private.aitask_task_assignment_is_valid('pgtap-legacy-hod','update',
+select ok(not private.aitask_task_assignment_is_valid('pgtap-legacy-hod','update',
   '{"department":"Video Editor","projectId":"legacy-proj","assignedTo":"legacy-staff-a","createdBy":"someone"}',
   '{"department":"Video Editor","projectId":"legacy-proj","assignedTo":"legacy-staff-b","createdBy":"someone","assignedBy":"legacy-hod","responsibleHodId":"legacy-hod","assignmentState":"assigned_staff"}'),
-  'the department HOD on the project can hand an older task to other Staff');
+  'the department HOD cannot hand off an older task they do not own');
 select ok(not private.aitask_task_assignment_is_valid('pgtap-legacy-hod','update',
   '{"department":"Designer","projectId":"legacy-proj","assignedTo":"legacy-designer","createdBy":"someone"}',
   '{"department":"Designer","projectId":"legacy-proj","assignedTo":"legacy-staff-b","createdBy":"someone"}'),

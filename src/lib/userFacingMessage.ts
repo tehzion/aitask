@@ -72,6 +72,10 @@ export const userFacingMessage = (value: unknown): string | MessageDescriptor =>
   if (renamed) return renamed;
   if (/^Complete every required predecessor before/.test(text)) return 'Complete the earlier workflow steps first.';
   if (/^Workflow details are unavailable\./.test(text)) return 'Workflow details are unavailable. Refresh this task and try again.';
+  const departmentMismatch = text.replace(/^FORBIDDEN:\s*/i, '').match(/^(.+?) is not (?:in the|assigned to) (.+?)(?: department)?\.$/i);
+  if (departmentMismatch) return msg('errors.assigneeDepartment', { name: departmentMismatch[1], department: departmentMismatch[2] });
+  if (/^Choose active internal Staff with a login\.$/i.test(text)) return msg('errors.hodAssigneeEligibility');
+  if (/^You can only delegate tasks you own\.$/i.test(text)) return msg('errors.hodTaskOwnership');
   if (/^FORBIDDEN:/i.test(text)) return msg('errors.permissionDenied');
   if (/^CONFLICT:/i.test(text)) return 'This work changed elsewhere. Review the saved data before retrying.';
   if (/^NOT_FOUND:/i.test(text)) return msg('feedback.unavailable');

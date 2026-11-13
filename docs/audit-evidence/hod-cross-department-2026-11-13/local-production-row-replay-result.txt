@@ -1,0 +1,33 @@
+BEGIN
+INSERT 0 3
+INSERT 0 1
+INSERT 0 3
+INSERT 0 2
+              set_config
+--------------------------------------
+ 200c1908-8c4a-439f-a565-922e17f31afc
+(1 row)
+
+  set_config
+---------------
+ authenticated
+(1 row)
+
+ mabel_member_resolved | mabel_is_hod | assignment_valid | mutation_allowed
+-----------------------+--------------+------------------+------------------
+ t                     | t            | t                | t
+(1 row)
+
+SET
+ command_applied
+-----------------
+ t
+(1 row)
+
+RESET
+ trigger_retains_hod_and_stamps_attribution
+--------------------------------------------
+ t
+(1 row)
+
+ROLLBACK

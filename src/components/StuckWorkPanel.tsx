@@ -54,7 +54,7 @@ const StuckRow = ({ task, mode }: { task: Task; mode: 'overdue' | 'unassigned' }
   const scope = { clients, projects, users };
   const canEdit = canEditTask(currentUser, task, rolePermissions, scope);
   const canAssign = canEdit && !getTaskAssignmentUnavailableReason(currentUser, task, rolePermissions, scope);
-  const assignees = canAssign ? assignableTaskAssignees(currentUser, task.department, users, rolePermissions) : [];
+  const assignees = canAssign ? assignableTaskAssignees(currentUser, task.department, users, rolePermissions, { task }) : [];
   const due = parseOptionalDate(task.dueDate);
   const run = async (apply: () => MutationActionResult) => {
     setSaving(true);

@@ -1,0 +1,88 @@
+{
+  "manifestVersion": "2026-11-13.4",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261110_workload_rls_read_speedup_production.json",
+  "immutable": false,
+  "capturedAt": "2026-11-13T11:54:11Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "READY FOR PRODUCTION APPROVAL: release candidate based on live production commit 9563a67; PR and Y.L approval required. The HOD migration is not applied to production.",
+  "validatedMigrationTail": [
+    "20261023063344_task_workflow_action_guards",
+    "20261023154255_bind_service_command_entity_types",
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover",
+    "20261102120000_plan_activation_entity_types",
+    "20261102130000_hod_assignee_output_files",
+    "20261102140000_addon_save_entity_types",
+    "20261102150000_task_assigned_at_format",
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign",
+    "20261103125940_hod_department_delegation_disable_staff_creation",
+    "20261103125949_pm_direct_internal_assignment",
+    "20261103143949_service_cycle_payments",
+    "20261104053237_restore_hod_handoff_and_codify_live_grants",
+    "20261104062406_block_project_delete_with_linked_tasks",
+    "20261106041228_optimize_pm_service_access",
+    "20261109141920_r3_s1_project_approval_pm",
+    "20261109193707_aitask_client_events",
+    "20261110015703_release_notice_everyday_saves",
+    "20261110071019_hod_staff_workload_summary",
+    "20261110114105_rls_read_speedup",
+    "20261110114150_audit_history_actor_snapshot_without_avatar",
+    "20261110130438_remove_service_addons",
+    "20261110174255_release_notice_start_wording",
+    "20261111111631_security_email_and_comment_files",
+    "20261112053140_hod_cross_department_delegation"
+  ],
+  "pendingProductionMigrations": [
+    "20261112053140_hod_cross_department_delegation"
+  ],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261111111631_security_email_and_comment_files",
+    "productionOnlyMigrations": [],
+    "migrationAnchors": "Release branch is based on live production commit 9563a67 and includes the three former production-only migrations. A clean local replay applied all 152 migrations, including 20261112053140, without anchor errors. The mutation anchor occurs twice as expected.",
+    "reportedFailure": "Read-only replay authenticated as Mabel's auth user 200c1908-8c4a-439f-a565-922e17f31afc (member 326b6b5e-fe78-4f81-acbe-7dcd0324ea2a) delegating task T-1793697276711-uc19q to Zi Yin (member U-1782900298644-bhjyb) returned false from private.aitask_task_assignment_is_valid and private.aitask_can_mutate_entity, both with the task status left as In Progress and with the status reset to Pending. The production row still shows assignedTo and responsibleHodId = Mabel, assignmentState = pending_hod, department = Video Editor, while Zi Yin is active internal Staff in Designer. The live validator rejects the target because its final eligibility predicate requires the target department to equal the task department.",
+    "reportedFailureEvidence": {
+      "taskRowReadOnly": "workspace aitask-main, entity T-1793697276711-uc19q, version 2, data length 1271 bytes",
+      "currentRoute": "assignedTo=Mabel; responsibleHodId=Mabel; assignmentState=pending_hod; status=In Progress; department=Video Editor",
+      "actor": "Mabel; auth user 200c1908-8c4a-439f-a565-922e17f31afc resolves to member 326b6b5e-fe78-4f81-acbe-7dcd0324ea2a; projected role Staff; is_hod true; departments Video Shooting, Video Editor; account not banned and not deleted",
+      "target": "Zi Yin; role Staff; departments Designer; account not banned and not deleted",
+      "replayResults": "assignment_valid_unchanged_status=false; mutation_allowed_unchanged_status=false; assignment_valid_pending_status=false",
+      "replaySetup": "JWT sub was set to the real auth user UUID, not the member id; the read-only transaction resolved the actor before evaluating the assignment.",
+      "localAfterReplay": "The same production task JSON, with Mabel as HOD and Zi Yin as Staff, passes the migrated local assignment validator, mutation guard and command; the trigger retains Mabel as responsibleHodId and stamps assignedBy/assigned_staff.",
+      "artifact": "docs/audit-evidence/hod-cross-department-2026-11-13/local-production-row-replay-result.txt"
+    },
+    "replayLimits": "The original browser/network request was not available. The proposed row was reconstructed from the current production row plus the requested assignee, actor, responsible HOD and assigned_staff route. Both the unchanged In Progress status and a Pending reset were tested; the original request could not be byte-for-byte replayed.",
+    "replayArtifacts": [
+      "docs/audit-evidence/hod-cross-department-2026-11-13/replay-mabel-ziyin.sql",
+      "docs/audit-evidence/hod-cross-department-2026-11-13/replay-mabel-ziyin-result.json",
+      "docs/audit-evidence/hod-cross-department-2026-11-13/live-functions.json",
+      "docs/audit-evidence/hod-cross-department-2026-11-13/task-current.json",
+      "docs/audit-evidence/hod-cross-department-2026-11-13/local-production-row-replay.sql",
+      "docs/audit-evidence/hod-cross-department-2026-11-13/local-production-row-replay-result.txt"
+    ]
+  },
+  "changeSummary": {
+    "20261112053140_hod_cross_department_delegation": "Allows an HOD to delegate owned open work to active internal Staff with a login across departments. The target must be Staff, must not be banned or deleted, must have an auth login, and must not hold an HOD custom role. The actor must own the task through assignedTo or responsibleHodId, keep manageCreatedTasks, and may not change department, project, client, completion or a locked status. The HOD remains responsibleHodId, the assignment trigger stamps server attribution and assigned_staff, and review routing continues to use the task department. The scoped eligibility lookup is HOD-only, and existing PM and ordinary Staff boundaries are unchanged.",
+    "plan-details-duplicate-editor": "Prevents the modal Edit details editor and the inline next-revision editor from mounting at the same time. This removes duplicate #next-month-plan ids, duplicate draft-recovery keys and duplicate unsaved-change listeners while preserving the existing production revision and Paused behavior."
+  },
+  "qualityGates": {
+    "localDatabase": "PASS (2026-11-13): clean Docker replay of all 152 migrations including 20261112053140. Full pgTAP suite: 95 files / 1,333 assertions. The cross-department file has 34 assertions covering same- and cross-department delegation, an In Progress owned task with legacy-omitted route fields, ineligible Client/banned/unlinked targets, ownership and locked-status denials, denied-notification rollback, assignee task/project/client visibility, Staff workflow actions, retained HOD oversight, department review routing, and ordinary Staff reassignment denial. rls_read_speedup and assignment-trigger suites pass. A rollback-only replay of the exact production task JSON authenticates as Mabel and confirms the migrated validator, mutation guard, command and trigger allow the delegation while retaining Mabel as responsibleHodId.",
+    "application": "PASS (2026-11-13): pnpm check, pnpm lint, i18n and strict i18n AST audits (0 findings across 232 source files), and unit tests (143 files / 1,128 tests). Production build and bundle budgets pass: eager JS 271.9 KiB gzip against the 300 KiB cap.",
+    "browser": "PASS for the release-specific flows: HOD parity 13/13, plan-details Add service 2/2 (en/zh), monthly payments 2/2 (en/zh), and client service workspace 1/1. The authorization matrix was updated to expect unowned HOD department work to remain non-reassignable and passes 3/3. All configured specs were exercised; the only remaining failures reproduce on untouched 9563a67: the cumulative responsive-audit matrix (1 test) and three staff-workspace-v2 screenshot baselines.",
+    "localSecurity": "PASS locally: anon and service_role cannot execute the eligibility lookup; ordinary Staff receive no eligible ids; anonymous and unauthenticated access is denied. The mutation validator independently rechecks actor ownership, target eligibility, status/completion, route fields and locked work. The entity trigger stamps assignedBy, assignedAt, responsibleHodId and assigned_staff, and HOD view/edit oversight is limited to tasks naming them.",
+    "productionApply": "NOT APPLIED. The release branch is based on live production commit 9563a67 and is ready for PR review. No production write or deployment was performed; the HOD migration requires Y.L approval after merge."
+  },
+  "releasePolicy": "Cross-department delegation is enabled for eligible HOD-owned tasks. No new configuration flag, audit-note field, or production setting is introduced.",
+  "unverifiedProductionBehavior": [
+    "The HOD migration has not been applied to production, so its replaced function definitions and trigger behavior are not live-verified there.",
+    "The original Mabel-to-Zi-Yin network request is unavailable; only a reconstructed read-only replay was possible.",
+    "Notification delivery to Zi Yin, cross-department project/client visibility, workflow actions and review routing after apply remain unverified against production data.",
+    "The responsive-audit matrix and three staff-workspace-v2 screenshot baselines fail identically on untouched production base 9563a67 and are recorded as pre-existing unrelated failures."
+  ]
+}

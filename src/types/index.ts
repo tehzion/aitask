@@ -78,6 +78,7 @@ export interface WorkspaceMember {
   version?: number;
   authUserId?: string;
   hasLogin?: boolean; // Explicit false marks an unlinked directory member; demos omit it.
+  hodDelegationEligible?: boolean; // Runtime-only server eligibility, including account ban state.
   workspaceId?: string;
   name: string;
   email?: string;

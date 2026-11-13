@@ -79,7 +79,7 @@ describe('PM to HOD routing', () => {
 
 describe('HOD delegation state', () => {
   it('moves the task to Staff while retaining the responsible HOD', () => {
-    const id = useStore.getState().addTask(taskDraft);
+    const id = useStore.getState().addTask({ ...taskDraft, assignedTo: hod.id });
     useStore.setState({ currentUser: hod });
     expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(true);
     expect(useStore.getState().tasks[0]).toMatchObject({
@@ -97,7 +97,7 @@ describe('HOD delegation state', () => {
 });
 
 it('lets the project HOD delegate to department Staff without project Staff membership', () => {
-  const id = useStore.getState().addTask(taskDraft);
+  const id = useStore.getState().addTask({ ...taskDraft, assignedTo: hod.id });
   expect(id).toBeTruthy();
   useStore.setState({ currentUser: hod, projects: [{ ...project, staffMemberIds: [] }] });
   expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(true);
@@ -132,4 +132,16 @@ it('lets an outside PM edit assigned work but keeps project moves and reassignme
   expect(useStore.getState().updateTask(id, { notes: 'Execution update' }).ok).toBe(true);
   expect(useStore.getState().updateTask(id, { projectId: otherProject.id }).ok).toBe(false);
   expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(false);
+});
+
+it('lets the responsible HOD reassign an owned task through the full edit path across departments', () => {
+  const crossStaff: User = { ...staff, id: 'routing-cross-staff', name: 'Cross Staff', departments: ['Video Editor'], department: 'Video Editor' };
+  useStore.setState({ users: [pm, hod, staff, crossStaff, client] });
+  const id = useStore.getState().addTask({ ...taskDraft, assignedTo: hod.id });
+  useStore.setState({ currentUser: hod });
+  expect(useStore.getState().updateTask(id, { assignedTo: crossStaff.id }).ok).toBe(true);
+  expect(useStore.getState().tasks.find(task => task.id === id)).toMatchObject({ assignedTo: crossStaff.id, responsibleHodId: hod.id, assignmentState: 'assigned_staff' });
+  expect(useStore.getState().notifications.some(notice => notice.targetUserId === crossStaff.id && notice.route?.entityId === id && notice.title === 'Task Assigned To You')).toBe(true);
+  expect(useStore.getState().updateTaskAssignee(id, staff.id).ok).toBe(true);
+  expect(useStore.getState().tasks.find(task => task.id === id)).toMatchObject({ assignedTo: staff.id, responsibleHodId: hod.id, assignmentState: 'assigned_staff' });
 });
