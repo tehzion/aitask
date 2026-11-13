@@ -7,6 +7,7 @@
   "projectRef": "ohjhwyiffgzyatcmmdql",
   "status": "READY FOR PRODUCTION APPROVAL: release candidate based on live production commit 9563a67; PR and Y.L approval required. The HOD migration is not applied to production.",
   "validatedMigrationTail": [
+    "20261023063344_task_workflow_action_guards",
     "20261023154255_bind_service_command_entity_types",
     "20261028120000_pm_no_hod_assignment_fallback",
     "20261028130000_service_command_guard_direct_writes",
@@ -34,7 +35,8 @@
     "20261110114150_audit_history_actor_snapshot_without_avatar",
     "20261110130438_remove_service_addons",
     "20261110174255_release_notice_start_wording",
-    "20261111111631_security_email_and_comment_files"
+    "20261111111631_security_email_and_comment_files",
+    "20261112053140_hod_cross_department_delegation"
   ],
   "pendingProductionMigrations": [
     "20261112053140_hod_cross_department_delegation"
