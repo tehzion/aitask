@@ -1,11 +1,11 @@
 {
-  "manifestVersion": "2026-11-13.2",
+  "manifestVersion": "2026-11-13.4",
   "manifestKind": "aitask-release-candidate",
   "supersedes": "aitask_release_manifest_20261110_workload_rls_read_speedup_production.json",
   "immutable": false,
-  "capturedAt": "2026-11-13T10:20:54Z",
+  "capturedAt": "2026-11-13T11:54:11Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "READY FOR PRODUCTION APPROVAL: release candidate committed; not applied to production. Y.L approval and production migration-history reconciliation are required before apply.",
+  "status": "READY FOR PRODUCTION APPROVAL: release candidate based on live production commit 9563a67; PR and Y.L approval required. The HOD migration is not applied to production.",
   "validatedMigrationTail": [
     "20261023154255_bind_service_command_entity_types",
     "20261028120000_pm_no_hod_assignment_fallback",
@@ -31,20 +31,19 @@
     "20261110015703_release_notice_everyday_saves",
     "20261110071019_hod_staff_workload_summary",
     "20261110114105_rls_read_speedup",
-    "20261110114150_audit_history_actor_snapshot_without_avatar"
+    "20261110114150_audit_history_actor_snapshot_without_avatar",
+    "20261110130438_remove_service_addons",
+    "20261110174255_release_notice_start_wording",
+    "20261111111631_security_email_and_comment_files"
   ],
   "pendingProductionMigrations": [
     "20261112053140_hod_cross_department_delegation"
   ],
   "productionVerification": {
-    "historyAligned": false,
+    "historyAligned": true,
     "historyThrough": "20261111111631_security_email_and_comment_files",
-    "productionOnlyMigrations": [
-      "20261110130438_remove_service_addons",
-      "20261110174255_release_notice_start_wording",
-      "20261111111631_security_email_and_comment_files"
-    ],
-    "migrationAnchors": "Read-only production inspection found the expected assignment, mutation, trigger, view, and edit function anchors; the mutation anchor occurs twice as expected. A local clean replay did not include the three later production migrations.",
+    "productionOnlyMigrations": [],
+    "migrationAnchors": "Release branch is based on live production commit 9563a67 and includes the three former production-only migrations. A clean local replay applied all 152 migrations, including 20261112053140, without anchor errors. The mutation anchor occurs twice as expected.",
     "reportedFailure": "Read-only replay authenticated as Mabel's auth user 200c1908-8c4a-439f-a565-922e17f31afc (member 326b6b5e-fe78-4f81-acbe-7dcd0324ea2a) delegating task T-1793697276711-uc19q to Zi Yin (member U-1782900298644-bhjyb) returned false from private.aitask_task_assignment_is_valid and private.aitask_can_mutate_entity, both with the task status left as In Progress and with the status reset to Pending. The production row still shows assignedTo and responsibleHodId = Mabel, assignmentState = pending_hod, department = Video Editor, while Zi Yin is active internal Staff in Designer. The live validator rejects the target because its final eligibility predicate requires the target department to equal the task department.",
     "reportedFailureEvidence": {
       "taskRowReadOnly": "workspace aitask-main, entity T-1793697276711-uc19q, version 2, data length 1271 bytes",
@@ -67,20 +66,21 @@
     ]
   },
   "changeSummary": {
-    "20261112053140_hod_cross_department_delegation": "Allows an HOD to delegate owned open work to active internal Staff with a login across departments. The target must be Staff, must not be banned or deleted, must have an auth login, and must not hold an HOD custom role. The actor must own the task through assignedTo or responsibleHodId, keep manageCreatedTasks, and may not change department, project, client, completion or a locked status. The HOD remains responsibleHodId, the assignment trigger stamps server attribution and assigned_staff, and review routing continues to use the task department. The scoped eligibility lookup is HOD-only, and existing PM and ordinary Staff boundaries are unchanged."
+    "20261112053140_hod_cross_department_delegation": "Allows an HOD to delegate owned open work to active internal Staff with a login across departments. The target must be Staff, must not be banned or deleted, must have an auth login, and must not hold an HOD custom role. The actor must own the task through assignedTo or responsibleHodId, keep manageCreatedTasks, and may not change department, project, client, completion or a locked status. The HOD remains responsibleHodId, the assignment trigger stamps server attribution and assigned_staff, and review routing continues to use the task department. The scoped eligibility lookup is HOD-only, and existing PM and ordinary Staff boundaries are unchanged.",
+    "plan-details-duplicate-editor": "Prevents the modal Edit details editor and the inline next-revision editor from mounting at the same time. This removes duplicate #next-month-plan ids, duplicate draft-recovery keys and duplicate unsaved-change listeners while preserving the existing production revision and Paused behavior."
   },
   "qualityGates": {
-    "localDatabase": "PASS (2026-11-13): clean Docker replay of all 149 migrations including 20261112053140. Full pgTAP suite: 93 files / 1,319 assertions. The new cross-department file has 34 assertions covering same- and cross-department delegation, an In Progress owned task with legacy-omitted route fields, ineligible Client/banned/unlinked targets, ownership and locked-status denials, denied-notification rollback, assignee task/project/client visibility, Staff workflow actions, retained HOD oversight, department review routing, and ordinary Staff reassignment denial. The existing rls_read_speedup and assignment-trigger suites also pass. A separate rollback-only replay seeded the exact production task JSON and auth identities: the live validator rejected the delegation before apply, while the migrated local validator, mutation guard, command and trigger all accept it and keep Mabel as responsibleHodId.",
-    "application": "PASS (2026-11-13): pnpm check, pnpm lint, i18n and strict i18n AST audits (0 findings across 231 source files each), and unit tests (142 files / 1,130 tests). Helper and picker coverage includes cross-department Staff, server eligibility flags, custom HOD roles, Clients, unlinked and directory-only members.",
-    "browser": "PASS (2026-11-13): e2e/hod-permission-parity.spec.ts 13/13 tests, including cross-department delegation, retained oversight, rejected-delegation recovery, empty recipient feedback, and unchanged PM/foreign-task limits.",
+    "localDatabase": "PASS (2026-11-13): clean Docker replay of all 152 migrations including 20261112053140. Full pgTAP suite: 95 files / 1,333 assertions. The cross-department file has 34 assertions covering same- and cross-department delegation, an In Progress owned task with legacy-omitted route fields, ineligible Client/banned/unlinked targets, ownership and locked-status denials, denied-notification rollback, assignee task/project/client visibility, Staff workflow actions, retained HOD oversight, department review routing, and ordinary Staff reassignment denial. rls_read_speedup and assignment-trigger suites pass. A rollback-only replay of the exact production task JSON authenticates as Mabel and confirms the migrated validator, mutation guard, command and trigger allow the delegation while retaining Mabel as responsibleHodId.",
+    "application": "PASS (2026-11-13): pnpm check, pnpm lint, i18n and strict i18n AST audits (0 findings across 232 source files), and unit tests (143 files / 1,128 tests). Production build and bundle budgets pass: eager JS 271.9 KiB gzip against the 300 KiB cap.",
+    "browser": "PASS for the release-specific flows: HOD parity 13/13, plan-details Add service 2/2 (en/zh), monthly payments 2/2 (en/zh), and client service workspace 1/1. The authorization matrix was updated to expect unowned HOD department work to remain non-reassignable and passes 3/3. All configured specs were exercised; the only remaining failures reproduce on untouched 9563a67: the cumulative responsive-audit matrix (1 test) and three staff-workspace-v2 screenshot baselines.",
     "localSecurity": "PASS locally: anon and service_role cannot execute the eligibility lookup; ordinary Staff receive no eligible ids; anonymous and unauthenticated access is denied. The mutation validator independently rechecks actor ownership, target eligibility, status/completion, route fields and locked work. The entity trigger stamps assignedBy, assignedAt, responsibleHodId and assigned_staff, and HOD view/edit oversight is limited to tasks naming them.",
-    "productionApply": "NOT APPLIED. The release candidate is committed locally and ready for Y.L approval after reconciling the three production-only migrations. No production write, deployment, or push was performed."
+    "productionApply": "NOT APPLIED. The release branch is based on live production commit 9563a67 and is ready for PR review. No production write or deployment was performed; the HOD migration requires Y.L approval after merge."
   },
   "releasePolicy": "Cross-department delegation is enabled for eligible HOD-owned tasks. No new configuration flag, audit-note field, or production setting is introduced.",
   "unverifiedProductionBehavior": [
-    "The migration has not been applied to production, so its replaced function definitions and trigger behavior are not live-verified there.",
+    "The HOD migration has not been applied to production, so its replaced function definitions and trigger behavior are not live-verified there.",
     "The original Mabel-to-Zi-Yin network request is unavailable; only a reconstructed read-only replay was possible.",
     "Notification delivery to Zi Yin, cross-department project/client visibility, workflow actions and review routing after apply remain unverified against production data.",
-    "The three production-only migrations (20261110130438, 20261110174255, 20261111111631) are not present in the local clean replay; production behavior after those migrations is covered only by live-definition inspection."
+    "The responsive-audit matrix and three staff-workspace-v2 screenshot baselines fail identically on untouched production base 9563a67 and are recorded as pre-existing unrelated failures."
   ]
 }
