@@ -7,12 +7,13 @@ import { getTodayInputDate, parseOptionalDate } from '../../../shared/utils/util
 import { getCurrentPlanCycle } from '../../dashboard/domain/dashboardData';
 import ContextualTutorialLink from '../../help/components/ContextualTutorialLink';
 
-const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upcomingPlan, onCreateNextPlan, onViewNextPlan, onViewCycle, onViewHistory }: {
+const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upcomingPlan, onEditDetails, onCreateNextPlan, onViewNextPlan, onViewCycle, onViewHistory }: {
   plan: ClientServicePlan;
   cycles: ServiceCycle[];
   today: Date;
   canManagePlans?: boolean;
   upcomingPlan?: ClientServicePlan;
+  onEditDetails?: () => void;
   onCreateNextPlan?: () => void;
   onViewNextPlan?: () => void;
   onViewCycle?: (cycleId: string) => void;
@@ -47,6 +48,7 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
         <p className="mt-1 text-sm font-medium text-ink" data-i18n-skip>{plan.name}</p>
       </div>
       <div className="flex flex-wrap gap-2">
+        {canManagePlans && ['Draft', 'Active'].includes(plan.status) && <Button variant="secondary" onClick={onEditDetails}>{t('Edit details')}</Button>}
         {upcomingPlan ? <Button variant="secondary" onClick={onViewNextPlan}><Eye aria-hidden="true" className="h-4 w-4" />{t('View Next Month’s Plan')}</Button>
           : canManagePlans && (plan.status === 'Active' || plan.status === 'Ended') && <Button onClick={onCreateNextPlan}><Plus aria-hidden="true" className="h-4 w-4" />{t("Create Next Month's Plan")}</Button>}
         {history.length > 0 && <Button variant="secondary" onClick={onViewHistory}><History aria-hidden="true" className="h-4 w-4" />{t('View Plan History')}</Button>}
