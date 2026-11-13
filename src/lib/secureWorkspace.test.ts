@@ -406,6 +406,33 @@ describe('secure command retry identity', () => {
     expect(byType.get('service_cycle.manage')).toEqual(['service_cycle']);
   });
 
+  it('isolates payment rows from a mixed task, service and notification diff', () => {
+    const operations = [
+      operation('task', 'insert'),
+      operation('service_cycle'),
+      operation('service_cycle_payment', 'insert'),
+      operation('notification', 'insert'),
+    ];
+    const groups = partitionOperationsWithExplicitType(operations, 'task.create');
+    const byType = new Map(groups.map(group => [group.type, group.operations.map(item => item.entityType)]));
+    expect(byType.get('task.create')).toEqual(['task', 'notification']);
+    expect(byType.get('service_cycle.manage')).toEqual(['service_cycle']);
+    expect(byType.get('service_cycle_payment.record')).toEqual(['service_cycle_payment']);
+    expect(groups.filter(group => group.type === 'service_cycle_payment.record')).toHaveLength(1);
+  });
+
+  it('splits multiple payment rows and keeps related service work on its owner', () => {
+    const groups = partitionOperationsWithExplicitType([
+      operation('service_cycle_payment', 'insert'),
+      operation('service_cycle_payment'),
+      operation('service_cycle'),
+    ], 'service_cycle_payment.record');
+    const byType = new Map(groups.map(group => [group.type, group.operations.map(item => item.entityType)]));
+    expect(byType.get('service_cycle_payment.record')).toEqual(['service_cycle_payment']);
+    expect(byType.get('service_cycle_payment.void')).toEqual(['service_cycle_payment']);
+    expect(byType.get('service_cycle.manage')).toEqual(['service_cycle']);
+  });
+
   it('sends a pending catalog template in its own command beside a deliverable update', () => {
     const operations = [
       operation('task'),
