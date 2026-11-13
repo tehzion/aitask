@@ -20,6 +20,12 @@ Only items with evidence from this check are marked.
 
 New since the audit: `aitask_entity_history` holds about 81 MB of the 107 MB production database and needs a retention policy.
 
+## Status on 2026-11-13
+
+- Release control: `20261113090000_hod_project_management` is applied to production. Repository and production migration names match exactly (153/153). The applied release manifest is `supabase/preflight/aitask_release_manifest_20261113z_hod_project_payment_applied_production.json`; `node scripts/verify-release-db-alignment.mjs` passes.
+- This supersedes the 148/148 `REL-002` evidence above.
+- Production cleanup: removed four QA/demo member accounts and the `TEST ONLY` client/project after a rollback-only dry run. The targeted rollback snapshot is `private.qa_cleanup_backup_20261113` (RLS enabled, no anon/authenticated access). Post-cleanup state: 8 members, 8 auth users, 0 orphan auth users, 43 clients, 43 projects, 53 tasks.
+
 ## P1 — release blockers
 
 | ID | Module | Gap | Impact | Evidence | Action |
