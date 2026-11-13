@@ -105,7 +105,7 @@ const projectionToEntityRow = (
   const clientCustomRoleId = customRoleId;
   const visibleEntityRows = currentUser.role === 'Client'
     ? entityRows.filter(row => (
-        !['task', 'project', 'client', 'comment', 'approval', 'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon', 'service_package', 'service_workflow_template', 'service_pricing_snapshot', 'registration', 'task_status'].includes(row.entity_type)
+        !['task', 'project', 'client', 'comment', 'approval', 'client_plan', 'service_cycle', 'service_cycle_payment', 'deliverable', 'cycle_comment', 'addon', 'service_package', 'service_workflow_template', 'service_pricing_snapshot', 'registration', 'task_status'].includes(row.entity_type)
         && (row.entity_type !== 'custom_role' || row.entity_id === clientCustomRoleId)
       ))
     : entityRows;

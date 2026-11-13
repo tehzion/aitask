@@ -19,6 +19,7 @@ import type {
   Role,
   RolePermissions,
   ServiceCycle,
+  ServiceCyclePayment,
   ServicePackage,
   ServicePricingSnapshot,
   ServiceWorkflowTemplate,
@@ -413,16 +414,34 @@ const superAdminOnlyEntityTypes = new Set(['custom_role', 'task_status', 'regist
 // handles too.
 const serviceEntityTypes = new Set([
   'service_package', 'service_workflow_template', 'service_pricing_snapshot',
-  'client_plan', 'service_cycle', 'deliverable', 'cycle_comment', 'addon',
+  'client_plan', 'service_cycle', 'service_cycle_payment', 'deliverable', 'cycle_comment', 'addon',
 ]);
 
 // Command types handled by the service RPC. The generic RPC rejects service
 // entity types, so a mixed diff must never be sent under a single generic type.
 const serviceCommandTypes = new Set<SecureCommandType>([
   'service_package.manage', 'client_plan.manage', 'service_cycle.manage',
+  'service_cycle_payment.record', 'service_cycle_payment.void',
   'deliverable.manage', 'cycle_comment.manage', 'addon.manage',
   'service_workflow.manage', 'deliverable.workflow.generate',
 ]);
+
+// Payment receipts use their own RPC and must never be batched with other
+// service rows. Keep each receipt operation in an isolated command.
+const serviceCommandGroups = (
+  operations: WorkspaceOperation[],
+  selfMemberId?: string,
+): { type: SecureCommandType; operations: WorkspaceOperation[] }[] => {
+  const groups: { type: SecureCommandType; operations: WorkspaceOperation[] }[] = [];
+  const nonPayment = operations.filter(operation => operation.entityType !== 'service_cycle_payment');
+  if (nonPayment.length > 0) {
+    groups.push({ type: inferSecureCommandType(nonPayment, { selfMemberId }), operations: nonPayment });
+  }
+  operations.filter(operation => operation.entityType === 'service_cycle_payment').forEach(operation => {
+    groups.push({ type: inferSecureCommandType([operation], { selfMemberId }), operations: [operation] });
+  });
+  return groups;
+};
 
 export const buildOperations = (
   state: PersistedWorkspaceState,
@@ -520,6 +539,7 @@ export const inferSecureCommandType = (
   // subscription can save that paired change before its UI handler supplies a
   // command type, so keep the whole operation on the service RPC.
   if ([...entityTypes].every(entityType => serviceEntityTypes.has(entityType))) {
+    if (entityTypes.has('service_cycle_payment')) return actions.has('update') ? 'service_cycle_payment.void' : 'service_cycle_payment.record';
     if (entityTypes.has('deliverable')) return 'deliverable.manage';
     if (entityTypes.has('service_cycle')) return 'service_cycle.manage';
     if (entityTypes.has('cycle_comment')) return 'cycle_comment.manage';
@@ -578,12 +598,7 @@ const partitionOperationsForRpc = (
       operations: genericOperations,
     });
   }
-  if (serviceOperations.length > 0) {
-    groups.push({
-      type: inferSecureCommandType(serviceOperations, { selfMemberId }),
-      operations: serviceOperations,
-    });
-  }
+  groups.push(...serviceCommandGroups(serviceOperations, selfMemberId));
   return groups;
 };
 
@@ -600,6 +615,20 @@ export const partitionOperationsWithExplicitType = (
   type: SecureCommandType,
   selfMemberId?: string,
 ): { type: SecureCommandType; operations: WorkspaceOperation[] }[] => {
+  const paymentOperations = operations.filter(operation => operation.entityType === 'service_cycle_payment');
+  if (paymentOperations.length > 0) {
+    const remaining = operations.filter(operation => operation.entityType !== 'service_cycle_payment');
+    return [
+      ...(remaining.length
+        ? partitionOperationsWithExplicitType(
+          remaining,
+          type.startsWith('service_cycle_payment.') ? inferSecureCommandType(remaining, { selfMemberId }) : type,
+          selfMemberId,
+        )
+        : []),
+      ...paymentOperations.map(operation => ({ type: inferSecureCommandType([operation], { selfMemberId }), operations: [operation] })),
+    ];
+  }
   if (serviceCommandTypes.has(type)) {
     return [{ type, operations }];
   }
@@ -644,12 +673,7 @@ export const partitionOperationsWithExplicitType = (
   if (genericOperations.length > 0) {
     groups.push({ type, operations: genericOperations });
   }
-  if (serviceOperations.length > 0) {
-    groups.push({
-      type: inferSecureCommandType(serviceOperations, { selfMemberId }),
-      operations: serviceOperations,
-    });
-  }
+  groups.push(...serviceCommandGroups(serviceOperations, selfMemberId));
   return groups;
 };
 
@@ -837,6 +861,7 @@ export const overlayRetainedWorkspaceEntities = (
     servicePackages: overlayList(remote.servicePackages, local.servicePackages, 'service_package'),
     clientPlans: overlayList(remote.clientPlans, local.clientPlans, 'client_plan'),
     serviceCycles: overlayList(remote.serviceCycles, local.serviceCycles, 'service_cycle'),
+    serviceCyclePayments: overlayList(remote.serviceCyclePayments, local.serviceCyclePayments, 'service_cycle_payment'),
     deliverables: overlayList(remote.deliverables, local.deliverables, 'deliverable'),
     cycleComments: overlayList(remote.cycleComments, local.cycleComments, 'cycle_comment'),
     addons: overlayList(remote.addons, local.addons, 'addon'),
@@ -866,7 +891,7 @@ const executeCommand = async (
       p_operations: command.operations,
       p_expected_workspace_version: expectedWorkspaceVersion ?? null,
     }))
-    : withSyncTimeout(supabase.rpc(serviceCommand ? 'aitask_execute_service_command' : 'aitask_execute_command', {
+    : withSyncTimeout(supabase.rpc(command.type.startsWith('service_cycle_payment.') ? 'aitask_execute_payment_command' : serviceCommand ? 'aitask_execute_service_command' : 'aitask_execute_command', {
       p_workspace_id: SECURE_WORKSPACE_ID,
       p_command_id: command.id,
       p_command_type: command.type,
@@ -1302,6 +1327,7 @@ const loadSecureWorkspaceInternal = async (authUser: User, options: WorkspaceLoa
     servicePackages: dataFor<ServicePackage>('service_package'),
     clientPlans: dataFor<ClientServicePlan>('client_plan'),
     serviceCycles: dataFor<ServiceCycle>('service_cycle'),
+    serviceCyclePayments: dataFor<ServiceCyclePayment>('service_cycle_payment'),
     deliverables: dataFor<Deliverable>('deliverable'),
     cycleComments: dataFor<CycleComment>('cycle_comment'),
     addons: dataFor<Addon>('addon'),

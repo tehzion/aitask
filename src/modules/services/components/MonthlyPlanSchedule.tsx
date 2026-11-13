@@ -1,4 +1,5 @@
 import { CalendarClock, Eye, History, Plus } from 'lucide-react';
+import CyclePaymentControl from './CyclePaymentControl';
 import { useI18n } from '../../../shared/components/I18nProvider';
 import { Button, StatusChip } from '../../../shared/components/ui';
 import { formatLocalizedDate } from '../../../shared/i18n/i18n';
@@ -26,10 +27,11 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
   const previousCycle = cycles
     .filter(item => item.clientId === plan.clientId && item.periodEnd < todayKey)
     .sort((left, right) => right.periodEnd.localeCompare(left.periodEnd))[0];
-  const history = cycles
+  const otherMonths = cycles
     .filter(item => item.clientId === plan.clientId && item.id !== cycle?.id)
-    .sort((left, right) => right.periodStart.localeCompare(left.periodStart))
-    .slice(0, 6);
+    .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
+  const history = (cycle ? [cycle, ...otherMonths.slice(0, 5)] : otherMonths.slice(0, 6))
+    .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
   const dateLabel = (value: string) => {
     const date = parseOptionalDate(value);
     return date ? formatLocalizedDate(date, locale) : t('Not scheduled');
@@ -73,8 +75,8 @@ const MonthlyPlanSchedule = ({ plan, cycles, today, canManagePlans = false, upco
     {history.length > 0 && <div className="mt-5 overflow-x-auto border-t border-line pt-4">
       <h3 className="text-sm font-semibold text-ink">{t('Plan History')}</h3>
       <table className="mt-3 w-full min-w-[520px] text-left text-sm">
-        <thead className="text-xs text-muted"><tr><th className="pb-2 font-medium">{t('Month')}</th><th className="pb-2 font-medium">{t('Period')}</th><th className="pb-2 font-medium">{t('Status')}</th><th className="pb-2 text-right font-medium">{t('Action')}</th></tr></thead>
-        <tbody className="divide-y divide-line/70">{history.map(item => <tr key={item.id}><td className="py-3 font-medium text-ink">{dateLabel(item.periodStart)}</td><td className="py-3 text-muted">{dateLabel(item.periodStart)} – {dateLabel(item.periodEnd)}</td><td className="py-3"><StatusChip tone={cycleState(item) === 'Active' ? 'emerald' : cycleState(item) === 'Upcoming' ? 'amber' : 'slate'}>{t(cycleState(item))}</StatusChip></td><td className="py-3 text-right"><Button variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => onViewCycle?.(item.id)}>{t('View')}</Button></td></tr>)}</tbody>
+        <thead className="text-xs text-muted"><tr><th className="pb-2 font-medium">{t('Month')}</th><th className="pb-2 font-medium">{t('Period')}</th><th className="pb-2 font-medium">{t('Status')}</th><th className="pb-2 font-medium">{t('Payment')}</th><th className="pb-2 text-right font-medium">{t('Action')}</th></tr></thead>
+        <tbody className="divide-y divide-line/70">{history.map(item => <tr key={item.id}><td className="py-3 font-medium text-ink">{dateLabel(item.periodStart)}</td><td className="py-3 text-muted">{dateLabel(item.periodStart)} – {dateLabel(item.periodEnd)}</td><td className="py-3"><StatusChip tone={cycleState(item) === 'Active' ? 'emerald' : cycleState(item) === 'Upcoming' ? 'amber' : 'slate'}>{t(cycleState(item))}</StatusChip></td><td className="py-3"><CyclePaymentControl cycle={item} /></td><td className="py-3 text-right"><Button variant="secondary" className="min-h-9 px-3 py-1.5" onClick={() => onViewCycle?.(item.id)}>{t('View')}</Button></td></tr>)}</tbody>
       </table>
     </div>}
   </section>;

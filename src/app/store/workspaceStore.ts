@@ -153,6 +153,7 @@ export const useStore = create<StoreState>()(
         servicePackages: [],
         clientPlans: [],
         serviceCycles: [],
+        serviceCyclePayments: [],
         deliverables: [],
         cycleComments: [],
         addons: [],
@@ -1065,6 +1066,7 @@ export const useStore = create<StoreState>()(
           servicePackages: state.servicePackages,
           clientPlans: state.clientPlans,
           serviceCycles: state.serviceCycles,
+          serviceCyclePayments: state.serviceCyclePayments,
           deliverables: state.deliverables,
           cycleComments: state.cycleComments,
           addons: state.addons,
@@ -1263,6 +1265,7 @@ export const startBackendAutoSync = () => {
       state.servicePackages !== previousState.servicePackages ||
       state.clientPlans !== previousState.clientPlans ||
       state.serviceCycles !== previousState.serviceCycles ||
+      state.serviceCyclePayments !== previousState.serviceCyclePayments ||
       state.deliverables !== previousState.deliverables ||
       state.cycleComments !== previousState.cycleComments ||
       state.addons !== previousState.addons;
@@ -1291,6 +1294,7 @@ export const startBackendAutoSync = () => {
         servicePackages: previousState.servicePackages,
         clientPlans: previousState.clientPlans,
         serviceCycles: previousState.serviceCycles,
+        serviceCyclePayments: previousState.serviceCyclePayments,
         deliverables: previousState.deliverables,
         cycleComments: previousState.cycleComments,
         addons: previousState.addons,
@@ -1442,7 +1446,7 @@ export const clearWorkspaceSession = (options: { discardPending?: boolean } = {}
     currentUser: null,
     ...(shouldUseSupabase() ? {
       taskStatuses: [], users: [], clients: [], projects: [], tasks: [], notifications: [], registrations: [], rolePermissions: [],
-      clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], servicePackages: [],
+      clientPlans: [], serviceCycles: [], serviceCyclePayments: [], deliverables: [], cycleComments: [], addons: [], servicePackages: [],
       serviceWorkflowTemplates: [], servicePricingSnapshots: [], notificationUnreadCount: 0,
       deletedUserIds: [], deletedRoleIds: [], deletedTaskStatuses: [], deletedClientIds: [],
     } : {}),

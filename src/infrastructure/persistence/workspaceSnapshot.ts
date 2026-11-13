@@ -37,7 +37,7 @@ export const stripSensitiveWorkspaceFields = (value: unknown): unknown => {
 };
 
 export const sanitizeWorkspaceStateForSnapshot = (
-  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'deliverables' | 'cycleComments' | 'addons' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
+  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'addons' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
 ): PersistedWorkspaceState => stripSensitiveWorkspaceFields({
   users: state.users.map(user => stripPassword(user as User & { password?: string })),
   clients: state.clients || [],
@@ -54,6 +54,7 @@ export const sanitizeWorkspaceStateForSnapshot = (
   servicePackages: state.servicePackages || [],
   clientPlans: state.clientPlans || [],
   serviceCycles: state.serviceCycles || [],
+  serviceCyclePayments: state.serviceCyclePayments || [],
   deliverables: state.deliverables || [],
   cycleComments: state.cycleComments || [],
   addons: state.addons || [],
@@ -212,6 +213,6 @@ export const mergePersistedWorkspace = (persistedState: unknown, currentState: S
 export const workspaceMutationFields: Array<keyof StoreState> = [
   'users', 'clients', 'projects', 'tasks', 'notifications', 'registrations', 'rolePermissions', 'taskStatuses',
   'deletedUserIds', 'deletedRoleIds', 'deletedTaskStatuses', 'deletedClientIds',
-  'servicePackages', 'clientPlans', 'serviceCycles', 'deliverables', 'cycleComments', 'addons',
+  'servicePackages', 'clientPlans', 'serviceCycles', 'serviceCyclePayments', 'deliverables', 'cycleComments', 'addons',
   'serviceWorkflowTemplates', 'servicePricingSnapshots',
 ];

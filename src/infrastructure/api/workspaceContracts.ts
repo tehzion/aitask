@@ -19,7 +19,7 @@ export const BACKEND_RETRY_REQUIRED_MESSAGE = enMessages['errors.workspaceRetry'
 
 export const WORKSPACE_ENTITY_TYPES = [
   'task', 'project', 'client', 'comment', 'approval', 'task_status', 'custom_role',
-  'registration', 'service_package', 'client_plan', 'service_cycle', 'deliverable',
+  'registration', 'service_package', 'client_plan', 'service_cycle', 'service_cycle_payment', 'deliverable',
   'cycle_comment', 'addon', 'service_workflow_template', 'service_pricing_snapshot',
 ] as const;
 
@@ -48,6 +48,8 @@ export const SECURE_COMMAND_TYPES = [
   'service_package.manage',
   'client_plan.manage',
   'service_cycle.manage',
+  'service_cycle_payment.record',
+  'service_cycle_payment.void',
   'deliverable.manage',
   'cycle_comment.manage',
   'addon.manage',

@@ -7,7 +7,8 @@ import {
   canManageServiceCatalog,
   canManageServiceCycles,
   canManageTaskTemplates,
-  canOpenServiceClient
+  canOpenServiceClient,
+  canViewServicePrices
 } from '../../../shared/authorization/access';
 import {
   isEligibleTaskAssignee
@@ -34,6 +35,7 @@ import { getTodayInputDate } from '../../../shared/utils/utils';
 import { cleanProfileText, isValidIsoDate, nowId } from '../../../shared/validation/workspaceInput';
 import { isServiceClientInScope, normalizeClientKey, serviceClientScopeError } from '../../clients/application/clientScope';
 import { allowedDepartments } from '../../tasks/application/taskRules';
+import { cyclePaymentSummary } from '../domain/cyclePayments';
 import { hasInvalidDeliveryLink } from '../domain/deliveryLinks';
 import { getBillingToday, validateRevisionItems } from '../domain/monthlyRecords';
 import {
@@ -46,7 +48,7 @@ import {
   resolveDeliverableStatus
 } from '../domain/serviceManagement';
 import { allowedServiceCycleTransitions, deriveServiceProgress } from './serviceProgress';
-export const createServicesActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<StoreState, "saveServicePackage" | "saveWorkflowTemplate" | "deleteServicePackage" | "deleteWorkflowTemplate" | "createClientWithPlan" | "createClientPlan" | "createClientPlanRevision" | "scheduleClientPlanRevision" | "returnClientPlanRevisionToDraft" | "updateDraftClientPlan" | "updateActivePlanDates" | "activateClientPlan" | "generateDueLocalServiceCycles" | "setClientPlanStatus" | "setServiceCycleStatus" | "updateDeliverableStatus" | "unlinkInvalidTaskDelivery" | "linkTaskToDeliverable" | "generateDeliverableTaskChain" | "carryForwardTaskToCycle" | "addCycleComment" | "addCycleCommentAttachment" | "addAddon" | "setAddonActive"> => ({
+export const createServicesActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<StoreState, "saveServicePackage" | "saveWorkflowTemplate" | "deleteServicePackage" | "deleteWorkflowTemplate" | "createClientWithPlan" | "createClientPlan" | "createClientPlanRevision" | "scheduleClientPlanRevision" | "returnClientPlanRevisionToDraft" | "updateDraftClientPlan" | "updateActivePlanDates" | "activateClientPlan" | "generateDueLocalServiceCycles" | "setClientPlanStatus" | "recordServiceCyclePayment" | "voidServiceCyclePayment" | "setServiceCycleStatus" | "updateDeliverableStatus" | "unlinkInvalidTaskDelivery" | "linkTaskToDeliverable" | "generateDeliverableTaskChain" | "carryForwardTaskToCycle" | "addCycleComment" | "addCycleCommentAttachment" | "addAddon" | "setAddonActive"> => ({
   saveServicePackage: (data) => {
     const state = get();
     if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
@@ -305,6 +307,31 @@ export const createServicesActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     }));
     useToastStore.getState().addToast(msg('plan.createdForClient', { name: client.clientName }), 'success');
     return { ok: true, planId };
+  },
+  recordServiceCyclePayment: (cycleId, amountMinor, paymentDate) => {
+    const state = get();
+    if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+    const actor = state.currentUser;
+    const cycle = state.serviceCycles.find(item => item.id === cycleId);
+    if (!actor || actor.role === 'Client' || !cycle || !canManageServiceCycles(actor, state.rolePermissions) || !canViewServicePrices(actor, state.rolePermissions) || !isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: 'You cannot record payments for this client.' };
+    if (!Number.isSafeInteger(amountMinor) || amountMinor <= 0) return { ok: false, error: 'Enter a positive amount in MYR.' };
+    if (!isValidIsoDate(paymentDate) || paymentDate > getBillingToday()) return { ok: false, error: 'Choose a payment date that is not in the future.' };
+    const summary = cyclePaymentSummary(cycle, state.servicePricingSnapshots, state.serviceCyclePayments);
+    if (amountMinor > summary.remaining) return { ok: false, error: 'The amount exceeds the remaining balance.' };
+    const id = nowId('PAY');
+    set({ serviceCyclePayments: [...state.serviceCyclePayments, { id, cycleId, clientId: cycle.clientId, amountMinor, paymentDate, createdBy: actor.id, createdAt: new Date().toISOString() }] });
+    return { ok: true, id };
+  },
+  voidServiceCyclePayment: (paymentId, reason) => {
+    const state = get();
+    if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+    const actor = state.currentUser;
+    const receipt = state.serviceCyclePayments.find(item => item.id === paymentId);
+    if (!actor || actor.role === 'Client' || !receipt || !canManageServiceCycles(actor, state.rolePermissions) || !canViewServicePrices(actor, state.rolePermissions) || !isServiceClientInScope(state, receipt.clientId)) return { ok: false, error: 'You cannot record payments for this client.' };
+    if (receipt.voidedAt) return { ok: false, error: 'This receipt has already been voided.' };
+    if (!reason.trim()) return { ok: false, error: 'Enter a reason for voiding this receipt.' };
+    set({ serviceCyclePayments: state.serviceCyclePayments.map(item => item.id === paymentId ? { ...item, voidedAt: new Date().toISOString(), voidedBy: actor.id, voidReason: reason.trim().slice(0, 1000) } : item) });
+    return { ok: true };
   },
   createClientPlanRevision: (planId) => {
     const state = get();

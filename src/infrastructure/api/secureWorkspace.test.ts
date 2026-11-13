@@ -142,6 +142,11 @@ describe('inferSecureCommandType', () => {
     expect(inferSecureCommandType([operation('deliverable'), operation('service_cycle')])).toBe('deliverable.manage');
   });
 
+  it('labels payment inserts and voids for the payment RPC', () => {
+    expect(inferSecureCommandType([operation('service_cycle_payment', 'insert')])).toBe('service_cycle_payment.record');
+    expect(inferSecureCommandType([operation('service_cycle_payment')])).toBe('service_cycle_payment.void');
+  });
+
   it('rejects command names that the Supabase RPC does not support', () => {
     expect(isSecureCommandType('task.update')).toBe(true);
     expect(isSecureCommandType('task_date_range')).toBe(false);
@@ -405,6 +410,18 @@ describe('secure command retry identity', () => {
     const operations = [operation('deliverable'), operation('service_cycle')];
     const groups = partitionOperationsWithExplicitType(operations, 'deliverable.manage');
     expect(groups).toEqual([{ type: 'deliverable.manage', operations }]);
+  });
+
+  it('isolates payment receipts from other service rows', () => {
+    const payment = operation('service_cycle_payment', 'insert');
+    const voided = { ...operation('service_cycle_payment'), entityId: 'service_cycle_payment-2' };
+    const cycle = operation('service_cycle');
+    const groups = partitionOperationsWithExplicitType([payment, voided, cycle], 'service_cycle.manage');
+    expect(groups).toEqual([
+      { type: 'service_cycle.manage', operations: [cycle] },
+      { type: 'service_cycle_payment.record', operations: [payment] },
+      { type: 'service_cycle_payment.void', operations: [voided] },
+    ]);
   });
 
   it('sends versioned multi-department updates through the dedicated RPC', async () => {

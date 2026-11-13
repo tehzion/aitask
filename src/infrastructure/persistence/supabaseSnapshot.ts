@@ -1,4 +1,4 @@
-import type { Addon, AppNotification, ClientProfile, ClientServicePlan, CustomRole, CycleComment, Deliverable, Project, Registration, ServiceCycle, ServicePackage, ServicePricingSnapshot, ServiceWorkflowTemplate, Task, User } from '../../shared/types/index';
+import type { Addon, AppNotification, ClientProfile, ClientServicePlan, CustomRole, CycleComment, Deliverable, Project, Registration, ServiceCycle, ServiceCyclePayment, ServicePackage, ServicePricingSnapshot, ServiceWorkflowTemplate, Task, User } from '../../shared/types/index';
 
 // Canonical persisted workspace shape shared by the secure load/save path. The
 // legacy REST JSON-snapshot bridge that used to live here was removed once the
@@ -19,6 +19,7 @@ export interface PersistedWorkspaceState {
   servicePackages?: ServicePackage[];
   clientPlans?: ClientServicePlan[];
   serviceCycles?: ServiceCycle[];
+  serviceCyclePayments?: ServiceCyclePayment[];
   deliverables?: Deliverable[];
   cycleComments?: CycleComment[];
   addons?: Addon[];

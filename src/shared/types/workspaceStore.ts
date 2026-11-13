@@ -24,6 +24,7 @@ import {
   type Role,
   type RolePermissions,
   type ServiceCycle,
+  type ServiceCyclePayment,
   type ServiceCycleStatus,
   type ServiceItem,
   type ServicePackage,
@@ -151,6 +152,7 @@ export interface StoreState {
   servicePackages: ServicePackage[];
   clientPlans: ClientServicePlan[];
   serviceCycles: ServiceCycle[];
+  serviceCyclePayments: ServiceCyclePayment[];
   deliverables: Deliverable[];
   cycleComments: CycleComment[];
   addons: Addon[];
@@ -221,6 +223,8 @@ export interface StoreState {
   activateClientPlan: (planId: string) => { ok: boolean; cycleId?: string; error?: string };
   generateDueLocalServiceCycles: () => void;
   setClientPlanStatus: (planId: string, status: ClientServicePlan['status']) => { ok: boolean; error?: string };
+  recordServiceCyclePayment: (cycleId: string, amountMinor: number, paymentDate: string) => { ok: boolean; id?: string; error?: string };
+  voidServiceCyclePayment: (paymentId: string, reason: string) => { ok: boolean; error?: string };
   setServiceCycleStatus: (cycleId: string, status: ServiceCycleStatus) => { ok: boolean; error?: string };
   updateDeliverableStatus: (deliverableId: string, status: DeliverableStatus) => { ok: boolean; error?: string };
   linkTaskToDeliverable: (taskId: string, cycleId?: string, deliverableId?: string) => { ok: boolean; error?: string };

@@ -1,10 +1,11 @@
 import React from 'react';
 import BackendFreshness from '../../../app/shell/BackendFreshness';
 import { useStore } from '../../../app/store/workspaceStore';
-import { isPendingMutationResolution } from '../../../infrastructure/commands/mutationGuard';
+import { isPendingMutationResolution, isWorkspaceMutationLocked } from '../../../infrastructure/commands/mutationGuard';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../../../infrastructure/persistence/workspaceSession';
 import { canViewServicePrices } from '../../../shared/authorization/access';
 import { useI18n } from '../../../shared/components/I18nProvider';
+import { canRetrySave } from '../../../shared/feedback/actionFeedback';
 import SystemMessage from '../../../shared/components/SystemMessage';
 import { Badge, Button } from '../../../shared/components/ui';
 import { cardBase, inputBase } from '../../../shared/components/uiTokens';
@@ -47,7 +48,11 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   const dirty = !same(draft, baseline);
   const dirtyRef = React.useRef(dirty); dirtyRef.current = dirty;
   const scheduled = plan.revisionScheduleStatus === 'scheduled';
-  const blocked = isPendingMutationResolution(store.backend);
+  const needsResolution = isPendingMutationResolution(store.backend);
+  const blocked = needsResolution || isWorkspaceMutationLocked(store) || store.backend.upgradeRequired === true || store.backend.status === 'upgrade_required';
+  const hasPending = Boolean(pending.current);
+  const canRetry = !store.backend.upgradeRequired && store.backend.status !== 'upgrade_required'
+    && !store.backend.isRestoring && canRetrySave(store.backend);
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);
   const effectiveDate = plan.effectiveFromCycleStart || source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay);
   const contractStartDate = getPlanContractStartDate(plan, store.clientPlans);
@@ -155,7 +160,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
     void commit('save', () => store.updateDraftClientPlan(plan.id, draft));
   };
   const retry = async () => {
-    if (busyRef.current) return;
+    if (busyRef.current || !canRetry) return;
     const session = captureWorkspaceSession(); busyRef.current = true; setBusy(true);
     try {
       const result = await store.retryPendingSave('client_plan.manage');
@@ -167,6 +172,28 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
     } catch (failure) { if (isWorkspaceSessionCurrent(session)) error(failure instanceof Error ? failure.message : 'Unable to update this revision.'); }
     finally { busyRef.current = false; if (mounted.current && isWorkspaceSessionCurrent(session)) setBusy(false); }
   };
+  const restoreSaved = async () => {
+    if (busyRef.current) return;
+    const session = captureWorkspaceSession(); busyRef.current = true; setBusy(true);
+    try {
+      await useStore.getState().discardMutation();
+      if (!mounted.current || !isWorkspaceSessionCurrent(session)) return;
+      const latest = useStore.getState();
+      if (isWorkspaceMutationLocked(latest) || isPendingMutationResolution(latest.backend)
+        || latest.backend.error || (latest.backend.mode === 'supabase' && latest.backend.status !== 'live')) {
+        error(latest.backend.error || 'Unable to reload saved data. Try again.'); return;
+      }
+      const saved = latest.clientPlans.find(item => item.id === plan.id);
+      if (!saved) { error(PLAN_SUBMISSION_MISSING); return; }
+      pending.current = null; optimistic.current = null;
+      setConflict(JSON.stringify(saved) !== fingerprint.current);
+      setReview(null);
+      setFeedback({ text: t('Saved data restored. Your draft has been kept. Review it before saving again.'), error: false });
+    } catch (failure) {
+      if (mounted.current && isWorkspaceSessionCurrent(session)) error(failure instanceof Error ? failure.message : 'Unable to reload saved data. Try again.');
+    } finally { busyRef.current = false; if (mounted.current && isWorkspaceSessionCurrent(session)) setBusy(false); }
+  };
+
   const schedule = () => {
     if (!review || review.fingerprint !== JSON.stringify(plan) || review.date !== effectiveDate || dirty) return error('The billing date changed. Refresh and review the next cycle before scheduling.');
     if (source.status === 'Ended') {
@@ -200,7 +227,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
       {mergeConflicts.map(item => <div key={item.path} className="mt-3 rounded-control border border-line p-3"><p className="text-sm font-medium text-ink">{conflictLabel(item.path)}</p><p className="mt-1 text-sm text-muted">{t('This field was also changed elsewhere. Choose which value to keep.')}</p><div className="mt-2 grid gap-3 sm:grid-cols-2"><div><p data-i18n-skip className="break-words text-sm text-ink">{conflictValue(item.local)}</p><Button variant="secondary" onClick={() => { choices.current[item.path] = 'local'; merge(choices.current); }}>{t('Use my value')}</Button></div><div><p data-i18n-skip className="break-words text-sm text-ink">{conflictValue(item.remote)}</p><Button variant="secondary" onClick={() => { choices.current[item.path] = 'remote'; merge(choices.current); }}>{t('Use saved value')}</Button></div></div></div>)}
     </div>}
     {scheduled ? <div className="space-y-3 p-5"><p data-i18n-skip className="font-semibold text-ink">{plan.name}</p>{plan.serviceItems.map(item => <div key={item.id}><p data-i18n-skip className="text-sm font-medium text-ink">{item.name}</p><p data-i18n-skip className="mt-1 text-sm text-muted">{itemSummary(item)}</p></div>)}{canSeePrices && <p className="border-t border-line pt-3 font-semibold text-ink">{t('Monthly total')}: {formatMoney(totals.total, 'MYR', locale)}</p>}</div> : <form id={formId} onSubmit={event => { event.preventDefault(); save(); }}>
-      <fieldset disabled={busy || mergeConflicts.length > 0 || Boolean(review)}>
+      <fieldset disabled={busy || hasPending || mergeConflicts.length > 0 || Boolean(review)}>
         <legend className="sr-only">{t('Next month’s plan')}</legend>
         <div className="grid gap-4 border-b border-line p-5 md:grid-cols-2">
           <label className="text-sm font-medium text-ink">{t('Plan name')}<input required maxLength={160} data-i18n-skip className={fieldClass} value={draft.name} onChange={event => update({ name: event.target.value })} /></label>
@@ -227,7 +254,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
       </fieldset>
       <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line p-5">
         {canSeePrices && <p className="text-sm font-semibold text-ink">{t('Monthly total')}: {formatMoney(totals.total, 'MYR', locale)}</p>}
-        {!review && <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || conflict || blocked}>{t(busy ? 'Saving…' : 'Save draft')}</Button><Button variant="secondary" disabled={dirty || busy || conflict || blocked || !['Active', 'Ended'].includes(source.status)} onClick={() => setReview({ fingerprint: JSON.stringify(plan), date: effectiveDate })}>{t('Review changes')}</Button></div>}
+        {!review && <div className="flex flex-wrap gap-2"><Button type="submit" disabled={busy || conflict || blocked || hasPending}>{t(busy ? 'Saving…' : 'Save draft')}</Button><Button variant="secondary" disabled={dirty || busy || conflict || blocked || hasPending || !['Active', 'Ended'].includes(source.status)} onClick={() => setReview({ fingerprint: JSON.stringify(plan), date: effectiveDate })}>{t('Review changes')}</Button></div>}
         {dirty && <p className="w-full text-sm text-muted" role="status">{t('Unsaved changes. Save the draft before reviewing.')}</p>}
         {source.status === 'Paused' && <p className="w-full text-sm text-muted">{t('Resume the active plan before scheduling a revision.')}</p>}
       </div>
@@ -236,9 +263,13 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
       <h3 className="font-semibold text-ink">{t('Review changes')} · {dateLabel(review.date)}</h3><p className="mt-2 text-sm text-muted">{t('Only the next billing cycle will use these changes.')}</p>
       <div className="mt-4 divide-y divide-line">{[...new Set([...source.serviceItems.map(item => item.id), ...draft.serviceItems.map(item => item.id)])].map(id => { const before = source.serviceItems.find(item => item.id === id); const after = draft.serviceItems.find(item => item.id === id); return <div key={id} className="py-4"><p data-i18n-skip className="text-sm font-semibold text-ink">{after?.name || before?.name}</p><div className="mt-2 grid gap-3 sm:grid-cols-2"><div><p className="text-xs text-muted">{t('Current plan')}</p><p data-i18n-skip className="mt-1 text-sm text-ink">{itemSummary(before)}</p></div><div><p className="text-xs text-muted">{t('Next month’s plan')}</p><p data-i18n-skip className="mt-1 text-sm text-ink">{itemSummary(after)}</p></div></div></div>; })}</div>
       {canSeePrices && <p className="mt-3 text-sm font-semibold text-ink">{t('Monthly total')}: {formatMoney(currentTotals.total, 'MYR', locale)} → {formatMoney(totals.total, 'MYR', locale)}</p>}
-      <div className="mt-5 flex flex-wrap gap-2"><Button disabled={busy || blocked} onClick={schedule}>{t(busy ? 'Saving…' : source.status === 'Ended' ? 'Activate next month' : 'Schedule for')} {!busy && dateLabel(review.date)}</Button><Button variant="secondary" disabled={busy} onClick={() => setReview(null)}>{t('Back to draft')}</Button></div>
+      <div className="mt-5 flex flex-wrap gap-2"><Button disabled={busy || blocked || hasPending} onClick={schedule}>{t(busy ? 'Saving…' : source.status === 'Ended' ? 'Activate next month' : 'Schedule for')} {!busy && dateLabel(review.date)}</Button><Button variant="secondary" disabled={busy} onClick={() => setReview(null)}>{t('Back to draft')}</Button></div>
     </section>}
-    {(blocked || (pending.current && feedback?.error)) && <div className="border-t border-line px-5 py-4">{blocked && <BackendFreshness compact />}<Button className="mt-3" variant="secondary" disabled={busy} onClick={() => void retry()}>{t('Retry saved change')}</Button></div>}
+    {(blocked || store.backend.error || (hasPending && feedback?.error)) && <div className="border-t border-line px-5 py-4">
+      {blocked && <BackendFreshness compact onRetry={retry} onDiscard={restoreSaved} />}
+      {store.backend.error && <p className="text-sm text-red-700" role="alert"><SystemMessage message={store.backend.error} /></p>}
+      {canRetry && (hasPending || blocked) && <Button className="mt-3" variant="secondary" disabled={busy || store.backend.isSaving || store.backend.isPulling} onClick={() => void retry()}>{t('Retry saved change')}</Button>}
+    </div>}
     {feedback && <div ref={alertRef} tabIndex={-1} className="border-t border-line px-5 py-3 text-sm font-medium text-ink" role={feedback.error ? 'alert' : 'status'}><SystemMessage message={feedback.text} />{feedback.fieldError && draft.serviceItems.length > 0 && <button type="button" className="mt-2 block min-h-11 text-accent underline" onClick={() => document.getElementById(`${formId}-quantity-0`)?.focus()}>{t('Review service fields')}</button>}</div>}
   </section>;
 };

@@ -195,6 +195,7 @@ export const stateToRows = (state: PersistedWorkspaceState, baseline: ReadonlyMa
     discountValue: 0,
     taxRateBps: 0,
   } as unknown as Record<string, unknown>, item.version, item.planId));
+  state.serviceCyclePayments?.forEach(item => push('entity', 'service_cycle_payment', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
   state.deliverables?.forEach(item => push('entity', 'deliverable', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
   state.cycleComments?.forEach(item => push('entity', 'cycle_comment', item.id, item as unknown as Record<string, unknown>, item.version, item.cycleId));
   state.addons?.forEach(item => push('entity', 'addon', item.id, { ...item, unitPriceMinor: 0 } as unknown as Record<string, unknown>, item.version, item.planId));

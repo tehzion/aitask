@@ -15,6 +15,7 @@ import type {
 	Registration,
 	Role,
 	ServiceCycle,
+	ServiceCyclePayment,
 	ServicePackage,
 	ServicePricingSnapshot,
 	ServiceWorkflowTemplate,
@@ -60,6 +61,7 @@ export interface SafeWorkspaceState {
   servicePackages: ServicePackage[];
   clientPlans: ClientServicePlan[];
   serviceCycles: ServiceCycle[];
+  serviceCyclePayments: ServiceCyclePayment[];
   deliverables: Deliverable[];
   cycleComments: CycleComment[];
   addons: Addon[];
@@ -584,6 +586,7 @@ export const parseWorkspaceSnapshot = (value: unknown): SafeWorkspaceState => {
     servicePackages: parseIdentifiedRecords<ServicePackage>(record.servicePackages),
     clientPlans: parseIdentifiedRecords<ClientServicePlan>(record.clientPlans),
     serviceCycles: parseIdentifiedRecords<ServiceCycle>(record.serviceCycles),
+    serviceCyclePayments: parseIdentifiedRecords<ServiceCyclePayment>(record.serviceCyclePayments),
     deliverables: parseIdentifiedRecords<Deliverable>(record.deliverables),
     cycleComments: parseIdentifiedRecords<CycleComment>(record.cycleComments),
     addons: parseIdentifiedRecords<Addon>(record.addons),
