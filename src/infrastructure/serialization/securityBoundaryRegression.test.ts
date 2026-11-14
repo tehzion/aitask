@@ -22,6 +22,22 @@ describe('security re-audit boundary contracts', () => {
     expect(source).toContain('results:${authData.user.id}');
   });
 
+  it('keeps feedback limiter limits within the SQL cap and validates input before allocating keys', () => {
+    const source = read('supabase/functions/aitask-feedback/index.ts');
+    const sql = read('supabase/migrations/20260928140058_server_reminders_and_feedback_rate_limit.sql');
+    const sqlCap = Number(/p_limit > (\d+)/.exec(sql)?.[1]);
+    const limits = [...source.matchAll(/const (?:submitRateLimit|campaignRateLimit) = (\d+);/g)].map(match => Number(match[1]));
+    expect(limits.length).toBe(2);
+    expect(Number.isFinite(sqlCap)).toBe(true);
+    for (const limit of limits) expect(limit).toBeLessThanOrEqual(sqlCap);
+    const submit = source.slice(source.indexOf("if (action === 'submit')"));
+    const firstLimiter = submit.indexOf('aitask_consume_feedback_rate_limit');
+    expect(submit.indexOf('body.website')).toBeGreaterThan(-1);
+    expect(submit.indexOf('body.website')).toBeLessThan(firstLimiter);
+    expect(submit.indexOf('validEmail(email)')).toBeLessThan(firstLimiter);
+    expect(submit.indexOf('submit:campaign:')).toBeLessThan(submit.indexOf('submit:email:'));
+  });
+
   it('binds client-visible service files to both comment and storage ownership', () => {
     const source = read('supabase/migrations/20261024090000_security_boundary_hardening.sql');
     expect(source).toContain("attachment ->> 'uploadedBy' is distinct from new.data ->> 'userId'");

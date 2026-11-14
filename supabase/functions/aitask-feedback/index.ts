@@ -30,7 +30,8 @@ const superAdminQuestionIds = ['registration_approval', 'permissions', 'audit', 
 const feedbackDeadline = new Date('2026-07-30T15:59:59.999Z').getTime();
 const submitRateLimit = 8;
 const submitRateWindowSeconds = 10 * 60;
-const campaignRateLimit = 256;
+// Must not exceed the SQL cap in aitask_consume_feedback_rate_limit (100).
+const campaignRateLimit = 100;
 
 const corsHeaders = (origin: string | null) => ({
   ...(origin && isAllowedOrigin(origin) ? { 'Access-Control-Allow-Origin': origin } : {}),
@@ -105,26 +106,13 @@ Deno.serve(async request => {
   const action = body.action === 'results' ? 'results' : 'submit';
 
   if (action === 'submit') {
-    const rateLimit = await admin.rpc('aitask_consume_feedback_rate_limit', {
-      // Do not trust client-controlled forwarding headers for abuse control.
-      // The email key limits retries for one identity; the campaign key below
-      // prevents an attacker from bypassing that limit with many addresses.
-      p_key_hash: await hashIdentity(`submit:email:${text(body.email, 254).toLowerCase() || 'invalid'}`),
-      p_limit: submitRateLimit,
-      p_window_seconds: submitRateWindowSeconds,
-    });
-    if (rateLimit.error || !rateLimit.data || rateLimit.data.ok !== true || typeof rateLimit.data.allowed !== 'boolean') {
-      return json(origin, { error: 'Feedback service is temporarily unavailable. Please try again later.' }, 503);
-    }
-    if (!rateLimit.data.allowed) {
-      const retryAfterSeconds = Math.max(1, Number(rateLimit.data.retryAfterSeconds) || submitRateWindowSeconds);
-      return json(
-        origin,
-        { error: 'Too many submissions. Please try again later.' },
-        429,
-        { 'Retry-After': String(retryAfterSeconds) },
-      );
-    }
+    // Cheap rejections come first so honeypot hits and malformed input never
+    // allocate durable rate-limit rows.
+    if (text(body.website, 200)) return json(origin, { ok: true, receipt: crypto.randomUUID() }, 201);
+    const email = text(body.email, 254).toLowerCase();
+    if (!validEmail(email)) return json(origin, { error: 'Please complete the required fields' }, 400);
+    // The bounded campaign counter runs before the per-email key so the number of
+    // distinct keys created per window cannot exceed the campaign limit.
     const campaignLimit = await admin.rpc('aitask_consume_feedback_rate_limit', {
       p_key_hash: await hashIdentity('submit:campaign:launch-week-2026-07'),
       p_limit: campaignRateLimit,
@@ -142,14 +130,32 @@ Deno.serve(async request => {
         { 'Retry-After': String(retryAfterSeconds) },
       );
     }
-    if (text(body.website, 200)) return json(origin, { ok: true, receipt: crypto.randomUUID() }, 201);
+    const rateLimit = await admin.rpc('aitask_consume_feedback_rate_limit', {
+      // Do not trust client-controlled forwarding headers for abuse control.
+      // The email key limits retries for one identity; the campaign key above
+      // bounds how many distinct email keys can be created per window.
+      p_key_hash: await hashIdentity(`submit:email:${email}`),
+      p_limit: submitRateLimit,
+      p_window_seconds: submitRateWindowSeconds,
+    });
+    if (rateLimit.error || !rateLimit.data || rateLimit.data.ok !== true || typeof rateLimit.data.allowed !== 'boolean') {
+      return json(origin, { error: 'Feedback service is temporarily unavailable. Please try again later.' }, 503);
+    }
+    if (!rateLimit.data.allowed) {
+      const retryAfterSeconds = Math.max(1, Number(rateLimit.data.retryAfterSeconds) || submitRateWindowSeconds);
+      return json(
+        origin,
+        { error: 'Too many submissions. Please try again later.' },
+        429,
+        { 'Retry-After': String(retryAfterSeconds) },
+      );
+    }
     const name = text(body.name, 100);
-    const email = text(body.email, 254).toLowerCase();
     const role = text(body.role, 30);
     const organization = text(body.organization, 120);
     const device = text(body.device, 20);
     const language = body.language === 'zh' ? 'zh' : 'en';
-    if (name.length < 2 || !validEmail(email) || !roles.has(role) || !devices.has(device) || body.consent !== true) {
+    if (name.length < 2 || !roles.has(role) || !devices.has(device) || body.consent !== true) {
       return json(origin, { error: 'Please complete the required fields' }, 400);
     }
 
