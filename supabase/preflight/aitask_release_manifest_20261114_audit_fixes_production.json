@@ -63,5 +63,9 @@
     "application": "PASS: typecheck, lint, strict i18n (0 findings / 232 files), unit tests 143 files / 1,129 tests, production build and bundle budgets (272.0 KiB gzip / 300 KiB cap).",
     "browser": "PASS: HOD project management 1/1, payment recovery 2/2, HOD parity 13/13, monthly payments 2/2, PM plan recovery 14/14, project management release 2/2, save recovery regressions 5/5.",
     "productionApply": "APPLIED 2026-11-13 after the approved production release merged as 0d8e072; live migration history contains 20261113090000_hod_project_management. Repository and production migration names match exactly (153/153)."
+  },
+  "rollback": {
+    "20261114100403_notification_audience_and_reminder_recipient_scope": "Restore private.aitask_guard_notification_audience() from 20261002164513_universal_notification_audience_guard.sql and private.aitask_generate_due_task_reminders(text, timestamptz) from 20261002100723_initialize_deadline_reminder_claim.sql (create or replace). No data changed.",
+    "20261114100421_freeze_published_cycle_pricing": "drop trigger aitask_guard_published_cycle_pricing on public.aitask_entities; drop function private.aitask_guard_published_cycle_pricing(). No data changed."
   }
 }
