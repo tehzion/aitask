@@ -1,5 +1,5 @@
--- Security audit follow-up: once a service cycle is published, its price terms
--- and its pricing snapshot are frozen. Status transitions, attachments and
+-- Security audit follow-up: a cycle's pricing snapshot is write-once, and once a
+-- service cycle is published its price terms and snapshot are frozen. Status transitions, attachments and
 -- payment records keep working; only the billing terms are protected.
 -- PENDING PRODUCTION APPROVAL: review against any workflow that edits a
 -- published cycle's prices before applying.
@@ -30,14 +30,20 @@ begin
   end if;
 
   if old.entity_type = 'service_pricing_snapshot' and old.data ->> 'parentType' = 'service_cycle' then
-    select cycle.data into v_cycle
-    from public.aitask_entities cycle
-    where cycle.workspace_id = old.workspace_id
-      and cycle.entity_type = 'service_cycle'
-      and cycle.entity_id = old.data ->> 'parentId';
-    if v_cycle is not null and coalesce(v_cycle ->> 'publishedAt', '') <> '' then
-      if tg_op = 'DELETE'
-        or (new.data - 'updatedAt' - 'version') is distinct from (old.data - 'updatedAt' - 'version') then
+    -- A cycle's pricing snapshot is write-once: clients only ever insert it
+    -- when the cycle is created, and the payment command reads it as the
+    -- charge. No command (including client_plan.manage) may rewrite it.
+    if tg_op = 'UPDATE'
+      and (new.data - 'updatedAt' - 'version') is distinct from (old.data - 'updatedAt' - 'version') then
+      raise check_violation using message = 'A service cycle pricing snapshot cannot be changed after creation.';
+    end if;
+    if tg_op = 'DELETE' then
+      select cycle.data into v_cycle
+      from public.aitask_entities cycle
+      where cycle.workspace_id = old.workspace_id
+        and cycle.entity_type = 'service_cycle'
+        and cycle.entity_id = old.data ->> 'parentId';
+      if v_cycle is not null and coalesce(v_cycle ->> 'publishedAt', '') <> '' then
         raise check_violation using message = 'A published service cycle keeps its frozen pricing snapshot.';
       end if;
     end if;
