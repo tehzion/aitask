@@ -11,14 +11,14 @@ const percent = (value?: number) => value === undefined ? '—' : `${Math.round(
 /** The delivery record to bring to a renewal conversation: on time and revisions. Extra requests are no longer tracked here (team feedback B1). */
 const RenewalSignals = ({ plan }: { plan: Pick<ClientServicePlan, 'id' | 'clientId'> }) => {
   const { t } = useI18n();
-  const { serviceCycles, deliverables, addons, tasks } = useStore(useShallow(state => ({
-    serviceCycles: state.serviceCycles, deliverables: state.deliverables, addons: state.addons, tasks: state.tasks,
+  const { serviceCycles, deliverables, tasks } = useStore(useShallow(state => ({
+    serviceCycles: state.serviceCycles, deliverables: state.deliverables, tasks: state.tasks,
   })));
   const signals = React.useMemo(
-    () => getRenewalSignals(plan, serviceCycles, deliverables, addons, tasks),
-    [plan, serviceCycles, deliverables, addons, tasks],
+    () => getRenewalSignals(plan, serviceCycles, deliverables, tasks),
+    [plan, serviceCycles, deliverables, tasks],
   );
-  if (signals.cyclesReviewed === 0) return <p className="mt-1 text-xs text-muted">{t('No published months yet to review.')}</p>;
+  if (signals.cyclesReviewed === 0) return <p className="mt-1 text-xs text-muted">{t('No started months yet to review.')}</p>;
   return <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
     <span>{t('On time')} {percent(signals.onTimeRate)}</span>
     <span>{t('Revisions')} {percent(signals.revisionRate)}</span>

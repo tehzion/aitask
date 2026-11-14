@@ -4,7 +4,7 @@ import { cyclePaymentSummary } from '../lib/cyclePayments';
 import { acknowledgeActionFeedback, clearActionFeedback, queueActionFeedback, taskStatusMessage } from '../lib/actionFeedback';
 import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
-import { canRequestTaskRevision, eligibleTaskHods, eligibleTaskStaff, getDepartmentReviewers, resolveTaskAssignmentState, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
+import { canRequestTaskRevision, eligibleHodDelegationStaff, eligibleTaskHods, eligibleTaskStaff, getDepartmentReviewers, resolveTaskAssignmentState, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { clearRecoveredDrafts } from '../lib/draftRecovery';
 import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { create } from 'zustand';
@@ -34,7 +34,6 @@ import {
   ServiceCycle,
   Deliverable,
   CycleComment,
-  Addon,
   PlanOrigin,
   ServiceCycleStatus,
   DeliverableStatus,
@@ -97,6 +96,7 @@ import {
   isNotificationVisible,
   isBossKoo,
   isHodUser,
+  isProjectAssignedToUser,
   canViewTask,
   isHodRole,
   isDepartmentScopedUser,
@@ -349,7 +349,6 @@ export interface StoreState {
   serviceCyclePayments: ServiceCyclePayment[];
   deliverables: Deliverable[];
   cycleComments: CycleComment[];
-  addons: Addon[];
   serviceWorkflowTemplates: ServiceWorkflowTemplate[];
   servicePricingSnapshots: ServicePricingSnapshot[];
   isCreateTaskModalOpen: boolean;
@@ -382,7 +381,7 @@ export interface StoreState {
   requestPasswordRecovery: (email: string) => Promise<{ ok: boolean; error?: string }>;
   completePasswordSetup: (data: { newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateCurrentUserProfile: (data: Pick<User, 'name' | 'email' | 'avatar'>) => { ok: boolean; error?: string };
-  updateCurrentUserEmail: (email: string, currentPassword: string) => Promise<{ ok: boolean; error?: string }>;
+  updateCurrentUserEmail: (email: string, currentPassword: string) => Promise<{ ok: boolean; error?: string; pendingConfirmation?: boolean }>;
   updateCurrentUserPassword: (data: { currentPassword?: string; newPassword: string; confirmPassword: string }) => Promise<{ ok: boolean; error?: string }>;
   updateTaskStatus: (taskId: string, status: TaskStatus) => MutationActionResult;
   updateTaskWork: (taskId: string, intent: TaskWorkIntent) => MutationActionResult;
@@ -434,8 +433,6 @@ export interface StoreState {
   carryForwardTaskToCycle: (taskId: string, targetCycleId: string, targetDeliverableId?: string) => { ok: boolean; taskId?: string; error?: string };
   addCycleComment: (cycleId: string, text: string, visibility: CommentVisibility) => { ok: boolean; id?: string; error?: string };
   addCycleCommentAttachment: (commentId: string, attachment: AttachmentRef) => { ok: boolean; error?: string };
-  addAddon: (data: Omit<Addon, 'id' | 'createdAt' | 'updatedAt'>) => { ok: boolean; id?: string; error?: string };
-  setAddonActive: (addonId: string, isActive: boolean, effectiveUntil?: string) => { ok: boolean; error?: string };
   addComment: (taskId: string, text: string) => { ok: boolean; id?: string; error?: string };
   markNotificationRead: (id: string) => void;
   markNotificationUnread: (id: string) => void;
@@ -731,7 +728,7 @@ export const stripSensitiveWorkspaceFields = (value: unknown): unknown => {
 };
 
 const sanitizeWorkspaceStateForSnapshot = (
-  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'addons' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
+  state: Pick<StoreState, 'users' | 'clients' | 'projects' | 'tasks' | 'notifications' | 'registrations' | 'rolePermissions' | 'taskStatuses' | 'deletedUserIds' | 'deletedRoleIds' | 'deletedTaskStatuses' | 'deletedClientIds' | 'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'serviceWorkflowTemplates' | 'servicePricingSnapshots'>
 ): PersistedWorkspaceState => stripSensitiveWorkspaceFields({
   users: state.users.map(user => stripPassword(user as User & { password?: string })),
   clients: state.clients || [],
@@ -751,7 +748,6 @@ const sanitizeWorkspaceStateForSnapshot = (
   serviceCyclePayments: state.serviceCyclePayments || [],
   deliverables: state.deliverables || [],
   cycleComments: state.cycleComments || [],
-  addons: state.addons || [],
   serviceWorkflowTemplates: state.serviceWorkflowTemplates || [],
   servicePricingSnapshots: state.servicePricingSnapshots || [],
 }) as PersistedWorkspaceState;
@@ -1021,7 +1017,6 @@ const normalizeWorkspaceState = (state: PersistedWorkspaceState): PersistedWorks
     serviceCycles: parsed.serviceCycles.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
     deliverables: parsed.deliverables.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
     cycleComments: parsed.cycleComments.map(item => ({ ...item, clientId: resolveClientId(item.clientId, item.clientName) })),
-    addons: parsed.addons.map(item => applyPricingSnapshot({ ...item, clientId: resolveClientId(item.clientId, item.clientName) }, pricingByParent.get(item.id))),
     serviceWorkflowTemplates: parsed.serviceWorkflowTemplates.length ? parsed.serviceWorkflowTemplates : [{ ...SHORT_VIDEO_WORKFLOW_TEMPLATE, steps: SHORT_VIDEO_WORKFLOW_TEMPLATE.steps.map(step => ({ ...step })) }],
   };
 };
@@ -1108,14 +1103,13 @@ const setLocalServiceDemoVersion = () => {
 };
 
 const hasLocalServiceData = (state: Pick<StoreState,
-  'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'addons' | 'servicePricingSnapshots'
+  'servicePackages' | 'clientPlans' | 'serviceCycles' | 'serviceCyclePayments' | 'deliverables' | 'cycleComments' | 'servicePricingSnapshots'
 >) => (
   state.servicePackages.length > 0 ||
   state.clientPlans.length > 0 ||
   state.serviceCycles.length > 0 ||
   state.deliverables.length > 0 ||
   state.cycleComments.length > 0 ||
-  state.addons.length > 0 ||
   state.servicePricingSnapshots.length > 0
 );
 
@@ -1197,7 +1191,7 @@ const mergePersistedWorkspace = (persistedState: unknown, currentState: StoreSta
 const workspaceMutationFields: Array<keyof StoreState> = [
   'users', 'clients', 'projects', 'tasks', 'notifications', 'registrations', 'rolePermissions', 'taskStatuses',
   'deletedUserIds', 'deletedRoleIds', 'deletedTaskStatuses', 'deletedClientIds',
-  'servicePackages', 'clientPlans', 'serviceCycles', 'serviceCyclePayments', 'deliverables', 'cycleComments', 'addons',
+  'servicePackages', 'clientPlans', 'serviceCycles', 'serviceCyclePayments', 'deliverables', 'cycleComments',
   'serviceWorkflowTemplates', 'servicePricingSnapshots',
 ];
 
@@ -1239,7 +1233,6 @@ export const useStore = create<StoreState>()(
       serviceCyclePayments: [],
       deliverables: [],
       cycleComments: [],
-      addons: [],
       serviceWorkflowTemplates: [{ ...SHORT_VIDEO_WORKFLOW_TEMPLATE, steps: SHORT_VIDEO_WORKFLOW_TEMPLATE.steps.map(step => ({ ...step })) }],
       servicePricingSnapshots: [],
       isCreateTaskModalOpen: false,
@@ -2517,20 +2510,13 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Your secure session has expired. Sign out, then sign in again.' };
         }
 
-        const { error } = await supabase.functions.invoke('invite-aitask-member', {
+        const { data, error } = await supabase.functions.invoke('invite-aitask-member', {
           headers: { Authorization: `Bearer ${session.access_token}` },
           body: { action: 'update_self_email', email, currentPassword },
         });
         if (error) return { ok: false, error: await getFunctionErrorMessage(error, 'Unable to update the login email.') };
-
-        const { error: refreshError } = await supabase.auth.refreshSession();
-        if (refreshError) {
-          return { ok: false, error: 'Email updated, but your session could not be refreshed. Sign out, then sign in again.' };
-        }
-        if (!get().backend.hasLocalChanges && get().backend.pendingMutations === 0) {
-          await get().pullBackendNow({ force: true, silent: true });
-        }
-        return { ok: true };
+        if (data?.pendingConfirmation !== true) return { ok: false, error: 'Unable to start email confirmation. Please try again.' };
+        return { ok: true, pendingConfirmation: true };
       },
 
       updateCurrentUserPassword: async (data) => {
@@ -2928,21 +2914,20 @@ export const useStore = create<StoreState>()(
           result = { ok: false, error: 'Choose a valid internal assignee.' };
           return state;
         }
-        const project = task.projectId ? state.projects.find(item => item.id === task.projectId) : undefined;
-        const responsibleHodId = task.responsibleHodId
+        const hodDelegation = isHodUser(currentUser, state.rolePermissions);
+        if (hodDelegation && (task.assignedTo !== currentUser!.id && task.responsibleHodId !== currentUser!.id)) {
+          result = { ok: false, error: 'You can only delegate tasks you own.' };
+          return state;
+        }
+        const responsibleHodId = hodDelegation ? currentUser!.id : task.responsibleHodId
           || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions)
             ? task.assignedTo
             : isHodUser(currentUser, state.rolePermissions) && isMemberInDepartment(currentUser, task.department)
               ? currentUser.id
               : undefined);
-        if (assigneeUser && assigneeUser.role === 'Staff' && !isHodUser(assigneeUser, state.rolePermissions)
-          && isHodUser(currentUser, state.rolePermissions)) {
-          const eligibleStaff = eligibleTaskStaff(task.department, project, state.users, state.rolePermissions);
-          if (!eligibleStaff.some(user => user.id === assigneeUser.id)
-            || (responsibleHodId && responsibleHodId !== currentUser.id)) {
-            result = { ok: false, error: 'Choose active Staff in this department.' };
-            return state;
-          }
+        if (hodDelegation && assignedTo && (!assigneeUser || !eligibleHodDelegationStaff(state.users, state.rolePermissions).some(user => user.id === assigneeUser.id))) {
+          result = { ok: false, error: 'Choose active internal Staff with a login.' };
+          return state;
         }
         if (!assignedTo && isHodUser(currentUser, state.rolePermissions) && responsibleHodId) {
           assignedTo = responsibleHodId;
@@ -2950,7 +2935,7 @@ export const useStore = create<StoreState>()(
         if (!assignedTo && currentUser.role !== 'Project Manager' && task.assignmentState === 'pending_hod' && responsibleHodId) {
           assignedTo = responsibleHodId;
         }
-        if (assigneeUser && (assigneeUser.hasLogin === false || (currentUser.role !== 'Project Manager' && !isEligibleTaskAssignee(assigneeUser, task.department)))) {
+        if (assigneeUser && (assigneeUser.hasLogin === false || (currentUser.role !== 'Project Manager' && !hodDelegation && !isEligibleTaskAssignee(assigneeUser, task.department)))) {
           useToastStore.getState().addToast(msg('errors.assigneeDepartment', { name: assigneeUser.name, department: task.department }), 'warning');
           result = { ok: false, error: `${assigneeUser.name} is not in the ${task.department} department.` };
           return state;
@@ -3220,7 +3205,7 @@ export const useStore = create<StoreState>()(
         if (!canAssignOthers && nextDepartment !== task.department) {
           return { ok: false, error: 'You do not have permission to change the task department.' };
         }
-        if (canAssignOthers && ['Staff', 'HOD'].includes(currentUser.role) && !isBossKoo(currentUser) && !isMemberInDepartment(currentUser, nextDepartment)) {
+        if (canAssignOthers && nextDepartment !== task.department && ['Staff', 'HOD'].includes(currentUser.role) && !isBossKoo(currentUser) && !isMemberInDepartment(currentUser, nextDepartment)) {
           return { ok: false, error: 'You can only manage tasks within your departments.' };
         }
         const requestedClientName = data.clientName !== undefined ? data.clientName.trim() : task.clientName;
@@ -3235,27 +3220,34 @@ export const useStore = create<StoreState>()(
         const assignee = nextAssigneeId ? state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client') : undefined;
         if (nextAssigneeId && !assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
         const assignmentChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
-        if (assignmentChanged && assignee && (assignee.hasLogin === false || (currentUser.role !== 'Project Manager' && !isEligibleTaskAssignee(assignee, nextDepartment)))) {
-          return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
+        const hodDelegation = isHodUser(currentUser, state.rolePermissions);
+        if (assignmentChanged && hodDelegation && task.assignedTo !== currentUser.id && task.responsibleHodId !== currentUser.id) {
+          return { ok: false, error: 'You can only delegate tasks you own.' };
+        }
+        if (assignmentChanged && hodDelegation && (!assignee || !eligibleHodDelegationStaff(state.users, state.rolePermissions).some(user => user.id === assignee.id))) {
+          return { ok: false, error: 'Choose active internal Staff with a login.' };
+        }
+        if (assignmentChanged && assignee && (assignee.hasLogin === false || (currentUser.role !== 'Project Manager' && !hodDelegation && !isEligibleTaskAssignee(assignee, nextDepartment)))) {
+          return { ok: false, error: `${assignee.name} is not in the ${nextDepartment} department.` };
         }
         const nextProjectForAssignment = (data.projectId ?? task.projectId)
           ? state.projects.find(item => item.id === (data.projectId ?? task.projectId))
           : undefined;
         const nextEligibleHods = eligibleTaskHods(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions);
-        const currentResponsibleHodId = task.responsibleHodId
+        const currentResponsibleHodId = (hodDelegation && assignmentChanged ? currentUser.id : task.responsibleHodId)
           || (task.assignedTo && isHodUser(state.users.find(user => user.id === task.assignedTo), state.rolePermissions) ? task.assignedTo : undefined)
           || (assignmentChanged && isHodUser(currentUser, state.rolePermissions) && isMemberInDepartment(currentUser, task.department) ? currentUser.id : undefined);
         const nextResponsibleHodId = !assignmentChanged ? task.responsibleHodId
           : currentUser.role === 'Project Manager' ? undefined
           : assignee && isHodUser(assignee, state.rolePermissions) ? assignee.id : currentResponsibleHodId;
         const shouldPersistAssignmentRouting = Boolean(task.assignmentState || task.responsibleHodId || nextResponsibleHodId);
-        if (assignmentChanged && nextResponsibleHodId && !nextEligibleHods.some(user => user.id === nextResponsibleHodId)) {
+        if (assignmentChanged && !hodDelegation && nextResponsibleHodId && !nextEligibleHods.some(user => user.id === nextResponsibleHodId)) {
           return { ok: false, error: 'Choose an HOD assigned to this project and department.' };
         }
         if (assignmentChanged && assignee && assignee.role === 'Staff' && !isHodUser(assignee, state.rolePermissions)
           && isHodUser(currentUser, state.rolePermissions)
-          && !eligibleTaskStaff(nextDepartment, nextProjectForAssignment, state.users, state.rolePermissions).some(user => user.id === assignee.id)) {
-          return { ok: false, error: 'Choose active Staff in this department.' };
+          && !eligibleHodDelegationStaff(state.users, state.rolePermissions).some(user => user.id === assignee.id)) {
+          return { ok: false, error: 'Choose active internal Staff with a login.' };
         }
         if (assignmentChanged) {
           // Submitted, approved, finished or cancelled work cannot change hands,
@@ -3952,6 +3944,8 @@ export const useStore = create<StoreState>()(
         if (!currentUser || !project || !canEditProject(currentUser, project, state.rolePermissions)) {
           return { ok: false, error: 'You do not have permission to edit this project.' };
         }
+        const actorIsProjectHod = isHodUser(currentUser, state.rolePermissions)
+          && isProjectAssignedToUser(currentUser, project, state.rolePermissions);
         if (data.projectManagerIds !== undefined && !isBossKoo(currentUser)) {
           return { ok: false, error: 'Only Boss Koo can change Project Manager assignments.' };
         }
@@ -3959,8 +3953,17 @@ export const useStore = create<StoreState>()(
           return { ok: false, error: 'Only Boss Koo or a Project Manager can change HOD project membership.' };
         }
         if ((data.staffMemberIds !== undefined || data.memberResponsibilities !== undefined)
-          && !isBossKoo(currentUser) && currentUser.role !== 'Project Manager') {
+          && !isBossKoo(currentUser) && currentUser.role !== 'Project Manager' && !actorIsProjectHod) {
           return { ok: false, error: 'Only Boss Koo or an assigned Project Manager can change project team membership.' };
+        }
+        if (actorIsProjectHod && !isBossKoo(currentUser) && currentUser.role !== 'Project Manager'
+          && project.createdBy !== currentUser.id) {
+          const nextClientId = data.clientId !== undefined ? data.clientId || undefined : project.clientId;
+          const nextClientName = data.clientName !== undefined ? data.clientName.trim() : project.clientName;
+          if (nextClientId !== project.clientId
+            || normalizeClientKey(nextClientName) !== normalizeClientKey(project.clientName)) {
+            return { ok: false, error: 'HODs can update project work, but not the company link.' };
+          }
         }
 
         const clientName = data.clientName !== undefined ? data.clientName.trim() : project.clientName;
@@ -3981,8 +3984,11 @@ export const useStore = create<StoreState>()(
         const nextClientId = data.clientId !== undefined ? data.clientId : project.clientId;
         if (nextClientId) {
           const client = state.clients.find(item => item.id === nextClientId && !item.discovered);
+          const clientUnchanged = nextClientId === project.clientId
+            && normalizeClientKey(clientName) === normalizeClientKey(project.clientName);
           const visibleClientKeys = new Set(getVisibleClientNames(currentUser, state.tasks, state.projects, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects }).map(normalizeClientKey));
-          if (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName)))) {
+          if (!(actorIsProjectHod && clientUnchanged)
+            && (!client || normalizeClientKey(client.clientName) !== normalizeClientKey(clientName) || (!canViewAllClients(currentUser, state.rolePermissions) && !visibleClientKeys.has(normalizeClientKey(clientName))))) {
             return { ok: false, error: 'You can only link this project to a company you can access.' };
           }
         }
@@ -4347,7 +4353,6 @@ export const useStore = create<StoreState>()(
           serviceCycles: current.serviceCycles.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
           deliverables: current.deliverables.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
           cycleComments: current.cycleComments.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
-          addons: current.addons.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
         }));
 
         return { ok: true };
@@ -4424,7 +4429,6 @@ export const useStore = create<StoreState>()(
           serviceCycles: current.serviceCycles.filter(item => item.clientId !== clientId),
           deliverables: current.deliverables.filter(item => item.clientId !== clientId),
           cycleComments: current.cycleComments.filter(item => item.clientId !== clientId),
-          addons: current.addons.filter(item => item.clientId !== clientId),
           servicePricingSnapshots: current.servicePricingSnapshots.filter(item => item.clientId !== clientId),
         }));
 
@@ -4726,7 +4730,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot revise client plans.' };
         const source = state.clientPlans.find(item => item.id === planId);
-        if (!source || !['Active', 'Paused', 'Ended'].includes(source.status)) return { ok: false, error: 'Only an active or ended plan can be renewed.' };
+        if (!source || !['Active', 'Paused', 'Ended'].includes(source.status)) return { ok: false, error: 'Only a running, paused or ended plan can be renewed.' };
         if (!isServiceClientInScope(state, source.clientId)) return { ok: false, error: serviceClientScopeError };
         const pending = state.clientPlans.find(item => item.supersedesPlanId === source.id && item.status === 'Draft');
         if (pending) return { ok: true, planId: pending.id };
@@ -4797,7 +4801,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const plan = state.clientPlans.find(item => item.id === planId);
         if (!canManageClientPlans(state.currentUser, state.rolePermissions) || !plan || !isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
-        if (plan.status !== 'Draft' || !plan.supersedesPlanId) return { ok: false, error: 'This revision is already active. Create a new revision for the next cycle.' };
+        if (plan.status !== 'Draft' || !plan.supersedesPlanId) return { ok: false, error: 'This revision is already in use. Create a new revision for next month.' };
         if (expectedVersion !== undefined && plan.version !== expectedVersion) return { ok: false, error: 'This revision changed elsewhere. Review the saved revision before saving.' };
         set({ clientPlans: state.clientPlans.map(item => item.id === plan.id ? { ...item, revisionScheduleStatus: 'draft', updatedAt: new Date().toISOString() } : item) });
         return { ok: true };
@@ -4879,7 +4883,7 @@ export const useStore = create<StoreState>()(
         const plan = state.clientPlans.find(item => item.id === planId);
         if (!plan) return { ok: false, error: 'Plan not found.' };
         if (!isServiceClientInScope(state, plan.clientId)) return { ok: false, error: serviceClientScopeError };
-        if (plan.status !== 'Active' && plan.status !== 'Paused') return { ok: false, error: 'Only active or paused plans can be edited here.' };
+        if (plan.status !== 'Active' && plan.status !== 'Paused') return { ok: false, error: 'Only running or paused plans can be edited here.' };
         const nextBillingDay = data.billingDay !== undefined ? Math.min(31, Math.max(1, Math.trunc(data.billingDay))) : plan.billingDay;
         const nextContractEnd = data.contractEndDate !== undefined
           ? (data.contractEndDate && isValidIsoDate(data.contractEndDate) ? data.contractEndDate : undefined)
@@ -4905,14 +4909,14 @@ export const useStore = create<StoreState>()(
         if (plan.status !== 'Draft' && plan.status !== 'Paused') return { ok: false, error: 'Only draft or paused plans can be activated.' };
         if (plan.status === 'Draft' && plan.supersedesPlanId) {
           const sourcePlan = state.clientPlans.find(item => item.id === plan.supersedesPlanId && item.clientId === plan.clientId);
-          if (sourcePlan?.status !== 'Ended') return { ok: false, error: 'Review and schedule this revision for the next billing cycle.' };
+          if (sourcePlan?.status !== 'Ended') return { ok: false, error: 'Review and schedule this revision for next month.' };
         }
         if (state.clientPlans.some(item => item.clientId === plan.clientId && item.id !== plan.id && item.status === 'Active')) {
-          return { ok: false, error: 'This client already has an active plan.' };
+          return { ok: false, error: 'This client already has a running plan.' };
         }
         const periodStart = plan.status === 'Paused' ? nextBillingDate(getBillingToday(), plan.billingDay) : plan.startDate;
         const existing = state.serviceCycles.find(cycle => cycle.planId === plan.id && cycle.periodStart === periodStart);
-        const records = existing ? null : makeCycleRecords(plan, state.addons.filter(addon => addon.clientId === plan.clientId), periodStart, nowId);
+        const records = existing ? null : makeCycleRecords(plan, periodStart, nowId);
         const now = new Date().toISOString();
         const cyclePricing = records ? makePricingSnapshot({
           id: nowId('PRICE'), clientId: plan.clientId, parentType: 'service_cycle', parentId: records.cycle.id,
@@ -4961,7 +4965,7 @@ export const useStore = create<StoreState>()(
             if (!Number.isInteger(plan.billingDay) || plan.billingDay < 1 || plan.billingDay > 31) break;
             // Match the database uniqueness rule: one cycle per client and start date.
             if (![...state.serviceCycles, ...cycles].some(cycle => cycle.clientId === plan.clientId && cycle.periodStart === start)) {
-              const records = makeCycleRecords(plan, state.addons.filter(addon => addon.clientId === plan.clientId), start, nowId, now);
+              const records = makeCycleRecords(plan, start, nowId, now);
               const price = makePricingSnapshot({
                 id: nowId('PRICE'), clientId: plan.clientId, parentType: 'service_cycle', parentId: records.cycle.id,
                 items: records.cycle.serviceItems, discountType: plan.discountType,
@@ -4997,7 +5001,7 @@ export const useStore = create<StoreState>()(
         if (plan.status === 'Ended') return { ok: false, error: 'Ended plans cannot be reopened.' };
         const hasStartedCycle = state.serviceCycles.some(cycle => cycle.planId === plan.id && cycle.status !== 'Draft');
         if (plan.status === 'Active' && status === 'Draft' && hasStartedCycle) {
-          return { ok: false, error: 'Active plans with started cycles cannot return to Draft.' };
+          return { ok: false, error: 'A running plan with started months cannot go back to Draft.' };
         }
         set(current => ({ clientPlans: current.clientPlans.map(item => item.id === planId ? { ...item, status, updatedAt: new Date().toISOString() } : item) }));
         return { ok: true };
@@ -5013,14 +5017,14 @@ export const useStore = create<StoreState>()(
         if (!canManageServiceCycles(actor, state.rolePermissions)) return { ok: false, error: 'You do not have permission to manage service cycles.' };
         if (status === cycle.status) return { ok: true };
         if (!allowedServiceCycleTransitions[cycle.status].includes(status)) {
-          return { ok: false, error: 'This cycle status transition is not allowed.' };
+          return { ok: false, error: 'This month’s status can’t change that way.' };
         }
         if (status === 'Completed') {
           const cycleDeliverables = state.deliverables.filter(item => item.cycleId === cycle.id && item.clientId === cycle.clientId);
           const allDelivered = cycleDeliverables.length > 0 && cycleDeliverables.every(
             deliverable => resolveDeliverableStatus(deliverable, state.tasks, state.serviceCycles) === 'Delivered',
           );
-          if (!allDelivered) return { ok: false, error: 'Complete every required delivery before completing this cycle.' };
+          if (!allDelivered) return { ok: false, error: 'Complete every required delivery before closing this month.' };
         }
         const now = new Date().toISOString();
         set(current => ({ serviceCycles: current.serviceCycles.map(item => item.id === cycleId ? { ...item, status, publishedAt: status === 'Published' ? item.publishedAt || now : item.publishedAt, updatedAt: now } : item) }));
@@ -5296,50 +5300,6 @@ export const useStore = create<StoreState>()(
             && state.tasks.some(task => task.serviceCycleId === comment.cycleId && task.assignedTo === state.currentUser?.id));
         if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
         set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
-        return { ok: true };
-      },
-
-      addAddon: (data) => {
-        const state = get();
-        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
-        const actor = state.currentUser;
-        if (!canManageClientPlans(actor, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
-        if (!state.clientPlans.some(plan => plan.id === data.planId && plan.clientId === data.clientId)) return { ok: false, error: 'Client plan not found.' };
-        if (!isServiceClientInScope(state, data.clientId)) return { ok: false, error: serviceClientScopeError };
-        const name = data.name.trim().slice(0, 160);
-        if (!name) return { ok: false, error: 'Add-on name is required.' };
-        if (data.billingMode === 'one_off' && !data.targetCycleId) return { ok: false, error: 'Choose the cycle for this one-off add-on.' };
-        if (data.targetCycleId && !state.serviceCycles.some(cycle => cycle.id === data.targetCycleId && cycle.clientId === data.clientId && cycle.planId === data.planId)) return { ok: false, error: 'Choose a cycle from this client plan.' };
-        if (!isValidIsoDate(data.effectiveFrom)) return { ok: false, error: 'Choose a valid effective date.' };
-        const now = new Date().toISOString();
-        const id = nowId('ADD');
-        const pricingSnapshotId = nowId('PRICE');
-        const item: Addon = { ...data, id, pricingSnapshotId, name, platforms: data.platforms.map(value => value.trim()).filter(Boolean).slice(0, 20), quantity: Math.max(1, Math.trunc(data.quantity)), unitPriceMinor: Math.max(0, Math.trunc(data.unitPriceMinor)), description: cleanProfileText(data.description, 2000), createdAt: now, updatedAt: now };
-        const pricing = makePricingSnapshot({ id: pricingSnapshotId, clientId: item.clientId, parentType: 'addon', parentId: id, addonUnitPriceMinor: item.unitPriceMinor, addonQuantity: item.quantity, now });
-        set(current => ({
-          addons: [...current.addons, item],
-          servicePricingSnapshots: [...current.servicePricingSnapshots, pricing],
-          serviceCycles: current.serviceCycles.map(cycle => {
-            const applies = cycle.status === 'Draft' && (
-              (item.billingMode === 'one_off' && item.targetCycleId === cycle.id)
-              || (item.billingMode === 'monthly' && cycle.planId === item.planId && cycle.periodStart >= item.effectiveFrom)
-            );
-            return applies ? { ...cycle, addonSnapshots: [...cycle.addonSnapshots, item], updatedAt: now } : cycle;
-          }),
-        }));
-        return { ok: true, id: item.id };
-      },
-
-      setAddonActive: (addonId, isActive, effectiveUntil) => {
-        const state = get();
-        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
-        if (!canManageClientPlans(state.currentUser, state.rolePermissions)) return { ok: false, error: 'You cannot manage add-ons.' };
-        const addon = state.addons.find(item => item.id === addonId);
-        if (!addon) return { ok: false, error: 'Add-on not found.' };
-        if (!isServiceClientInScope(state, addon.clientId)) return { ok: false, error: serviceClientScopeError };
-        if (effectiveUntil && !isValidIsoDate(effectiveUntil)) return { ok: false, error: 'Choose a valid ending date.' };
-        const now = new Date().toISOString();
-        set(current => ({ addons: current.addons.map(item => item.id === addonId ? { ...item, isActive, effectiveUntil: isActive ? effectiveUntil : effectiveUntil || getTodayInputDate(), updatedAt: now } : item) }));
         return { ok: true };
       },
 
@@ -6555,7 +6515,6 @@ export const useStore = create<StoreState>()(
             serviceCycles: [...state.serviceCycles, ...fixture.serviceCycles],
             deliverables: [...state.deliverables, ...fixture.deliverables],
             cycleComments: [...state.cycleComments, ...fixture.cycleComments],
-            addons: [...state.addons, ...fixture.addons],
             serviceWorkflowTemplates: [
               ...state.serviceWorkflowTemplates,
               ...fixture.serviceWorkflowTemplates.filter(template => !state.serviceWorkflowTemplates.some(item => item.id === template.id)),
@@ -6593,7 +6552,6 @@ export const useStore = create<StoreState>()(
             serviceCycles: replaceLocalServiceDemoRecords(current.serviceCycles, fixture.serviceCycles),
             deliverables: replaceLocalServiceDemoRecords(current.deliverables, fixture.deliverables),
             cycleComments: replaceLocalServiceDemoRecords(current.cycleComments, fixture.cycleComments),
-            addons: replaceLocalServiceDemoRecords(current.addons, fixture.addons),
             serviceWorkflowTemplates: [
               ...current.serviceWorkflowTemplates,
               ...fixture.serviceWorkflowTemplates.filter(template => !current.serviceWorkflowTemplates.some(item => item.id === template.id)),
@@ -6689,7 +6647,6 @@ export const useStore = create<StoreState>()(
           serviceCyclePayments: state.serviceCyclePayments,
           deliverables: state.deliverables,
           cycleComments: state.cycleComments,
-          addons: state.addons,
           serviceWorkflowTemplates: state.serviceWorkflowTemplates,
           servicePricingSnapshots: state.servicePricingSnapshots,
         };
@@ -6908,8 +6865,7 @@ export const startBackendAutoSync = () => {
       state.serviceCycles !== previousState.serviceCycles ||
       state.serviceCyclePayments !== previousState.serviceCyclePayments ||
       state.deliverables !== previousState.deliverables ||
-      state.cycleComments !== previousState.cycleComments ||
-      state.addons !== previousState.addons;
+      state.cycleComments !== previousState.cycleComments;
 
     const serviceMetadataChanged =
       state.serviceWorkflowTemplates !== previousState.serviceWorkflowTemplates ||
@@ -6938,7 +6894,6 @@ export const startBackendAutoSync = () => {
         serviceCyclePayments: previousState.serviceCyclePayments,
         deliverables: previousState.deliverables,
         cycleComments: previousState.cycleComments,
-        addons: previousState.addons,
         serviceWorkflowTemplates: previousState.serviceWorkflowTemplates,
         servicePricingSnapshots: previousState.servicePricingSnapshots,
         backend: {
@@ -7100,7 +7055,7 @@ export const clearWorkspaceSession = (options: { discardPending?: boolean } = {}
     currentUser: null,
     ...(shouldUseSupabase() ? {
       taskStatuses: [], users: [], clients: [], projects: [], tasks: [], notifications: [], registrations: [], rolePermissions: [],
-      clientPlans: [], serviceCycles: [], serviceCyclePayments: [], deliverables: [], cycleComments: [], addons: [], servicePackages: [],
+      clientPlans: [], serviceCycles: [], serviceCyclePayments: [], deliverables: [], cycleComments: [], servicePackages: [],
       serviceWorkflowTemplates: [], servicePricingSnapshots: [], notificationUnreadCount: 0,
       deletedUserIds: [], deletedRoleIds: [], deletedTaskStatuses: [], deletedClientIds: [],
     } : {}),

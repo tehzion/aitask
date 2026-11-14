@@ -19,7 +19,7 @@ test('an HOD sees what waits on them and assigns from the list', async ({ page }
     const staff = { ...template, id: 'ux-staff', name: 'Designer Staff', department: 'Designer', departments: ['Designer'], mustResetPassword: false };
     const hod = { ...staff, id: 'ux-hod', name: 'Designer HOD', role: 'HOD', customRoleId: undefined, customRoleName: undefined };
     enablePasswordResetBypass(hod.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${hod.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${hod.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', 'en');
     const task = {
       ...(state.tasks[0] as object), generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined,
@@ -56,7 +56,7 @@ test('a PM approves several submitted tasks at once', async ({ page }) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const pm = state.users.find(user => user.role === 'Project Manager' && !user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${pm.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${pm.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...pm, mustResetPassword: false },
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
@@ -118,7 +118,7 @@ const seedRole = async (page: Page, route: string, seed: Seed) => {
     if (!member) throw new Error(`Demo member not found: ${name}`);
     const { enablePasswordResetBypass } = await import("/src/lib/auth.ts");
     enablePasswordResetBypass(member.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${member.id}`, "acknowledged");
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${member.id}`, "acknowledged");
     localStorage.setItem("aitask:locale", "en");
     useStore.setState({ currentUser: { ...member, mustResetPassword: false } });
   }, seed.member);
@@ -130,7 +130,7 @@ const seedRole = async (page: Page, route: string, seed: Seed) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const member = { ...state.users.find(user => user.name === input.member)!, mustResetPassword: false };
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${member.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${member.id}`, 'acknowledged');
     localStorage.setItem('aitask:locale', 'en');
     const base = {
       ...(state.tasks[0] as object), generatedFromDeliverable: false, workflowStepId: undefined, workflowStepKind: undefined, workflowDependenciesReady: undefined,

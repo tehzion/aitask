@@ -12,7 +12,7 @@ const seedReview = async (page: import('@playwright/test').Page, locale: string)
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     const client = { ...state.clients[0], id: 'review-client', clientName: 'Review Company', createdBy: boss.id };
     const plan = { ...state.clientPlans[0], id: 'review-plan', clientId: client.id, clientName: client.clientName, name: 'Review Plan', status: 'Active' as const, revision: 1 };
     const cycle = { ...state.serviceCycles[0], id: 'review-cycle', planId: plan.id, clientId: client.id, clientName: client.clientName, status: 'Draft' as const, periodStart: '2026-10-01', periodEnd: '2026-10-31', serviceItems: [] };
@@ -32,7 +32,9 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   // Linking is optional and folded away until asked for.
   await panel.getByRole('button', { name: locale === 'en' ? /^Link completed tasks to deliverables \(optional\)/ : /^将已完成任务关联到交付物（可选）/ }).click();
   await expect(page.getByText('0%', { exact: true })).toHaveCount(0);
-  await expect(panel.getByRole('button', { name: locale === 'en' ? 'Publish' : '发布', exact: true })).toBeVisible();
+  await expect(panel.getByRole('button', { name: locale === 'en' ? 'Start month' : '开始本月', exact: true })).toBeVisible();
+  await expect(panel.getByText(locale === 'en' ? 'Starting this month lets the team begin work and makes its deliverables visible to the client.' : '开始本月后，团队可以开始工作，客户也能看到本月的交付内容。', { exact: true })).toBeVisible();
+  await expect(page.getByText(locale === 'en' ? 'Starting this month lets the team begin work and makes its deliverables visible to the client.' : '开始本月后，团队可以开始工作，客户也能看到本月的交付内容。', { exact: true })).toHaveCount(2);
   const selectors = panel.getByRole('combobox');
   await selectors.nth(0).selectOption('review-deliverable');
   await selectors.nth(1).selectOption('review-deliverable');
@@ -55,7 +57,7 @@ for (const locale of ['en', 'zh']) test(`delivery review preserves pending actio
   await expect(retry).toHaveCount(0);
   await expect(panel.getByRole('combobox')).toHaveValue('review-deliverable');
   await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ commitPendingMutation: async () => ({ ok: true }) }); });
-  await panel.getByRole('button', { name: locale === 'en' ? 'Publish' : '发布', exact: true }).click();
+  await panel.getByRole('button', { name: locale === 'en' ? 'Start month' : '开始本月', exact: true }).click();
   await expect(panel.getByRole('combobox')).toHaveValue('review-deliverable');
   const result = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -80,9 +82,9 @@ test('invalid links and expired drafts require explicit scoped review', async ({
   await expect(panel.getByText('Invalid delivery link. Review before linking again.')).toBeVisible();
   await expect(panel.getByText('Foreign secret output')).toHaveCount(0);
   await expect(panel.getByRole('combobox')).toHaveCount(1);
-  await panel.getByRole('button', { name: 'Older unpublished cycles (1)' }).click();
-  await expect(panel.getByText(/Expired unpublished cycle/)).toBeVisible();
-  await expect(panel.getByRole('button', { name: 'Publish', exact: true })).toHaveCount(1);
+  await panel.getByRole('button', { name: 'Older months not started (1)' }).click();
+  await expect(panel.getByText(/Ended without starting/)).toBeVisible();
+  await expect(panel.getByRole('button', { name: 'Start month', exact: true })).toHaveCount(1);
   await panel.getByRole('button', { name: 'Remove invalid link' }).click();
   const confirm = page.getByRole('dialog', { name: 'Remove invalid delivery link' });
   await expect(confirm).toBeVisible();
@@ -111,7 +113,7 @@ for (const action of ['link', 'publication']) test(`a restored-away delivery ${a
   if (action === 'link') {
     await panel.getByRole('combobox').first().selectOption('review-deliverable');
     await panel.getByRole('button', { name: 'Link task', exact: true }).first().click();
-  } else await panel.getByRole('button', { name: 'Publish', exact: true }).click();
+  } else await panel.getByRole('button', { name: 'Start month', exact: true }).click();
   await expect(panel.getByRole('status')).toContainText('Delivery confirmation timed out.');
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');

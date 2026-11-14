@@ -494,7 +494,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           <h3 id="staff-task-brief" className="text-sm font-semibold text-ink">{t('Details')}</h3>
           <p className="mt-1.5 whitespace-pre-wrap text-sm leading-6 text-ink">{liveTask.description ? <span data-i18n-skip>{liveTask.description}</span> : <span className="text-muted">{t('No description.')}</span>}</p>
           {liveTask.notes && <p data-i18n-skip className="mt-2 whitespace-pre-wrap text-sm leading-6 text-muted">{liveTask.notes}</p>}
-          {(deliverable || cycle) && <p className="mt-2 text-xs text-muted">{deliverable && <>{t('Deliverable')}: <span data-i18n-skip>{deliverable.title}</span></>}{deliverable && cycle && ' · '}{cycle && <>{t('Service cycle')}: {formatLocalizedDateRange(cycle.periodStart, cycle.periodEnd, locale)}</>}</p>}
+          {(deliverable || cycle) && <p className="mt-2 text-xs text-muted">{deliverable && <>{t('Deliverable')}: <span data-i18n-skip>{deliverable.title}</span></>}{deliverable && cycle && ' · '}{cycle && <>{t('Month')}: {formatLocalizedDateRange(cycle.periodStart, cycle.periodEnd, locale)}</>}</p>}
         </section>
 
         <section aria-labelledby="staff-task-attachments" className="space-y-2 border-t border-line/70 pt-5">

@@ -204,7 +204,7 @@ const stepsByPersona: Record<OnboardingPersona, Array<[string, string, string, s
     ['company', 'projects-overview', 'Create the company and project', '创建公司和项目', 'Start with the client company, then add a project with a named owner, service scope, and deadline.', '先创建客户公司，再添加项目并填写负责人、服务范围和截止日期。'],
     ['task', 'create-task', 'Add tasks under the client project', '在客户项目下添加任务', 'Open the company, then use Add task on its project. Write the requirement, set the deadline and department, then choose the person.', '打开公司，在项目上点击添加任务。填写要求、截止日期和部门，然后选择负责人。'],
     ['monitor', 'tasks-overview', 'Monitor delivery and review work', '监控交付和审核工作', 'Use Tasks to follow progress, open requirements, submitted work, and permitted revision requests without changing the underlying workflow.', '在任务页面跟进进度、要求、已提交成果，并在权限允许时请求修订，不改变既定工作流程。'],
-    ['reports', 'reports-overview', 'Check reports and service plans', '查看报表和服务方案', 'Reports show delivery patterns; service plans and cycles keep recurring client work visible and scheduled.', '报表显示交付情况；服务方案和周期让持续性的客户工作保持清晰并按计划进行。'],
+    ['reports', 'reports-overview', 'Check reports and service plans', '查看报表和服务方案', 'Reports show delivery patterns; service plans and months keep recurring client work visible and scheduled.', '报表显示交付情况；服务方案和月份让持续性的客户工作保持清晰并按计划进行。'],
     ['workflow', 'help-overview', 'Keep the handoff sequence in mind', '记住交接顺序', 'The usual path is Project Manager → HOD → Staff → HOD review → Client review. Open Help any time for the status rules.', '通常的流程是项目经理 → 部门主管 → 员工 → 部门主管审核 → 客户审核。随时打开帮助中心查看状态规则。'],
   ],
   hod: [

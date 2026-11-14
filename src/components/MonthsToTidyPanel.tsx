@@ -13,14 +13,14 @@ import { useI18n } from './I18nProvider';
 type BulkAction = { status: ServiceCycle['status']; label: string; kind: 'never-published' | 'ready-to-close' };
 
 const BULK_ACTIONS: BulkAction[] = [
-  { status: 'Published', label: 'Publish late', kind: 'never-published' },
+  { status: 'Published', label: 'Start late', kind: 'never-published' },
   { status: 'Cancelled', label: 'Cancel month', kind: 'never-published' },
   { status: 'Completed', label: 'Close month', kind: 'ready-to-close' },
 ];
 
 /**
  * Every ended month that still needs a decision, across companies, with bulk
- * Publish late / Cancel / Close (click reduction, item 2). Each month is saved
+ * Start late / Cancel / Close (click reduction, item 2). Each month is saved
  * as its own command so one refusal does not undo the others; overdue months
  * only link to their company, because they need delivery work, not a status.
  */
@@ -60,7 +60,7 @@ const MonthsToTidyPanel = ({ months, deliverables, todayKey, canManage }: {
     try {
       for (const cycle of targets) {
         const local = useStore.getState().setServiceCycleStatus(cycle.id, action.status);
-        if (!local.ok) { firstError ||= local.error || 'This cycle status transition is not allowed.'; continue; }
+        if (!local.ok) { firstError ||= local.error || 'This month’s status can’t change that way.'; continue; }
         const committed = await useStore.getState().commitPendingMutation('service_cycle.manage');
         if (committed.ok) saved += 1;
         else { firstError ||= committed.error || 'The change is waiting to be saved.'; break; }
@@ -86,7 +86,7 @@ const MonthsToTidyPanel = ({ months, deliverables, todayKey, canManage }: {
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
       <div>
         <h3 id={titleId} className="font-semibold text-ink">{t('Months to tidy up')}</h3>
-        <p className="mt-1 text-sm text-muted">{t('Ended months that still need a decision. Select several to publish, cancel or close them together.')}</p>
+        <p className="mt-1 text-sm text-muted">{t('Ended months that still need a decision. Select several to start, cancel or close them together.')}</p>
       </div>
       <CountLabel>{rows.length}</CountLabel>
     </div>
@@ -108,7 +108,7 @@ const MonthsToTidyPanel = ({ months, deliverables, todayKey, canManage }: {
             ? <input type="checkbox" className="h-4 w-4" checked={selected.has(cycle.id)} disabled={busy} aria-label={`${t('Select')}: ${name}`} onChange={() => toggle(cycle.id)} />
             : <span aria-hidden="true" className="inline-block h-4 w-4" />}
           <Link to={`/clients/${encodeURIComponent(cycle.clientId)}`} className="min-w-0 flex-1 truncate text-sm font-medium text-ink hover:underline"><span data-i18n-skip>{cycle.clientName}</span> · {label(cycle)}</Link>
-          {housekeeping.kind === 'never-published' && <StatusChip tone="amber">{t('Never published')}</StatusChip>}
+          {housekeeping.kind === 'never-published' && <StatusChip tone="amber">{t('Never started')}</StatusChip>}
           {housekeeping.kind === 'ready-to-close' && <StatusChip tone="emerald">{t('Ready to close')}</StatusChip>}
           {housekeeping.kind === 'overdue' && <StatusChip tone="red">{t('Overdue: {count} not done', { count: housekeeping.notDone })}</StatusChip>}
         </li>;

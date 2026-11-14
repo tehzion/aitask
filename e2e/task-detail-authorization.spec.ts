@@ -43,7 +43,7 @@ const signIn = async (page: Page, username: string) => {
     const user = useStore.getState().users.find(member => member.name === name);
     if (!user) throw new Error(`Missing authorization fixture account: ${name}`);
     enablePasswordResetBypass(user.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${user.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${user.id}`, 'acknowledged');
   }, username);
   await page.getByLabel('Email or username').fill(username);
   await page.getByLabel('Password').fill('password123');
@@ -163,7 +163,7 @@ test.describe('task detail authorization matrix', () => {
     const hodEditor = page.getByRole('dialog', { name: hodDepartmentTask.title });
     await expect(hodEditor.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
     await hodEditor.getByRole('button', { name: 'Edit', exact: true }).click();
-    await expect(hodEditor.locator('select').filter({ has: page.locator('option[value="u-staff-demo-local"]') })).toBeEnabled();
+    await expect(hodEditor.locator('select').filter({ has: page.locator('option[value="u-staff-demo-local"]') })).toBeDisabled();
 
     const staffAssignedTask = makeTask({
       id: 'e2e-staff-assigned',

@@ -30,7 +30,7 @@ const describeItem = (item: ManagementAttentionItem, t: Translate) => {
     case 'review': return t('Awaiting your review');
     case 'completion': return t('Ready to finalize');
     case 'renewal': return t('Renewal due');
-    case 'deliverable': return t('Service cycle ended before delivery');
+    case 'deliverable': return t('Month ended before delivery');
     case 'clientReview': return t('Ready for your review');
     default: return item.blocked ? t('Blocked work') : item.waitingReview ? t('Waiting review') : item.revisionCount ? `${t('Revision')} ${item.revisionCount}` : '';
   }
@@ -54,9 +54,9 @@ const MarkDelivered: React.FC<{ deliverableId: string; title: string }> = ({ del
       const cycle = store.serviceCycles.find(item => item.id === deliverable?.cycleId);
       if (cycle?.status === 'Draft') {
         const published = store.setServiceCycleStatus(cycle.id, 'Published');
-        if (!published.ok) { setError(published.error || 'Unable to publish this month.'); return; }
+        if (!published.ok) { setError(published.error || 'Unable to start this month.'); return; }
         const saved = await useStore.getState().commitPendingMutation('service_cycle.manage');
-        if (!saved.ok) { setError(saved.error || 'The month is waiting to be published.'); return; }
+        if (!saved.ok) { setError(saved.error || 'The month is waiting to start.'); return; }
       }
       const delivered = useStore.getState().updateDeliverableStatus(deliverableId, 'Delivered');
       if (!delivered.ok) { setError(delivered.error || 'Unable to mark this delivered.'); return; }

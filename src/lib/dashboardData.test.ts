@@ -7,7 +7,7 @@ const plan = { id: 'active-plan', clientId: 'client-1' };
 const cycle = (overrides: Partial<ServiceCycle> = {}): ServiceCycle => ({
   id: 'october', clientId: plan.clientId, clientName: 'Audit Company', planId: plan.id,
   planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published',
-  currency: 'MYR', serviceItems: [], addonSnapshots: [], discountType: 'none',
+  currency: 'MYR', serviceItems: [], discountType: 'none',
   discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01',
   ...overrides,
 });

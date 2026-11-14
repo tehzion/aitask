@@ -14,7 +14,7 @@ const seedBoss = async (page: Page, time = '2026-10-07T07:00:00Z') => {
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false } });
   });
   await page.goto('/');
@@ -149,7 +149,7 @@ const seedCompanyCycles = async (page: Page) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const plan = { id: 'followup-plan', clientId: 'followup-company', clientName: 'Followup Company', name: 'Followup Plan', revision: 1, status: 'Active', currency: 'MYR', origin: 'custom', serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0, startDate: '2026-10-01', billingDay: 1, createdBy: state.currentUser!.id, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
-    const cycle = { id: 'followup-current-cycle', clientId: plan.clientId, clientName: plan.clientName, planId: plan.id, planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Draft', currency: 'MYR', serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
+    const cycle = { id: 'followup-current-cycle', clientId: plan.clientId, clientName: plan.clientName, planId: plan.id, planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Draft', currency: 'MYR', serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' };
     const deliveries = (cycleId: string, quantity: number, delivered: number) => Array.from({ length: quantity }, (_, i) => ({ id: `${cycleId}-${i}`, clientId: plan.clientId, clientName: plan.clientName, planId: plan.id, cycleId, serviceItemId: 'followup-item', taskIds: [], name: `Output ${i}`, status: i < delivered ? 'Delivered' : 'Planned', createdAt: '2026-10-01', updatedAt: '2026-10-01' }));
     useStore.setState({
       clientPlans: [plan],
@@ -174,7 +174,7 @@ test('company operations keeps current draft planning separate from confirmed pr
   await seedCompanyCycles(page);
   await page.goto('/clients/followup-company');
   await page.clock.runFor(500);
-  await expect(page.getByText('Awaiting publication', { exact: true })).toBeVisible();
+  await expect(page.getByText('Not started yet', { exact: true })).toBeVisible();
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -185,7 +185,7 @@ test('company operations keeps current draft planning separate from confirmed pr
     const { useStore } = await import('/src/store/index.ts');
     useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(cycle => cycle.id !== 'followup-current-cycle') });
   });
-  await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
+  await expect(page.getByText('No month in progress', { exact: true })).toBeVisible();
   await expect(page.getByText('Done 2/4', { exact: true })).toHaveCount(0);
 });
 

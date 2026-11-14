@@ -38,7 +38,7 @@
 ## 5. CI/CD
 
 - `.github/workflows/ci.yml` — dependency audit, typecheck, lint, unit tests, build, bundle/PWA, e2e smoke, `verify:supabase` + a `database` job (`verify:supabase:rollout` = migrations + pgTAP + advisors in disposable Docker).
-- `.github/workflows/staging.yml` — authenticated staging QA on PR to `master`.
+- `.github/workflows/staging.yml` — removed 11 Nov 2026 (its staging token had lost access; see `docs/staging-release-setup.md`).
 - `.github/workflows/release.yml` — tagged release provenance + staging deploy + QA fixture.
 
 ## 6. Deployment dependencies

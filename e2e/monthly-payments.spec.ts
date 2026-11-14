@@ -9,8 +9,8 @@ for (const locale of ['en', 'zh']) test(`monthly payment records and revision de
     const state = useStore.getState(); const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
     localStorage.setItem(`aitask:release-notice:2026-10-project-workflows:${boss.id}`, 'acknowledged');
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
-    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], clientPlans: [], tasks: [], projects: [], serviceCycles: [], serviceCyclePayments: [], servicePricingSnapshots: [], deliverables: [], addons: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
+    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], clientPlans: [], tasks: [], projects: [], serviceCycles: [], serviceCyclePayments: [], servicePricingSnapshots: [], deliverables: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
     const created = useStore.getState().createClientWithPlan({ clientName: 'Receipt Co', planName: 'Monthly Design', origin: 'custom', serviceItems: [{ id: 'fee', name: 'Design', platforms: [], unit: 'month', quantity: 1, unitPriceMinor: 10000 }], startDate: '2026-09-01', billingDay: 1, discountType: 'percent', discountValue: 1000, taxRateBps: 600 });
     useStore.getState().activateClientPlan(created.planId!);
     useStore.getState().generateDueLocalServiceCycles();

@@ -11,11 +11,10 @@ const seedDraftPlan = async (page: import('@playwright/test').Page, startDate: s
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
-      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [], addons: [],
-      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [],       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Notes Co', planName: 'Notes Plan', origin: 'custom',
@@ -39,10 +38,11 @@ test('a plan that starts this month is activated and published in one confirmed 
   await expect(page.getByRole('tab', { name: 'Plan & delivery', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('tablist', { name: 'Client workspace' }).getByRole('tab')).toHaveCount(2);
 
-  await page.getByRole('button', { name: 'Activate & publish this month' }).click();
-  const dialog = page.getByRole('dialog', { name: 'Activate & publish this month' });
+  await page.getByRole('button', { name: 'Start plan and this month' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Start plan and this month' });
   await expect(dialog.getByText('Social Posts', { exact: true })).toBeVisible();
-  await dialog.getByRole('button', { name: 'Activate & publish', exact: true }).click();
+  await expect(dialog.getByText("This starts the plan and this month. The team can begin work, and the client will see this month's deliverables.")).toBeVisible();
+  await dialog.getByRole('button', { name: 'Start plan and this month', exact: true }).click();
   await expect(dialog).toHaveCount(0);
 
   const state = await page.evaluate(async id => {
@@ -58,10 +58,11 @@ test('a plan that starts this month is activated and published in one confirmed 
 test('a plan that starts next month is only activated; its month is published later', async ({ page }) => {
   const clientId = await seedDraftPlan(page, monthStart(1));
   await page.goto(`/clients/${clientId}`);
-  await expect(page.getByRole('button', { name: 'Activate & publish this month' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Activate plan', exact: true }).click();
-  const dialog = page.getByRole('dialog', { name: 'Activate plan' });
-  await dialog.getByRole('button', { name: 'Activate plan', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Start plan and this month' })).toHaveCount(0);
+  await page.getByRole('button', { name: 'Start plan', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Start plan' });
+  await expect(dialog.getByText(/^This starts the plan\. Its first month begins on .+\.$/)).toBeVisible();
+  await dialog.getByRole('button', { name: 'Start plan', exact: true }).click();
   await expect(dialog).toHaveCount(0);
   const cycles = await page.evaluate(async id => {
     const { useStore } = await import('/src/store/index.ts');
@@ -99,6 +100,31 @@ const seedPublishedMonth = async (page: import('@playwright/test').Page) => {
   }, clientId);
   return clientId;
 };
+
+test('plan history includes the current month and links to its delivery details', async ({ page }) => {
+  const clientId = await seedPublishedMonth(page);
+  await page.goto(`/clients/${clientId}?tab=plan`);
+  const schedule = page.getByRole('region', { name: 'Monthly update schedule' });
+  const history = schedule.getByRole('table');
+  const current = history.getByRole('row').filter({ hasText: 'This month' });
+  await expect(current).toHaveCount(1);
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    const month = state.serviceCycles.find(item => item.clientId === id && item.status === 'Published')!;
+    const upcoming = Array.from({ length: 7 }, (_, i) => ({ ...month, id: `history-future-${i}`, periodStart: `2099-${String(i + 1).padStart(2, '0')}-01`, periodEnd: `2099-${String(i + 1).padStart(2, '0')}-28`, status: 'Draft' as const }));
+    useStore.setState({ serviceCycles: [...state.serviceCycles, ...upcoming] });
+  }, clientId);
+  await expect(history.getByRole('row')).toHaveCount(7); // header plus six months
+  await expect(current).toHaveCount(1);
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ serviceCycles: state.serviceCycles.map(item => item.clientId === id && item.status === 'Published' ? { ...item, status: 'Completed' as const } : item) }));
+  }, clientId);
+  await expect(current.getByText('Done', { exact: true })).toBeVisible();
+  await current.getByRole('button', { name: 'View', exact: true }).click();
+  await expect(page).toHaveURL(/cycleId=/);
+});
 
 // Added on the loaded page: seeding a project before a reload is not restored by this local setup.
 const addProject = (page: import('@playwright/test').Page, clientId: string) => page.evaluate(async id => {
@@ -177,9 +203,9 @@ test('an ended month that was never published can be cancelled from plan history
     const key = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
     useStore.setState({ serviceCycles: [...state.serviceCycles, { ...current, id: 'old-draft', status: 'Draft', publishedAt: undefined, periodStart: key(prevStart), periodEnd: key(prevEnd) }] });
   });
-  await expect(page.getByText('Never published', { exact: true })).toBeVisible();
+  await expect(page.getByText('Never started', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: /^Cancel month: / }).click();
-  await expect(page.getByText('Never published', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Never started', { exact: true })).toHaveCount(0);
   const status = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     return useStore.getState().serviceCycles.find(cycle => cycle.id === 'old-draft')?.status;

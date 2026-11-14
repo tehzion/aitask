@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
-const noticeId = '2026-11-everyday-saves';
+const noticeId = '2026-11-start-wording';
 
 const openAdminWorkspace = async (page: import('@playwright/test').Page) => {
   await page.goto('/login');
@@ -26,10 +26,10 @@ const switchDemoUser = async (page: import('@playwright/test').Page, userId: str
 test('each account receives the release update once', async ({ page }) => {
   await openAdminWorkspace(page);
 
-  const dialog = page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' });
+  const dialog = page.getByRole('dialog', { name: 'Clearer words for plans and months' });
   await expect(dialog).toBeVisible();
-  await expect(dialog.getByText('Approve several at once')).toBeVisible();
-  await expect(dialog.getByText('Changes save on their own')).toBeVisible();
+  await expect(dialog.getByText('Start plan', { exact: true })).toBeVisible();
+  await expect(dialog.getByText('Start month', { exact: true })).toBeVisible();
   await expect(page.locator('#root')).toHaveAttribute('inert', '');
   await expect(dialog.getByRole('button', { name: 'Happy working' })).toBeFocused();
 
@@ -45,7 +45,7 @@ test('each account receives the release update once', async ({ page }) => {
 
 test('dismissal survives a reload before persistent acknowledgement and remains scoped to the account', async ({ page }) => {
   await openAdminWorkspace(page);
-  const dialog = page.getByRole('dialog', { name: 'Approve faster and stop worrying about saves' });
+  const dialog = page.getByRole('dialog', { name: 'Clearer words for plans and months' });
   await expect(dialog).toBeVisible();
   const userId = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -57,7 +57,7 @@ test('dismissal survives a reload before persistent acknowledgement and remains 
   await expect(dialog).toHaveCount(0);
 
   await switchDemoUser(page, 'u-staff-demo-local');
-  await expect(page.getByRole('dialog', { name: 'Your list now starts with what to do today' })).toBeVisible();
+  await expect(page.getByRole('dialog', { name: 'Clearer names for client months' })).toBeVisible();
 });
 
 test('each role hears only what changed for them', async ({ page }) => {
@@ -65,21 +65,21 @@ test('each role hears only what changed for them', async ({ page }) => {
   await page.getByRole('button', { name: 'Happy working' }).click();
 
   await switchDemoUser(page, 'u-boss');
-  await expect(page.getByRole('dialog', { name: 'Dependable saves and a clearer view of staffing' })).toContainText('Staffing gaps lead to the team');
+  await expect(page.getByRole('dialog', { name: 'Clearer words for plans and months' })).toContainText('Replaces Publish.');
   await page.getByRole('button', { name: 'Happy working' }).click();
 
   await switchDemoUser(page, 'u-hod-demo-local');
-  await expect(page.getByRole('dialog', { name: 'See what waits on you and hand it out faster' })).toContainText('Assign from the list');
+  await expect(page.getByRole('dialog', { name: 'Clearer names for client months' })).toContainText('Your tasks are unchanged');
   await page.getByRole('button', { name: 'Happy working' }).click();
 
   await switchDemoUser(page, 'u-operation-demo-local');
-  await expect(page.getByRole('dialog', { name: 'Your list now starts with what to do today' })).toContainText('Today first');
-  await expect(page.getByRole('dialog')).not.toContainText(/price|pricing|Approve several/i);
+  await expect(page.getByRole('dialog', { name: 'Clearer names for client months' })).toContainText('Your tasks are unchanged');
+  await expect(page.getByRole('dialog')).not.toContainText(/price|pricing|Start plan|Start month/i);
   await page.getByRole('button', { name: 'Happy working' }).click();
 
   await switchDemoUser(page, 'u-client-urban');
-  const clientDialog = page.getByRole('dialog', { name: 'Your progress is easier to read' });
-  await expect(clientDialog).toContainText('This month by service');
+  const clientDialog = page.getByRole('dialog', { name: 'Clearer words for your monthly service' });
+  await expect(clientDialog).toContainText('Not started, In progress or Done');
   await expect(clientDialog).not.toContainText(/price|pricing|internal task|Staff/i);
 });
 
@@ -100,7 +100,7 @@ test('the notice is Chinese, dark-mode readable, and usable on mobile', async ({
     await page.getByRole('button', { name: '暂时继续' }).click();
   }
 
-  const dialog = page.getByRole('dialog', { name: '更快审批，不再担心保存' });
+  const dialog = page.getByRole('dialog', { name: '方案与月份的用词更清晰' });
   await expect(dialog).toBeVisible();
   await expect(page.locator('html')).toHaveClass(/dark/);
   await expect(dialog.getByRole('button', { name: '开始工作吧' })).toBeFocused();

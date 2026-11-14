@@ -12,10 +12,9 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], projects: [], tasks: [],
-      clientPlans: [], serviceCycles: [], deliverables: [], servicePricingSnapshots: [], addons: [],
-      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+      clientPlans: [], serviceCycles: [], deliverables: [], servicePricingSnapshots: [],       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
     const created = useStore.getState().createClientWithPlan({ clientName: 'Revision Feedback Co', planName: 'RM2250 PACKAGE', origin: 'custom',
       serviceItems: [{ id: 'fee', name: 'RM2250 PACKAGE', platforms: [], unit: 'month', quantity: 1, unitPriceMinor: 225000 }],
@@ -52,6 +51,18 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   expect(saved.revision).toMatchObject({ startDate: '2026-10-30', contractEndDate: '2026-10-03', name: 'Revised RM2250 PACKAGE' });
   expect(saved.original).toMatchObject({ startDate: '2026-09-30', contractEndDate: '2026-10-03', name: 'RM2250 PACKAGE' });
   expect(saved.cycles).toEqual(seeded.previousCycles);
+
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, status: 'Ended' as const } : plan) }));
+  }, seeded.originalId);
+  await revision.getByRole('button', { name: locale === 'zh' ? '查看更改' : 'Review changes', exact: true }).click();
+  await expect(revision.getByRole('button', { name: locale === 'zh' ? /开始下个月/ : /Start next month/ })).toBeVisible();
+  await revision.getByRole('button', { name: locale === 'zh' ? '返回草稿' : 'Back to draft', exact: true }).click();
+  await page.evaluate(async id => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === id ? { ...plan, status: 'Active' as const } : plan) }));
+  }, seeded.originalId);
 
   await date.fill('2026-09-29');
   await revision.getByRole('button', { name: locale === 'zh' ? '保存草稿' : 'Save draft', exact: true }).click();

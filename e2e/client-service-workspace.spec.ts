@@ -19,10 +19,10 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
     const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/lib/serviceManagement.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
-      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], tasks: [],
+      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], tasks: [],
       servicePricingSnapshots: [], serviceWorkflowTemplates: [structuredClone(SHORT_VIDEO_WORKFLOW_TEMPLATE)],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
@@ -46,7 +46,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   expect(seeded.taskIds).toHaveLength(10);
   await page.goto(`/clients/${seeded.clientId}`);
   await expect(page.getByRole('heading', { name: 'Customized Co', level: 1 })).toBeVisible();
-  // Plan, cycles, add-ons and progress share one tab (team feedback B).
+  // Plan, cycles and progress share one tab (team feedback B).
   const deliveryTab = page.getByRole('tab', { name: 'Plan & delivery', exact: true });
   await expect(page.getByRole('tablist', { name: 'Client workspace' }).getByRole('tab')).toHaveCount(2);
   await deliveryTab.focus();
@@ -70,7 +70,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
 
   await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
   const billingPeriod = page.getByRole('combobox', { name: 'Billing period' });
-  const publishedPeriod = billingPeriod.locator('option').filter({ hasText: /Published/ }).first();
+  const publishedPeriod = billingPeriod.locator('option').filter({ hasText: /In progress/ }).first();
   await billingPeriod.selectOption(await publishedPeriod.getAttribute('value'));
   const cyclesPanel = page.getByRole('tabpanel', { name: 'Plan & delivery', exact: true });
   await expect(cyclesPanel.getByText('Included', { exact: true })).toBeVisible();
@@ -80,20 +80,8 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
   await expect(page.getByText('Invoice', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Outstanding', { exact: true })).toHaveCount(0);
 
-  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
-  const openAddon = page.getByRole('button', { name: 'Add service add-on' });
-  await openAddon.click();
-  const addonDialog = page.getByRole('dialog', { name: 'Add service add-on' });
-  await expect(addonDialog).toBeVisible();
-  await page.keyboard.press('Escape');
-  await expect(addonDialog).toBeHidden();
-  await expect(openAddon).toBeFocused();
-  await openAddon.click();
-  await addonDialog.getByLabel('Add-on name').fill('Launch cutdown');
-  await addonDialog.getByLabel('Service cycle').selectOption(seeded.cycleId);
-  await addonDialog.getByRole('button', { name: 'Add add-on' }).click();
-  await expect(addonDialog).toBeHidden();
-  await expect(page.getByText('Launch cutdown')).toBeVisible();
+  // Add-ons were removed (10 Nov 2026).
+  await expect(page.getByRole('button', { name: 'Add service add-on' })).toHaveCount(0);
 
   await page.getByRole('tab', { name: 'Activity / Files' }).click();
   const openActivity = page.getByRole('button', { name: 'Add activity' });
@@ -106,7 +94,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
-    localStorage.setItem('aitask:release-notice:2026-11-everyday-saves:operation-e2e', 'acknowledged');
+    localStorage.setItem('aitask:release-notice:2026-11-start-wording:operation-e2e', 'acknowledged');
     useStore.setState({ currentUser: { id: 'operation-e2e', name: 'Operation E2E', role: 'Staff', departments: ['Operation'], department: 'Operation', workerType: 'employee', permissions: { manageServiceCycles: true, createTasks: true, viewAllServiceClients: true, viewDashboard: true, viewTasks: true, viewCalendar: true, viewProjects: true } } });
   });
   await page.goto('/');
@@ -125,7 +113,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
-    localStorage.setItem('aitask:release-notice:2026-11-everyday-saves:account-e2e', 'acknowledged');
+    localStorage.setItem('aitask:release-notice:2026-11-start-wording:account-e2e', 'acknowledged');
     useStore.setState({ currentUser: { id: 'account-e2e', name: 'Account E2E', role: 'Staff', departments: ['Account & Finance'], department: 'Account & Finance', workerType: 'employee', permissions: { viewDashboard: true, viewAllServiceClients: true, viewServicePrices: true, viewProductionReports: true } } });
   });
   await page.goto('/');
@@ -138,7 +126,7 @@ test('service plans, frozen workflow tasks and role workbenches remain isolated'
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
-    localStorage.setItem('aitask:release-notice:2026-11-everyday-saves:client-e2e', 'acknowledged');
+    localStorage.setItem('aitask:release-notice:2026-11-start-wording:client-e2e', 'acknowledged');
     useStore.setState({ currentUser: { id: 'client-e2e', name: 'Customized Client', role: 'Client', departments: ['Client'], department: 'Client', companyName: 'Customized Co', permissions: { viewDashboard: true } } });
   });
   await page.goto(`/clients/${seeded.clientId}`);

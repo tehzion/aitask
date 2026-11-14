@@ -54,10 +54,25 @@ describe('application feedback', () => {
     expect(userFacingText(undefined, 'Unable to send the invitation.')).toBe('Unable to send the invitation.');
   });
 
+  it('localizes a known department denial without masking it', () => {
+    expect(userFacingMessage('FORBIDDEN: Zi Yin is not in the Video Editor department.')).toEqual(msg('errors.assigneeDepartment', { name: 'Zi Yin', department: 'Video Editor' }));
+    expect(render('Zi Yin is not in the Video Editor department.', 'zh')).toContain('Zi Yin');
+  });
+
   it('distinguishes saved-data recovery from software updates in both languages', () => {
     expect(render('Restore saved data', 'zh')).toBe('恢复已保存数据');
     expect(render('Reload saved data', 'zh')).toBe('重新加载已保存数据');
     expect(render('New saved data available', 'zh')).toBe('有新的已保存数据');
     expect(render('This revision changed elsewhere. Review the saved revision before saving.', 'zh')).not.toContain('最新版本');
+  });
+
+  it.each([
+    ['Active plans with started cycles cannot return to Draft.', 'A running plan with started months cannot go back to Draft.', '已有已开始月份的运行中方案不能恢复为草稿。'],
+    ['Complete every required delivery before completing this cycle.', 'Complete every required delivery before closing this month.', '关闭本月前，请先完成所有必需的交付。'],
+    ['This cycle status transition is not allowed.', 'This month’s status can’t change that way.', '本月状态不能这样更改。'],
+    ['Staff cannot publish or manually change service cycles.', 'Staff cannot start or manually change months.', '员工不能开始或手动更改月份。'],
+  ])('shows the server message %s in the current month wording', (server, english, chinese) => {
+    expect(render(server, 'en')).toBe(english);
+    expect(render(server, 'zh')).toBe(chinese);
   });
 });

@@ -9,7 +9,7 @@ test('project deletion cancels safely and retries without restaging or deleting 
     const boss = state.users.find(user => user.isSuperAdmin)!;
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     const project = { id: 'delete-project', clientId: 'delete-client', clientName: 'Delete company', projectName: 'Delete example', services: ['Design'], startDate: '2026-11-01', deadline: '', createdBy: boss.id };
 
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, projects: [project], clients: [{ id: 'delete-client', clientName: 'Delete company', createdBy: boss.id, createdAt: '2026-11-01', updatedAt: '2026-11-01' }], tasks: [{ ...state.tasks[0], id: 'keep-task', projectId: project.id, projectName: project.projectName }],
@@ -67,7 +67,7 @@ test('project deletion stays unavailable while the dialog explains why', async (
     const boss = state.users.find(user => user.isSuperAdmin)!;
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
     enablePasswordResetBypass(boss.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     const project = { id: 'blocked-project', clientId: 'blocked-client', clientName: 'Blocked company', projectName: 'Blocked example', services: ['Design'], startDate: '2026-11-01', deadline: '', createdBy: boss.id };
     useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, projects: [project], clients: [{ id: 'blocked-client', clientName: 'Blocked company', createdBy: boss.id, createdAt: '2026-11-01', updatedAt: '2026-11-01' }], tasks: [{ ...state.tasks[0], id: 'blocked-task', projectId: undefined, projectName: undefined, clientName: 'Blocked company' }],
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },

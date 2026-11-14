@@ -276,9 +276,9 @@ const ServiceRoleDashboard = () => {
         <TaskQueue title={t('Ready to finalize')} tasks={personal.completion} empty={t('No tasks awaiting final completion.')} />
         <TaskQueue title={t('Overdue')} tasks={overdue} empty={t('No overdue tasks.')} />
         <TaskQueue title={t('Due today')} tasks={dueToday} empty={t('No tasks due today.')} />
-        <Surface className="overflow-hidden"><div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Months to publish')}</h3></div>
-          <ul className="divide-y divide-line/60">{monthsToPublish.map(cycle => <li key={cycle.id} className="px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=delivery&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`} className="font-medium text-accent hover:underline"><span data-i18n-skip>{cycle.clientName}</span> · {t('Awaiting publication')}</Link></li>)}</ul>
-          {monthsToPublish.length === 0 && <p className="px-5 py-4 text-sm text-muted">{t('No months to publish.')}</p>}
+        <Surface className="overflow-hidden"><div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Months to start')}</h3></div>
+          <ul className="divide-y divide-line/60">{monthsToPublish.map(cycle => <li key={cycle.id} className="px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=delivery&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`} className="font-medium text-accent hover:underline"><span data-i18n-skip>{cycle.clientName}</span> · {t('Not started yet')}</Link></li>)}</ul>
+          {monthsToPublish.length === 0 && <p className="px-5 py-4 text-sm text-muted">{t('No months waiting to start.')}</p>}
         </Surface>
         <MonthsToTidyPanel months={monthsToTidy} deliverables={store.deliverables} todayKey={todayKey} canManage={canManageServiceCycles(store.currentUser, store.rolePermissions)} />
         <Surface className="overflow-hidden"><div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Unlinked work this month')}</h3><CountLabel>{unlinkedWork.length}</CountLabel></div>
@@ -361,7 +361,7 @@ const ServiceRoleDashboard = () => {
   }
 
   return <section className="space-y-4" aria-labelledby="management-workbench-title">
-    <WorkbenchHeader id="management-workbench-title" title={t('Company operations')} description={t('Contract value and current-cycle delivery for each active company.')} />
+    <WorkbenchHeader id="management-workbench-title" title={t('Company operations')} description={t("Contract value and this month's delivery for each company with a running plan.")} />
     <MetricStrip label={t('Company operations')} items={[
       { label: t('Contracted monthly value'), value: formatMoney(contractedMonthly, 'MYR', locale) },
       { label: t('Active clients'), value: activePlans.length, to: '/clients' },
@@ -379,14 +379,14 @@ const ServiceRoleDashboard = () => {
         const unpublished = months.filter(cycle => getMonthHousekeeping(cycle, store.deliverables, todayKey).kind === 'never-published').length;
         const missingHod = visibleProjects.filter(project => project.clientId === item.clientId && projectStatus(project) === 'Active' && projectHasNoHod(project)).length;
         const oldReviews = visibleTasks.filter(task => task.clientId === item.clientId && task.status === 'Waiting Approval' && task.workState?.reviewRequestedAt && Date.parse(task.workState.reviewRequestedAt) < Date.now() - 2 * 86400000).length;
-        return <li key={item.clientId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="font-semibold text-ink hover:text-accent">{item.clientName}</Link><span className="text-muted">{t('Overdue months')}: {overdueMonths} · {t('Never published')}: {unpublished} · {t('Projects without HOD')}: {missingHod} · {t('Reviews over 2 days')}: {oldReviews}</span></li>;
+        return <li key={item.clientId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="font-semibold text-ink hover:text-accent">{item.clientName}</Link><span className="text-muted">{t('Overdue months')}: {overdueMonths} · {t('Never started')}: {unpublished} · {t('Projects without HOD')}: {missingHod} · {t('Reviews over 2 days')}: {oldReviews}</span></li>;
       })}</ul>
     </Surface>}
     <MonthsToTidyPanel months={monthsToTidy} deliverables={store.deliverables} todayKey={getTodayInputDate(now)} canManage={canManageServiceCycles(store.currentUser, store.rolePermissions)} />
     {store.currentUser?.isSuperAdmin && <StaffingGapsPanel users={store.users} projects={store.projects} tasks={store.tasks} />}
     <Surface className="overflow-hidden">
       <div className="flex items-center justify-between border-b border-line/70 px-5 py-4">
-        <div><h3 className="font-semibold text-ink">{t('Monthly deliverables')}</h3><p className="mt-1 text-sm text-muted">{t('Current cycle delivery progress for each active company.')}</p></div>
+        <div><h3 className="font-semibold text-ink">{t('Monthly deliverables')}</h3><p className="mt-1 text-sm text-muted">{t("This month's delivery progress for each company with a running plan.")}</p></div>
         <CountLabel>{activeCompanies.length}</CountLabel>
       </div>
       <div className="divide-y divide-line/60">
@@ -394,7 +394,7 @@ const ServiceRoleDashboard = () => {
           <div key={item.plan.id} className="grid gap-3 p-4 sm:grid-cols-[minmax(0,1fr)_minmax(200px,auto)] sm:items-center sm:px-5">
             <div className="min-w-0">
               <Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="truncate text-sm font-semibold text-ink hover:text-accent">{item.clientName}</Link>
-              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t(item.draftCycle ? 'Current cycle not published' : 'No published cycle covering today')}</>}</p>
+              <p className="mt-1 truncate text-xs text-muted"><span data-i18n-skip>{item.plan.name}</span>{item.currentCycle ? <> · {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(item.currentCycle.periodEnd)!, locale)}</> : <> · {t(item.draftCycle ? 'Current month not started' : 'No month in progress')}</>}</p>
             </div>
             <div className="min-w-0">
               {item.currentCycle && item.total > 0 ? <>
@@ -407,8 +407,8 @@ const ServiceRoleDashboard = () => {
                 <StatusChip tone="slate">{item.planned} {t('Planned')}</StatusChip>
               </div>
               </> : <StatusChip tone="slate">{t(item.draftCycle
-                ? 'Awaiting publication'
-                : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
+                ? 'Not started yet'
+                : item.currentCycle ? 'No deliverables this month' : 'No month in progress')}</StatusChip>}
               <CompanyTaskActivity activity={item.taskActivity} />
               {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
                 {t('Progress counts completed work.')}

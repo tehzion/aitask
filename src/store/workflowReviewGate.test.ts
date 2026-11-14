@@ -19,7 +19,7 @@ const task = (index: number) => useStore.getState().tasks.find(item => item.id =
 
 describe('enforced internal workflow review', () => {
   beforeEach(() => {
-    useStore.setState({ ...initial, currentUser: boss, users: [boss, staff, hod, designerHod], tasks: [], clients: [], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], addons: [], notifications: [], rolePermissions: [], servicePricingSnapshots: [], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } }, true);
+    useStore.setState({ ...initial, currentUser: boss, users: [boss, staff, hod, designerHod], tasks: [], clients: [], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], notifications: [], rolePermissions: [], servicePricingSnapshots: [], backend: { ...initial.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } }, true);
     const plan = useStore.getState().createClientWithPlan({ clientName: 'Review Company', planName: 'Reviewed Plan', origin: 'custom', serviceItems: [{ id: 'review-service', name: 'Design', platforms: [], unit: 'output', quantity: 1, unitPriceMinor: 0, workflow: snapshotWorkflow(template) }], startDate: '2026-10-01', billingDay: 1, discountType: 'none', discountValue: 0, taxRateBps: 0 });
     expect(plan.ok).toBe(true);
     expect(useStore.getState().activateClientPlan(plan.planId!).ok).toBe(true);

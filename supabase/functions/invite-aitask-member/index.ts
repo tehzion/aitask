@@ -187,31 +187,30 @@ const handleRequest = async (request: Request): Promise<Response> => {
     });
     if (passwordError) return json({ error: 'Current password is incorrect' }, 403);
 
+    // Fail closed until the database has the confirmed-email synchronization
+    // trigger. This permits deploying this function ahead of the migration.
+    const { data: ready, error: readyError } = await adminClient.rpc('aitask_verified_email_change_ready');
+    if (readyError || ready !== true) return json({ error: 'Email changes are temporarily unavailable. Please try again later.' }, 503);
+    const { data: available, error: availabilityError } = await adminClient.rpc('aitask_email_change_available', {
+      p_actor_member_id: actor.id, p_email: nextEmail,
+    });
+    if (availabilityError) return json({ error: 'Unable to verify the new email address' }, 503);
+    if (available !== true) return json({ error: 'Another user already uses that email.' }, 409);
+
     const { users: authUsers, error: listError } = await listAllAuthUsers(adminClient);
     if (listError) return json({ error: 'Unable to verify the new email address' }, 500);
     const duplicate = authUsers.some(user => user.id !== authData.user.id && user.email?.toLowerCase() === nextEmail);
     if (duplicate) return json({ error: 'Another account already uses this email address' }, 409);
 
-    const { error: updateAuthError } = await adminClient.auth.admin.updateUserById(authData.user.id, {
-      email: nextEmail,
-      email_confirm: true,
+    const appUrl = publicAppUrl();
+    if (!appUrl) return json({ error: 'Email confirmation is temporarily unavailable.' }, 503);
+    const { error: authorizationError } = await adminClient.rpc('aitask_authorize_email_change', {
+      p_auth_user_id: authData.user.id, p_email: nextEmail,
     });
+    if (authorizationError) return json({ error: 'Email confirmation is temporarily unavailable.' }, 503);
+    const { error: updateAuthError } = await verifier.auth.updateUser({ email: nextEmail }, { emailRedirectTo: `${appUrl}/settings` });
     if (updateAuthError) return json({ error: updateAuthError.message || 'Unable to update the login email' }, 400);
-
-    const { data: result, error: memberError } = await adminClient.rpc('aitask_update_member_email', {
-      p_actor_member_id: actor.id,
-      p_email: nextEmail,
-    });
-    if (memberError) {
-      const { error: rollbackError } = await adminClient.auth.admin.updateUserById(authData.user.id, {
-        email: oldEmail,
-        email_confirm: true,
-      });
-      if (rollbackError) console.error('Auth email rollback failed', { memberId: actor.id, message: rollbackError.message });
-      return json({ error: memberError.message || 'Unable to update the workspace email' }, 400);
-    }
-
-    return json(result);
+    return json({ ok: true, pendingConfirmation: true });
   }
 
   const projectManagerActor = !actor.is_super_admin && actor.role === 'Project Manager';

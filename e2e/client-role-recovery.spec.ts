@@ -13,9 +13,9 @@ const seed = async (page: Page) => {
     const client = { id: 'role-client', name: 'Customer', role: 'Client', companyName: 'Customer Co', department: 'Client', departments: ['Client'], mustResetPassword: false };
     const staff = { id: 'role-staff', name: 'Contact', role: 'Staff', department: 'Designer', departments: ['Designer'] };
     enablePasswordResetBypass(client.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${client.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${client.id}`, 'acknowledged');
     const base = { clientName: 'Customer Co', clientId: 'role-company', serviceType: 'Design', description: 'Shared brief', department: 'Designer', assignedTo: staff.id, createdBy: staff.id, startDate: '2026-10-01', dueDate: '2026-10-08', priority: 'Medium', status: 'Approved', isCompleted: false, completionPercentage: 80, clientApprovalStatus: 'Pending', revisionCount: 0, isRecurring: false, visibility: 'client-visible', comments: [], approvalHistory: [] };
-    useStore.setState({ currentUser: client, users: [client, staff], tasks: [{ ...base, id: 'customer-a', title: 'Customer artwork A' }, { ...base, id: 'customer-b', title: 'Customer artwork B' }, { ...base, id: 'customer-private', title: 'Internal secret', visibility: 'internal' }, { ...base, id: 'customer-foreign', title: 'Foreign secret', clientName: 'Other Co' }], clients: [{ id: 'role-company', clientName: 'Customer Co', createdAt: '2026-10-01', updatedAt: '2026-10-01' }], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], rolePermissions: [], backend: { ...state.backend, mode: 'local', status: 'local', isSaving: false, isPulling: false, hasLocalChanges: false, pendingMutations: 0 } });
+    useStore.setState({ currentUser: client, users: [client, staff], tasks: [{ ...base, id: 'customer-a', title: 'Customer artwork A' }, { ...base, id: 'customer-b', title: 'Customer artwork B' }, { ...base, id: 'customer-private', title: 'Internal secret', visibility: 'internal' }, { ...base, id: 'customer-foreign', title: 'Foreign secret', clientName: 'Other Co' }], clients: [{ id: 'role-company', clientName: 'Customer Co', createdAt: '2026-10-01', updatedAt: '2026-10-01' }], projects: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], rolePermissions: [], backend: { ...state.backend, mode: 'local', status: 'local', isSaving: false, isPulling: false, hasLocalChanges: false, pendingMutations: 0 } });
     useToastStore.setState({ toasts: [] });
   });
 };
@@ -113,7 +113,7 @@ test('Customer late approval acknowledgement cannot affect another account', asy
     const client = { ...current.currentUser!, id: 'other-customer' };
     const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
     enablePasswordResetBypass(client.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${client.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${client.id}`, 'acknowledged');
     useStore.setState({ currentUser: client, users: [client, ...current.users.filter(user => user.role !== 'Client')], tasks: current.tasks.map(task => ({ ...task, clientApprovalStatus: 'Pending', status: 'Approved', isCompleted: false, approvalHistory: [] })) });
   });
   const note = dialog.getByRole('textbox', { name: 'Decision note' });
@@ -173,10 +173,10 @@ test('Customer progress uses the current plan and period while preserving delive
   await page.goto('/clients/role-company');
   await expect(page.getByText('50%', { exact: true }).first()).toBeVisible();
   await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ serviceCycles: useStore.getState().serviceCycles.filter(item => item.id !== 'current-cycle') }); });
-  await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
+  await expect(page.getByText('No month in progress', { exact: true })).toBeVisible();
   await expect(page.getByRole('progressbar')).toHaveCount(0);
   await page.goto('/');
-  await expect(page.getByText('No current published cycle', { exact: true })).toBeVisible();
+  await expect(page.getByText('No month in progress', { exact: true })).toBeVisible();
   await expect(page.getByText('50%', { exact: true })).toHaveCount(0);
 });
 
@@ -276,7 +276,7 @@ test('Customer malformed published periods and contract dates do not break the w
   await page.goto('/clients/role-company');
   await expect(page.getByRole('heading', { name: 'Customer Co', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Deliveries', exact: true }).click();
-  await expect(page.getByText('No published deliveries yet', { exact: true })).toBeVisible();
+  await expect(page.getByText('No deliveries yet', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: 'Services', exact: true }).click();
   await expect(page.getByText('Customer Plan', { exact: true })).toBeVisible();
   await expect(page.getByText('Service reminder', { exact: true })).toHaveCount(0);

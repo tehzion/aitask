@@ -91,16 +91,17 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
     {message && <p className="mt-3 text-sm" role="status"><SystemMessage message={message} /></p>}
     {pending && <Button className="mt-3" disabled={busy} onClick={() => save(() => ({ ok: true }), pending.command)}>{t('Retry pending save')}</Button>}
     <div className="mt-3 space-y-4">
+      {canPublish && records.draftCycles.length > 0 && <p className="text-xs text-muted">{t("Starting this month lets the team begin work and makes its deliverables visible to the client.")}</p>}
       {records.draftCycles.map(cycle => <div key={cycle.id} className="flex flex-wrap items-center justify-between gap-3 text-sm">
         <div><Link className="font-medium text-accent" to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=delivery&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`}><span data-i18n-skip>{cycle.clientName}</span></Link>
-          <p className="text-xs text-muted">{t('Awaiting publication')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p></div>
-        {canPublish && <Button disabled={busy || Boolean(pending)} onClick={() => save(() => useStore.getState().setServiceCycleStatus(cycle.id, 'Published'), 'service_cycle.manage', { cycleId: cycle.id })}>{t('Publish')}</Button>}
+          <p className="text-xs text-muted">{t('Not started yet')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p></div>
+        {canPublish && <Button disabled={busy || Boolean(pending)} onClick={() => save(() => useStore.getState().setServiceCycleStatus(cycle.id, 'Published'), 'service_cycle.manage', { cycleId: cycle.id })}>{t('Start month')}</Button>}
       </div>)}
       {records.expiredDraftCycles.length > 0 && <div>
-        <Button variant="secondary" aria-expanded={showOlderDrafts} onClick={() => setShowOlderDrafts(value => !value)}>{t('Older unpublished cycles')} ({records.expiredDraftCycles.length})</Button>
+        <Button variant="secondary" aria-expanded={showOlderDrafts} onClick={() => setShowOlderDrafts(value => !value)}>{t('Older months not started')} ({records.expiredDraftCycles.length})</Button>
         {showOlderDrafts && <div className="mt-3 space-y-3">{records.expiredDraftCycles.map(cycle => <div key={cycle.id} className="text-sm">
           <Link className="font-medium text-accent" to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=delivery&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`}><span data-i18n-skip>{cycle.clientName}</span></Link>
-          <p className="text-xs text-muted">{t('Expired unpublished cycle')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p>
+          <p className="text-xs text-muted">{t('Ended without starting')} · {date(cycle.periodStart)} – {date(cycle.periodEnd)}</p>
         </div>)}</div>}
       </div>}
       {reviewTasks.length > 0 && <Button variant="secondary" aria-expanded={showLinking} onClick={() => setShowLinking(value => !value)}>
@@ -124,7 +125,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
               if (item) save(() => useStore.getState().linkTaskToDeliverable(task.id, item.cycleId, item.id), 'task.update', { taskId: task.id, deliverableId: item.id });
             }}>{t('Link task')}</Button>
           </div>}
-          {editable && !invalidLink && eligible.length === 0 && <p className="text-xs text-muted">{t('No eligible deliverable. Review the company service cycle.')}</p>}
+          {editable && !invalidLink && eligible.length === 0 && <p className="text-xs text-muted">{t("No eligible deliverable. Review the company's current month.")}</p>}
         </div>;
       })}
     </div>

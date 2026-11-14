@@ -22,7 +22,7 @@ const signInAs = async (page: Page, who: 'boss' | 'pm') => page.evaluate(async r
     ? state.users.find(item => item.isSuperAdmin)!
     : state.users.find(item => item.role === 'Project Manager' && !item.isSuperAdmin)!;
   enablePasswordResetBypass(user.id);
-  localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${user.id}`, 'acknowledged');
+  localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${user.id}`, 'acknowledged');
   useStore.setState({ currentUser: { ...user, mustResetPassword: false }, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   return user.id;
 }, who);
@@ -55,7 +55,7 @@ test('PM re-dates long-overdue work and assigns unowned work from the dashboard'
   await expect(day.getByRole('heading', { name: 'Ready to finalize' })).toBeVisible();
   await expect(day.getByRole('heading', { name: 'Overdue', exact: true })).toBeVisible();
   await expect(day.getByRole('heading', { name: 'Due today', exact: true })).toBeVisible();
-  await expect(day.getByRole('heading', { name: 'Months to publish' })).toBeVisible();
+  await expect(day.getByRole('heading', { name: 'Months to start' })).toBeVisible();
   await expect(day.getByRole('heading', { name: 'Unlinked work this month' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Stuck work' })).toBeVisible();
   const newDue = isoDaysFromToday(5);
@@ -109,7 +109,7 @@ test('Boss Koo assigns a Project Manager to a project that has none, and new pro
   await expect(dialog.getByText('Choose at least one Project Manager for this project.')).toBeVisible();
 });
 
-test('a month of service work: bulk task chains, a one-off add-on, and plan pace', async ({ page }) => {
+test('a month of service work: bulk task chains and plan pace', async ({ page }) => {
   test.setTimeout(120_000);
   await startApp(page);
   await signInAs(page, 'boss');
@@ -117,7 +117,7 @@ test('a month of service work: bulk task chains, a one-off add-on, and plan pace
   const clientId = await page.evaluate(async monthStart => {
     const { useStore } = await import('/src/store/index.ts');
     const { SHORT_VIDEO_WORKFLOW_TEMPLATE, snapshotWorkflow } = await import('/src/lib/serviceManagement.ts');
-    useStore.setState({ clients: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], tasks: [], servicePricingSnapshots: [],
+    useStore.setState({ clients: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], tasks: [], servicePricingSnapshots: [],
       serviceWorkflowTemplates: [structuredClone(SHORT_VIDEO_WORKFLOW_TEMPLATE)] });
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Monthly Co', planName: 'Monthly Co Growth', origin: 'custom',
@@ -141,21 +141,12 @@ test('a month of service work: bulk task chains, a one-off add-on, and plan pace
   expect(chains.length).toBe(3);
   expect(chains.every(count => count > 0)).toBe(true);
 
-  // Old ?tab=addons links land on the merged Plan & delivery tab. The
-  // "Extra requests this month" block is gone (team feedback B1); extra work
-  // is added as a one-off add-on for the month.
+  // Old ?tab=addons links land on the merged Plan & delivery tab, which no
+  // longer offers add-ons (removed 10 Nov 2026).
   await page.goto(`/clients/${encodeURIComponent(clientId)}?tab=addons`);
   await expect(page.getByRole('tab', { name: 'Plan & delivery', exact: true })).toHaveAttribute('aria-selected', 'true');
   await expect(page.getByRole('region', { name: 'Extra requests this month' })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: 'Log extra request' })).toHaveCount(0);
-  await page.getByRole('button', { name: 'Add service add-on' }).click();
-  await page.getByLabel('Add-on name').fill('Extra story post');
-  const cycleSelect = page.getByLabel('Service cycle');
-  await cycleSelect.selectOption({ index: 1 });
-  await page.locator('button[type="submit"][form="add-addon-form"]').click();
-  await expect.poll(() => page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().addons.find(item => item.clientId === id)?.name, clientId)).toBe('Extra story post');
-  const addon = await page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().addons.find(item => item.clientId === id), clientId);
-  expect(addon).toMatchObject({ name: 'Extra story post', billingMode: 'one_off', unitPriceMinor: 0 });
+  await expect(page.getByRole('button', { name: 'Add service add-on' })).toHaveCount(0);
 });
 
 test('Boss Koo marks a past deliverable delivered from the attention list, publishing its month', async ({ page }) => {
@@ -164,7 +155,7 @@ test('Boss Koo marks a past deliverable delivered from the attention list, publi
   await signInAs(page, 'boss');
   const ids = await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
-    useStore.setState({ clients: [], clientPlans: [], serviceCycles: [], deliverables: [], addons: [], tasks: [], servicePricingSnapshots: [] });
+    useStore.setState({ clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [], servicePricingSnapshots: [] });
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Past Month Co', planName: 'Past plan', origin: 'custom',
       serviceItems: [{ id: 'fee', name: 'Management fee', platforms: [], unit: 'month', quantity: 1, unitPriceMinor: 0 }],

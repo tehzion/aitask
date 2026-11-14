@@ -3,7 +3,7 @@ import { registerUiTranslations } from './i18n';
 registerUiTranslations({
   'This change could not be saved on this device. Keep this page open and try again.': '无法在此设备保存此更改。请保持此页面打开，然后重试。',
   'Your password changed, but account setup could not finish. Sign in with the new password and try again.': '您的密码已更改，但账号设置尚未完成。请使用新密码登录后重试。',
-  'No service cycle is available for this activity. Ask your project manager to publish one.': '此动态暂无可用的服务周期。请让您的项目经理发布一个周期。',
+  'No month is available for this activity. Ask your project manager to start one.': '此动态暂无可用月份。请让您的项目经理开始一个月份。',
   'You can view this task, but your account cannot edit it.': '您可以查看此任务，但您的账号无法编辑它。',
 
   'Choose an available company or brand': '选择可用的公司或品牌',

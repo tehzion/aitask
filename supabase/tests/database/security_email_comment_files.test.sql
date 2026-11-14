@@ -1,0 +1,15 @@
+begin;
+create extension if not exists pgtap with schema extensions;
+select plan(10);
+select ok(exists(select 1 from pg_trigger where tgrelid='auth.users'::regclass and tgname='aitask_sync_confirmed_auth_email' and not tgisinternal), 'Auth email synchronization trigger is installed');
+select ok(not has_function_privilege('anon','public.aitask_verified_email_change_ready()','EXECUTE'), 'anonymous cannot read the rollout gate');
+select ok(not has_function_privilege('authenticated','public.aitask_verified_email_change_ready()','EXECUTE'), 'authenticated users cannot call the rollout gate');
+select ok(has_function_privilege('service_role','public.aitask_verified_email_change_ready()','EXECUTE'), 'the Edge Function can read the rollout gate');
+select ok(not has_table_privilege('authenticated','private.aitask_comment_file_publications','SELECT'), 'publication approvals are not directly readable by clients');
+select ok(not has_table_privilege('authenticated','private.aitask_comment_file_publications','INSERT'), 'publication approvals cannot be forged by clients');
+select ok(not has_table_privilege('authenticated','private.aitask_authorized_email_changes','INSERT'), 'users cannot bypass the password check');
+select ok(not has_function_privilege('authenticated','public.aitask_authorize_email_change(uuid,text)','EXECUTE'), 'users cannot authorize their own email change');
+select ok(not has_function_privilege('anon','public.aitask_approve_comment_file(text,text,text)','EXECUTE'), 'anonymous users cannot approve legacy files');
+select ok(exists(select 1 from pg_trigger where tgrelid='public.aitask_entities'::regclass and tgname='aitask_guard_comment_file_publication' and not tgisinternal), 'comment publication guard is installed');
+select * from finish();
+rollback;

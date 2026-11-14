@@ -9,7 +9,6 @@ export type MessageValues = Record<string, MessageValue>;
  */
 export const enMessages = {
   "feedback.activityAdded": "Activity added.",
-  "feedback.addonAdded": "Add-on added.",
   "feedback.profileSaved": "Profile saved.",
 
   "feedback.changesSaved": "Changes saved.",
@@ -106,7 +105,7 @@ export const enMessages = {
   'clientPortal.newDeliveriesNotice': 'New deliveries and review requests will appear here when the team shares them.',
   'clientPortal.deliveryProgress': 'Delivery progress',
   'clientPortal.deliveredThisCycle': '{delivered} of {total} delivered this cycle',
-  'clientPortal.noPublishedDeliverables': 'No published deliverables yet',
+  'clientPortal.noPublishedDeliverables': 'No deliveries yet',
   'clientPortal.viewAll': 'View all',
   'clientPortal.nothingWaiting': 'Nothing is waiting for your review.',
   'clientPortal.currentReviewHighlighted': 'Your current review is highlighted above.',
@@ -348,7 +347,9 @@ export const enMessages = {
   'errors.unexpected': 'Something went wrong',
   'errors.recoveredWorkspace': 'Recovered your local changes. They are waiting to sync.',
   'errors.syncMerged': 'Sync resolved: concurrent edits merged.',
-  'errors.assigneeDepartment': '{name} is not assigned to {department}.',
+  'errors.assigneeDepartment': '{name} is not in the {department} department.',
+  'errors.hodAssigneeEligibility': 'Choose active internal Staff with a login.',
+  'errors.hodTaskOwnership': 'You can only delegate tasks you own.',
   'errors.workspaceReset': 'Stored workspace data was corrupted and has been reset.',
   'errors.accessChanged': 'Your access changed. Reloaded the latest workspace; retry your change.',
   'project.created': 'Project "{name}" created successfully',
@@ -361,7 +362,7 @@ export const enMessages = {
   'workflow.deleted': 'Workflow template "{name}" deleted.',
   'plan.draftCreated': 'Client "{name}" and draft plan created.',
   'plan.createdForClient': 'Draft plan created for "{name}".',
-  'plan.activated': 'Plan "{name}" activated.',
+  'plan.activated': 'Plan "{name}" started.',
   'approval.bulkApproveFailed': '{approved} registration(s) approved; {failed} could not be approved. {names}',
   'approval.bulkApproveNone': 'No registrations could be approved. {names}',
   'approval.departmentFallback': '{count} approved. {departments} had no matching department and were assigned to Designer.',
@@ -376,7 +377,6 @@ export const enMessages = {
 
 export const zhMessages: Record<keyof typeof enMessages, string> = {
   "feedback.activityAdded": "动态已添加。",
-  "feedback.addonAdded": "附加项目已添加。",
   "feedback.profileSaved": "个人资料已保存。",
 
   "feedback.changesSaved": "更改已保存。",
@@ -473,7 +473,7 @@ export const zhMessages: Record<keyof typeof enMessages, string> = {
   'clientPortal.newDeliveriesNotice': '团队共享新交付内容或审阅请求后，它们会显示在此处。',
   'clientPortal.deliveryProgress': '交付进度',
   'clientPortal.deliveredThisCycle': '本周期已交付 {delivered}/{total}',
-  'clientPortal.noPublishedDeliverables': '尚无已发布的交付物',
+  'clientPortal.noPublishedDeliverables': '暂无交付内容',
   'clientPortal.viewAll': '查看全部',
   'clientPortal.nothingWaiting': '目前没有等待您审阅的内容。',
   'clientPortal.currentReviewHighlighted': '您当前的审阅内容已在上方突出显示。',
@@ -716,6 +716,8 @@ export const zhMessages: Record<keyof typeof enMessages, string> = {
   'errors.recoveredWorkspace': '已恢复您的本地更改，正在等待同步。',
   'errors.syncMerged': '同步已解决：已合并并发编辑。',
   'errors.assigneeDepartment': '{name} 未分配到 {department} 部门。',
+  'errors.hodAssigneeEligibility': '请选择有登录账号的在职内部员工。',
+  'errors.hodTaskOwnership': '您只能分配由您负责的任务。',
   'errors.workspaceReset': '存储的工作区数据已损坏，已重置。',
   'errors.accessChanged': '您的访问权限已更改。已重新加载最新工作区，请重试您的更改。',
   'project.created': '项目“{name}”已成功创建',
@@ -728,7 +730,7 @@ export const zhMessages: Record<keyof typeof enMessages, string> = {
   'workflow.deleted': '工作流模板“{name}”已删除。',
   'plan.draftCreated': '客户“{name}”及其草案方案已创建。',
   'plan.createdForClient': '已为“{name}”创建草案方案。',
-  'plan.activated': '方案“{name}”已激活。',
+  'plan.activated': '方案“{name}”已启动。',
   'approval.bulkApproveFailed': '已批准 {approved} 份注册申请；{failed} 份无法批准。{names}',
   'approval.bulkApproveNone': '没有注册申请可以批准。{names}',
   'approval.departmentFallback': '已批准 {count} 份申请。{departments} 没有匹配的部门，已分配到设计师部门。',

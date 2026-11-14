@@ -12,18 +12,18 @@ const seedHod = async (page: Page, options: { recipients?: boolean; manage?: boo
     const state = useStore.getState();
     const hod = { id: 'audit-hod', name: 'Audit HOD', role: 'HOD', department: 'Video Editor', departments: ['Video Shooting', 'Video Editor'], permissions: { ...defaultRolePermissions.HOD, manageCreatedTasks: manage !== false }, mustResetPassword: false };
     enablePasswordResetBypass(hod.id);
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${hod.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${hod.id}`, 'acknowledged');
     // The welcome card is non-modal and can cover list controls; skip it as other HOD specs do.
     localStorage.setItem('aitask:onboarding:v1', JSON.stringify({ [hod.id]: { status: 'skipped', updatedAt: new Date().toISOString() } }));
-    const users = [hod, { id: 'audit-pm', name: 'Audit PM', role: 'Project Manager', department: 'Management', departments: ['Management'] }, { id: 'audit-designer', name: 'Audit Designer', role: 'Staff', department: 'Designer', departments: ['Designer'] }];
-    if (recipients !== false) users.push({ id: 'audit-editor', name: 'Audit Editor', role: 'Staff', department: 'Video Editor', departments: ['Video Editor'] });
+    const users = [hod, { id: 'audit-pm', name: 'Audit PM', role: 'Project Manager', department: 'Management', departments: ['Management'] }];
+    if (recipients !== false) users.push({ id: 'audit-designer', name: 'Audit Designer', role: 'Staff', department: 'Designer', departments: ['Designer'] }, { id: 'audit-editor', name: 'Audit Editor', role: 'Staff', department: 'Video Editor', departments: ['Video Editor'] });
     const base = { clientName: 'Audit Co', serviceType: 'Video Editing', description: '', startDate: '2026-10-01', dueDate: '2026-10-10', status: 'Pending', priority: 'Medium', completionPercentage: 0, isCompleted: false, revisionCount: 0, clientApprovalStatus: 'Pending', isRecurring: false, recurrenceFrequency: 'None', comments: [], approvalHistory: [], visibility: 'internal' };
     const tasks = [
       { ...base, id: 'hod-assigned', title: 'Assigned delegation work', department: 'Video Editor', assignedTo: hod.id, createdBy: 'audit-pm' },
       { ...base, id: 'hod-oversight', title: 'Legacy Editor oversight', department: 'Editor', assignedTo: 'audit-editor', createdBy: 'audit-pm' },
       { ...base, id: 'hod-foreign', title: 'Foreign department work', department: 'Designer', assignedTo: 'audit-designer', createdBy: 'audit-pm' },
     ];
-    useStore.setState({ currentUser: hod, users, tasks, clients: [], projects: [], rolePermissions: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], addons: [], servicePricingSnapshots: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+    useStore.setState({ currentUser: hod, users, tasks, clients: [], projects: [], rolePermissions: [], clientPlans: [], serviceCycles: [], deliverables: [], cycleComments: [], servicePricingSnapshots: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   }, options);
 };
 
@@ -42,15 +42,17 @@ test('HOD delegates assigned work only to an eligible staff member and preserves
   const choices = dialog.getByRole('combobox', { name: 'Choose a team member' });
   await expect(choices.locator('option[value="audit-editor"]')).toHaveCount(1);
   await expect(choices.locator('option[value="audit-editor"]')).toContainText('1 Active tasks');
-  await expect(choices.locator('option[value="audit-designer"]')).toHaveCount(0);
-  await choices.selectOption('audit-editor');
+  await expect(choices.locator('option[value="audit-designer"]')).toHaveCount(1);
+  await choices.selectOption('audit-designer');
   await dialog.getByRole('button', { name: 'Assign Task', exact: true }).click();
   await expect.poll(() => page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
-    const task = useStore.getState().tasks.find(task => task.id === 'hod-assigned');
-    return { assignedTo: task?.assignedTo, createdBy: task?.createdBy };
-  })).toEqual({ assignedTo: 'audit-editor', createdBy: 'audit-pm' });
-  await expect(dialog.getByRole('heading', { name: 'Task Delegation' })).toHaveCount(0);
+    const state = useStore.getState();
+    const task = state.tasks.find(task => task.id === 'hod-assigned');
+    return { assignedTo: task?.assignedTo, createdBy: task?.createdBy, responsibleHodId: task?.responsibleHodId,
+      assignmentState: task?.assignmentState, notified: state.notifications.some(notice => notice.targetUserId === 'audit-designer' && notice.title === 'Task Assigned To You' && notice.route?.entityId === 'hod-assigned') };
+  })).toEqual({ assignedTo: 'audit-designer', createdBy: 'audit-pm', responsibleHodId: 'audit-hod', assignmentState: 'assigned_staff', notified: true });
+  await expect(dialog.getByRole('heading', { name: 'Task Delegation' })).toBeVisible();
 });
 
 test('rejected delegation explains the attempted assignment and restores the saved assignee', async ({ page }) => {
@@ -90,7 +92,8 @@ test('revoked delegation permissions and empty recipient lists have usable mobil
   await seedHod(page, { recipients: false });
   await page.evaluate(() => localStorage.setItem('aitask-color-theme', 'dark'));
   const dialog = await openDetails(page, 'hod-assigned', 'Assigned delegation work');
-  await expect(dialog.getByText(/^No Staff in .+ yet. You can do this task yourself/)).toBeVisible();
+  await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.setState({ users: useStore.getState().users.filter(user => user.role !== 'Staff') }); });
+  await expect(dialog.getByText('No eligible Staff available. You can do this task yourself, or ask your project manager for help.')).toBeVisible();
   await expect(dialog.getByRole('button', { name: 'Assign Task', exact: true })).toHaveCount(0);
   await page.keyboard.press('Escape');
   await seedHod(page);
@@ -123,7 +126,7 @@ test('HOD task creation includes populated Boss-curated projects while excluding
   await expect(choices.locator('option[value="foreign-project"]')).toHaveCount(0);
 });
 
-test('HOD can edit foreign-department assigned work without exposing delegation', async ({ page }) => {
+test('HOD can delegate foreign-department assigned work', async ({ page }) => {
   await seedHod(page);
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -132,7 +135,7 @@ test('HOD can edit foreign-department assigned work without exposing delegation'
   });
   const dialog = await openDetails(page, 'hod-foreign', 'Foreign department work');
   await expect(dialog.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
-  await expect(dialog.getByRole('heading', { name: 'Task Delegation' })).toHaveCount(0);
+  await expect(dialog.getByRole('heading', { name: 'Task Delegation' })).toBeVisible();
 });
 
 

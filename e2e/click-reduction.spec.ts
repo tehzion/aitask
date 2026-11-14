@@ -16,11 +16,10 @@ const seedPublishedMonth = async (page: import('@playwright/test').Page) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const boss = state.users.find(user => user.isSuperAdmin)!;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${boss.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
     useStore.setState({
       currentUser: { ...boss, mustResetPassword: false },
-      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [], addons: [],
-      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+      clients: [], clientPlans: [], serviceCycles: [], deliverables: [], tasks: [],       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
     const created = useStore.getState().createClientWithPlan({
       clientName: 'Clicks Co', planName: 'Clicks Plan', origin: 'custom',
@@ -88,7 +87,7 @@ test('several ended months are cancelled together from the dashboard', async ({ 
   });
   await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
   const panel = page.locator('section', { has: page.getByRole('heading', { name: 'Months to tidy up' }) }).last();
-  await expect(panel.getByText('Never published', { exact: true })).toHaveCount(2);
+  await expect(panel.getByText('Never started', { exact: true })).toHaveCount(2);
   for (const box of await panel.getByRole('checkbox', { name: /^Select: Clicks Co · / }).all()) await box.check();
   await panel.getByRole('button', { name: 'Cancel month (2)' }).click();
   const dialog = page.getByRole('dialog', { name: 'Cancel 2 months?' });
@@ -108,7 +107,7 @@ test('Staff start their work from the list without opening the task', async ({ p
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
     const staff = state.users.find(user => user.role === 'Staff' && user.status !== 'Inactive')!;
-    localStorage.setItem(`aitask:release-notice:2026-11-everyday-saves:${staff.id}`, 'acknowledged');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${staff.id}`, 'acknowledged');
     const task = state.tasks.find(item => item.assignedTo === staff.id && ['Pending', 'Revision'].includes(item.status) && !item.dependencies?.length)
       || state.tasks.find(item => item.assignedTo === staff.id && item.status === 'In Progress');
     if (!task) throw new Error('no staff task');

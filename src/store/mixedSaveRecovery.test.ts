@@ -29,7 +29,7 @@ beforeEach(() => {
   version = 1; failGeneric = false; failService = false;
   entities = [
     { entity_type: 'client', entity_id: 'client-1', workspace_id: 'aitask-main', version: 1, updated_at: stamp, data: { id:'client-1',clientName:'Old Company',createdBy:member.id,createdAt:stamp,updatedAt:stamp } },
-    { entity_type: 'service_cycle', entity_id: 'cycle-1', workspace_id: 'aitask-main', version: 1, updated_at: stamp, data: { id:'cycle-1',clientId:'client-1',clientName:'Old Company',planId:'plan-1',planRevision:1,periodStart:'2026-10-01',periodEnd:'2026-10-31',status:'Published',currency:'MYR',serviceItems:[],addonSnapshots:[],discountType:'none',discountValue:0,taxRateBps:0,createdAt:stamp,updatedAt:stamp } },
+    { entity_type: 'service_cycle', entity_id: 'cycle-1', workspace_id: 'aitask-main', version: 1, updated_at: stamp, data: { id:'cycle-1',clientId:'client-1',clientName:'Old Company',planId:'plan-1',planRevision:1,periodStart:'2026-10-01',periodEnd:'2026-10-31',status:'Published',currency:'MYR',serviceItems:[],discountType:'none',discountValue:0,taxRateBps:0,createdAt:stamp,updatedAt:stamp } },
   ];
   mocks.rpc.mockReset(); mocks.from.mockReset();
   mocks.getUser.mockResolvedValue({ data:{user:{id:authId}},error:null });

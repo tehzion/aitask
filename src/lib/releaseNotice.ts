@@ -2,7 +2,7 @@ import type { CustomRole, User } from '../types';
 import { getDashboardPersona, isHodUser } from './access';
 
 /** Bump for each release people should hear about; each id is acknowledged once per member. */
-export const RELEASE_NOTICE_ID = '2026-11-everyday-saves';
+export const RELEASE_NOTICE_ID = '2026-11-start-wording';
 
 export interface ReleaseNoticeHighlight {
   title: string;
@@ -22,135 +22,86 @@ export type ReleaseNoticeAudience = 'boss' | 'projectManager' | 'hod' | 'staff' 
 
 type ReleaseNoticeLocale = 'en' | 'zh';
 
-const savesEn: ReleaseNoticeHighlight = { title: 'Changes save on their own', description: 'If the connection drops, your change is kept and saved automatically. A note beside the task shows Saving… and then Saved.' };
-const savesZh: ReleaseNoticeHighlight = { title: '更改会自动保存', description: '网络中断时，您的更改会被保留并自动保存。任务旁会显示“保存中…”，然后显示“已保存”。' };
-const rowsEn: ReleaseNoticeHighlight = { title: 'Next step on each row', description: 'Task lists offer the next step, such as Start work or Send for review, without opening the task.' };
-const rowsZh: ReleaseNoticeHighlight = { title: '每行直接显示下一步', description: '任务列表直接提供下一步操作，例如“开始工作”或“提交审核”，无需打开任务。' };
-const defaultsEn: ReleaseNoticeHighlight = { title: 'New task remembers your choices', description: 'New task reuses your last department and shows Last used, with Clear to start fresh.' };
-const defaultsZh: ReleaseNoticeHighlight = { title: '新建任务会记住您的选择', description: '新建任务会沿用您上次的部门，并显示“上次使用”，可点击“清除”重新选择。' };
+// 11 Nov 2026: "Activate" and "Publish" confused people, so plans and months now
+// use Start / Running / Not started / In progress / Done (see serviceStatusLabels).
+const startPlanEn: ReleaseNoticeHighlight = { title: 'Start plan', description: 'Replaces Activate plan. When the first month is already due, the button reads Start plan and this month.' };
+const startPlanZh: ReleaseNoticeHighlight = { title: '启动方案', description: '取代“启用方案”。如果第一个月已经到期，按钮会显示“启动方案并开始本月”。' };
+const startMonthEn: ReleaseNoticeHighlight = { title: 'Start month', description: 'Replaces Publish. The team can begin that month’s work, and the client sees its deliverables.' };
+const startMonthZh: ReleaseNoticeHighlight = { title: '开始本月', description: '取代“发布”。团队即可开始当月工作，客户也会看到当月的交付物。' };
+const statusesEn: ReleaseNoticeHighlight = { title: 'New status names', description: 'Plans show Running. Months show Not started, In progress or Done.' };
+const statusesZh: ReleaseNoticeHighlight = { title: '新的状态名称', description: '方案显示“运行中”，月份显示“未开始”“进行中”或“已完成”。' };
+const sameEn: ReleaseNoticeHighlight = { title: 'Only the words changed', description: 'Your plans, months, files and links work exactly as before.' };
+const sameZh: ReleaseNoticeHighlight = { title: '只改了用词', description: '您的方案、月份、文件和链接一切照旧。' };
 
 const eyebrowEn = 'What changed for you';
 const eyebrowZh = '与您相关的更新';
 
+const managerEn: ReleaseNoticeCopy = {
+  eyebrow: eyebrowEn,
+  title: 'Clearer words for plans and months',
+  description: 'Activate and Publish are now Start, and every status says what is happening.',
+  highlights: [startPlanEn, startMonthEn, statusesEn, sameEn],
+  acknowledgeLabel: 'Happy working',
+};
+const managerZh: ReleaseNoticeCopy = {
+  eyebrow: eyebrowZh,
+  title: '方案与月份的用词更清晰',
+  description: '“启用”和“发布”已改为“启动”和“开始”，每个状态都直接说明进展。',
+  highlights: [startPlanZh, startMonthZh, statusesZh, sameZh],
+  acknowledgeLabel: '开始工作吧',
+};
+const teamEn: ReleaseNoticeCopy = {
+  eyebrow: eyebrowEn,
+  title: 'Clearer names for client months',
+  description: 'Client plans and months use plainer status names. Your own tasks have not changed.',
+  highlights: [
+    statusesEn,
+    { title: 'Your tasks are unchanged', description: 'Task steps and buttons such as Start work and Send for review work as before.' },
+  ],
+  acknowledgeLabel: 'Happy working',
+};
+const teamZh: ReleaseNoticeCopy = {
+  eyebrow: eyebrowZh,
+  title: '客户月份的名称更清晰',
+  description: '客户方案和月份使用更直白的状态名称。您自己的任务没有变化。',
+  highlights: [
+    statusesZh,
+    { title: '您的任务保持不变', description: '“开始工作”“提交审核”等任务步骤和按钮照常使用。' },
+  ],
+  acknowledgeLabel: '开始工作吧',
+};
+
 const englishCopy: Record<ReleaseNoticeAudience, ReleaseNoticeCopy> = {
-  boss: {
-    eyebrow: eyebrowEn,
-    title: 'Dependable saves and a clearer view of staffing',
-    description: 'This update keeps changes from getting lost and shows where the team needs people.',
-    highlights: [
-      savesEn,
-      { title: 'Staffing gaps lead to the team', description: 'Select a department in Staffing gaps to open its members, with pending sign-ups first.' },
-      rowsEn,
-      defaultsEn,
-    ],
-    acknowledgeLabel: 'Happy working',
-  },
-  projectManager: {
-    eyebrow: eyebrowEn,
-    title: 'Approve faster and stop worrying about saves',
-    description: 'Fewer clicks for everyday reviews, and changes that save themselves.',
-    highlights: [
-      { title: 'Approve several at once', description: 'On your dashboard, tick submitted tasks and approve them together. To return work with a note, open the task.' },
-      rowsEn,
-      savesEn,
-      defaultsEn,
-    ],
-    acknowledgeLabel: 'Happy working',
-  },
-  hod: {
-    eyebrow: eyebrowEn,
-    title: 'See what waits on you and hand it out faster',
-    description: 'Your department’s assignments and reviews are easier to find and act on.',
-    highlights: [
-      { title: 'What waits on you', description: 'The badge on My work counts tasks to assign and reviews where you are the reviewer.' },
-      { title: 'Assign from the list', description: 'Use Assign to… on a task row to hand work to your Staff without opening the task.' },
-      { title: 'Do it myself', description: 'When your department has no Staff, take the task yourself in one click.' },
-      savesEn,
-    ],
-    acknowledgeLabel: 'Happy working',
-  },
-  staff: {
-    eyebrow: eyebrowEn,
-    title: 'Your list now starts with what to do today',
-    description: 'Urgent work comes first, and your changes save even on a weak connection.',
-    highlights: [
-      { title: 'Today first', description: 'Your list starts with overdue work, then due today, revisions and work in progress. Blocked work goes last.' },
-      { title: 'Reviewer note on the card', description: 'When work comes back for a revision, the reviewer’s note shows on the task card.' },
-      rowsEn,
-      savesEn,
-    ],
-    acknowledgeLabel: 'Happy working',
-  },
+  boss: managerEn,
+  projectManager: managerEn,
+  hod: teamEn,
+  staff: teamEn,
   client: {
     eyebrow: eyebrowEn,
-    title: 'Your progress is easier to read',
-    description: 'Your dashboard now shows each service’s progress for the month.',
+    title: 'Clearer words for your monthly service',
+    description: 'Your plan and months now use plainer status names.',
     highlights: [
-      { title: 'This month by service', description: 'See how far each service has come this month, such as 6 of 8 completed.' },
-      { title: 'Ready counts as completed', description: 'Work your team has marked Ready now counts toward your completed total.' },
-      { title: 'Your feedback is kept', description: 'If the connection drops while you leave feedback, it is kept and saved automatically.' },
+      { title: 'Your plan', description: 'A plan that is underway shows Running.' },
+      { title: 'Each month', description: 'Months show Not started, In progress or Done, so you can see where things stand.' },
+      { title: 'Nothing else changed', description: 'Your deliveries, files and feedback are exactly where they were.' },
     ],
     acknowledgeLabel: 'Happy working',
   },
 };
 
 const chineseCopy: Record<ReleaseNoticeAudience, ReleaseNoticeCopy> = {
-  boss: {
-    eyebrow: eyebrowZh,
-    title: '保存更可靠，人员情况更清晰',
-    description: '本次更新避免更改丢失，并显示团队哪里缺人。',
-    highlights: [
-      savesZh,
-      { title: '从人员缺口直达团队', description: '在“人员缺口”中选择部门即可打开其成员，待审核的注册申请排在最前。' },
-      rowsZh,
-      defaultsZh,
-    ],
-    acknowledgeLabel: '开始工作吧',
-  },
-  projectManager: {
-    eyebrow: eyebrowZh,
-    title: '更快审批，不再担心保存',
-    description: '日常审核步骤更少，更改也会自动保存。',
-    highlights: [
-      { title: '批量批准', description: '在您的仪表板中勾选已提交的任务并一次批准。如需附说明退回，请打开任务。' },
-      rowsZh,
-      savesZh,
-      defaultsZh,
-    ],
-    acknowledgeLabel: '开始工作吧',
-  },
-  hod: {
-    eyebrow: eyebrowZh,
-    title: '看清待您处理的工作，更快分配',
-    description: '部门的分配与审核更容易找到和处理。',
-    highlights: [
-      { title: '待您处理', description: '“我的工作”上的标记会统计待分配任务，以及由您审核的任务。' },
-      { title: '在列表中分配', description: '在任务行使用“分配给…”，无需打开任务即可交给员工。' },
-      { title: '我自己来做', description: '部门没有员工时，一键由您自己接手任务。' },
-      savesZh,
-    ],
-    acknowledgeLabel: '开始工作吧',
-  },
-  staff: {
-    eyebrow: eyebrowZh,
-    title: '列表现在先显示今天要做的事',
-    description: '紧急工作排在最前，网络不稳时您的更改也会保存。',
-    highlights: [
-      { title: '今天优先', description: '列表依次显示逾期工作、今天到期、修订和进行中的工作，被阻塞的工作排在最后。' },
-      { title: '卡片上显示审核意见', description: '工作被退回修订时，审核人的意见会显示在任务卡片上。' },
-      rowsZh,
-      savesZh,
-    ],
-    acknowledgeLabel: '开始工作吧',
-  },
+  boss: managerZh,
+  projectManager: managerZh,
+  hod: teamZh,
+  staff: teamZh,
   client: {
     eyebrow: eyebrowZh,
-    title: '进度更容易查看',
-    description: '您的仪表板现在会显示每项服务本月的进度。',
+    title: '月度服务的用词更清晰',
+    description: '您的方案和月份现在使用更直白的状态名称。',
     highlights: [
-      { title: '本月各项服务', description: '查看每项服务本月的进度，例如已完成 6/8。' },
-      { title: '“待交付”计为已完成', description: '团队标记为“待交付”的工作现在会计入已完成总数。' },
-      { title: '您的反馈会被保留', description: '留下反馈时如果网络中断，反馈会被保留并自动保存。' },
+      { title: '您的方案', description: '正在进行的方案会显示“运行中”。' },
+      { title: '每个月份', description: '月份会显示“未开始”“进行中”或“已完成”，方便您了解进展。' },
+      { title: '其他一切不变', description: '您的交付、文件和反馈都保持原样。' },
     ],
     acknowledgeLabel: '开始工作吧',
   },

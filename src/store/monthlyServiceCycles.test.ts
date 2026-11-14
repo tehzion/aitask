@@ -19,7 +19,7 @@ const createPlan = (startDate = '2026-09-09', billingDay = 9) => {
 
 beforeEach(() => {
   vi.useFakeTimers(); setDay(2026, 10, 8);
-  useStore.setState({ ...initial, currentUser: pm, users: [pm], clients: [], projects: [], tasks: [], clientPlans: [], serviceCycles: [], deliverables: [], addons: [], servicePricingSnapshots: [], rolePermissions: [],
+  useStore.setState({ ...initial, currentUser: pm, users: [pm], clients: [], projects: [], tasks: [], clientPlans: [], serviceCycles: [], deliverables: [], servicePricingSnapshots: [], rolePermissions: [],
     backend: { ...initial.backend, mode: 'local', status: 'local', isLoading: false, hasLocalChanges: false, pendingMutations: 0 } }, true);
 });
 afterEach(() => { useStore.setState(initial, true); vi.useRealTimers(); });
@@ -165,17 +165,6 @@ describe('monthly service cycle rollover', () => {
     useStore.setState({ currentUser: { ...pm, role: 'Staff' } });
     setDay(2026, 10, 9); useStore.getState().generateDueLocalServiceCycles();
     expect(useStore.getState().serviceCycles).toHaveLength(1);
-  });
-
-  it('copies effective monthly add-ons and excludes one-off work from the new cycle', () => {
-    const id = createPlan(); const activation = useStore.getState().activateClientPlan(id);
-    const plan = useStore.getState().clientPlans[0];
-    for (const billingMode of ['monthly', 'one_off'] as const) useStore.getState().addAddon({
-      clientId: plan.clientId, clientName: plan.clientName, planId: id, name: billingMode, platforms: [], quantity: 1, unitPriceMinor: 100,
-      billingMode, targetCycleId: billingMode === 'one_off' ? activation.cycleId : undefined, effectiveFrom: '2026-10-09', isActive: true,
-    });
-    setDay(2026, 10, 9); useStore.getState().generateDueLocalServiceCycles();
-    expect(useStore.getState().serviceCycles[1].addonSnapshots.map(item => item.name)).toEqual(['monthly']);
   });
 
   it('carries unresolved work into the next cycle without changing the source task', () => {

@@ -5,7 +5,7 @@ import { getMonthlyCycleCloseout } from './monthlyCloseout';
 const cycle: ServiceCycle = {
   id: 'cycle-oct', clientId: 'client-1', clientName: 'Acme', planId: 'plan-1', planRevision: 1,
   periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', currency: 'MYR',
-  serviceItems: [], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
+  serviceItems: [], discountType: 'none', discountValue: 0, taxRateBps: 0,
   createdAt: '2026-10-01T00:00:00.000Z', updatedAt: '2026-10-01T00:00:00.000Z',
 };
 const deliverable = (id: string, status: Deliverable['status']): Deliverable => ({

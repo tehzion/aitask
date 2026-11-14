@@ -406,6 +406,33 @@ describe('secure command retry identity', () => {
     expect(byType.get('service_cycle.manage')).toEqual(['service_cycle']);
   });
 
+  it('isolates payment rows from a mixed task, service and notification diff', () => {
+    const operations = [
+      operation('task', 'insert'),
+      operation('service_cycle'),
+      operation('service_cycle_payment', 'insert'),
+      operation('notification', 'insert'),
+    ];
+    const groups = partitionOperationsWithExplicitType(operations, 'task.create');
+    const byType = new Map(groups.map(group => [group.type, group.operations.map(item => item.entityType)]));
+    expect(byType.get('task.create')).toEqual(['task', 'notification']);
+    expect(byType.get('service_cycle.manage')).toEqual(['service_cycle']);
+    expect(byType.get('service_cycle_payment.record')).toEqual(['service_cycle_payment']);
+    expect(groups.filter(group => group.type === 'service_cycle_payment.record')).toHaveLength(1);
+  });
+
+  it('splits multiple payment rows and keeps related service work on its owner', () => {
+    const groups = partitionOperationsWithExplicitType([
+      operation('service_cycle_payment', 'insert'),
+      operation('service_cycle_payment'),
+      operation('service_cycle'),
+    ], 'service_cycle_payment.record');
+    const byType = new Map(groups.map(group => [group.type, group.operations.map(item => item.entityType)]));
+    expect(byType.get('service_cycle_payment.record')).toEqual(['service_cycle_payment']);
+    expect(byType.get('service_cycle_payment.void')).toEqual(['service_cycle_payment']);
+    expect(byType.get('service_cycle.manage')).toEqual(['service_cycle']);
+  });
+
   it('sends a pending catalog template in its own command beside a deliverable update', () => {
     const operations = [
       operation('task'),
@@ -1802,7 +1829,7 @@ describe('task workflow backend versions', () => {
 });
 
 describe('minimal Client service projection', () => {
-  it('loads and diffs a public cycle without private addon snapshots', () => {
+  it('loads and diffs a public cycle', () => {
     const state = stateWithUser('client');
     state.users[0].role = 'Client';
     state.serviceCycles = [{ id: 'cycle', clientId: 'company', planId: 'plan', serviceItems: [] } as unknown as NonNullable<PersistedWorkspaceState['serviceCycles']>[number]];
@@ -1825,13 +1852,12 @@ describe('service command grouping by entity owner', () => {
 
   it('sends an update-only rename across service rows as one command per owner', () => {
     const groups = partitionOperationsForRpc([
-      op('client_plan', 'update'), op('service_cycle', 'update'), op('deliverable', 'update'), op('addon', 'update'), op('cycle_comment', 'update'),
+      op('client_plan', 'update'), op('service_cycle', 'update'), op('deliverable', 'update'), op('cycle_comment', 'update'),
     ]);
     expect(groups.map(group => [group.type, group.operations.map(item => item.entityType)])).toEqual([
       ['client_plan.manage', ['client_plan']],
       ['service_cycle.manage', ['service_cycle']],
       ['deliverable.manage', ['deliverable']],
-      ['addon.manage', ['addon']],
       ['cycle_comment.manage', ['cycle_comment']],
     ]);
   });
@@ -1842,13 +1868,6 @@ describe('service command grouping by entity owner', () => {
     ]);
     expect(groups).toHaveLength(1);
     expect(groups[0].type).toBe('client_plan.manage');
-  });
-
-  it('keeps a new add-on with its pricing and draft cycle under the add-on command', () => {
-    const groups = partitionOperationsForRpc([
-      op('addon', 'insert'), op('service_pricing_snapshot', 'insert'), op('service_cycle', 'update'),
-    ]);
-    expect(groups.map(group => group.type)).toEqual(['addon.manage']);
   });
 
   it('leaves a deliverable status change with its cycle on the deliverable command', () => {

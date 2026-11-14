@@ -31,7 +31,7 @@ try {
     { id: 'publish-step', order: 3, title: 'Publish output', department: 'Designer', kind: 'publishing', clientVisible: true, required: true },
   ] };
   insert('client', { id: 'review-company', clientName: 'Review QA', createdBy: 'review-pm', createdAt: '2026-10-01', updatedAt: '2026-10-01' });
-  insert('service_cycle', { id: 'review-cycle', clientId: 'review-company', clientName: 'Review QA', planId: 'review-plan', planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', currency: 'MYR', serviceItems: [{ id: 'review-service', name: 'Design', unit: 'output', quantity: 1, platforms: [], unitPriceMinor: 0, workflow }], addonSnapshots: [], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' });
+  insert('service_cycle', { id: 'review-cycle', clientId: 'review-company', clientName: 'Review QA', planId: 'review-plan', planRevision: 1, periodStart: '2026-10-01', periodEnd: '2026-10-31', status: 'Published', currency: 'MYR', serviceItems: [{ id: 'review-service', name: 'Design', unit: 'output', quantity: 1, platforms: [], unitPriceMinor: 0, workflow }], discountType: 'none', discountValue: 0, taxRateBps: 0, createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   insert('deliverable', { id: 'review-output', clientId: 'review-company', clientName: 'Review QA', planId: 'review-plan', cycleId: 'review-cycle', serviceItemId: 'review-service', sequence: 1, title: 'Reviewed output', status: 'Planned', taskIds: [], attachments: [], createdAt: '2026-10-01', updatedAt: '2026-10-01' });
   process.env.VITE_SUPABASE_URL = url;
   process.env.VITE_SUPABASE_PUBLISHABLE_KEY = process.env.AITASK_LOCAL_TEST_PUBLIC;

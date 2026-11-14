@@ -28,7 +28,7 @@ describe('service management calculations', () => {
       taxRateBps: 0, startDate: '2026-08-15', billingDay: 15, createdBy: 'admin', createdAt: '2026-08-15T00:00:00.000Z', updatedAt: '2026-08-15T00:00:00.000Z',
     };
     let id = 0;
-    const result = makeCycleRecords(plan, [], plan.startDate, prefix => `${prefix}-${++id}`, '2026-08-15T00:00:00.000Z');
+    const result = makeCycleRecords(plan, plan.startDate, prefix => `${prefix}-${++id}`, '2026-08-15T00:00:00.000Z');
     expect(result.deliverables).toHaveLength(3);
     expect(result.cycle.periodEnd).toBe('2026-09-14');
     plan.serviceItems[0].name = 'Changed later';
@@ -76,7 +76,7 @@ describe('service management calculations', () => {
     const cycle = {
       id: 'cycle-1', clientId: 'client-1', clientName: 'Acme', planId: 'plan-1', planRevision: 1,
       periodStart: '2026-08-15', periodEnd: '2026-09-14', status: 'Published' as const, currency: 'MYR' as const,
-      serviceItems: items, addonSnapshots: [], discountType: 'none' as const, discountValue: 0, taxRateBps: 0,
+      serviceItems: items, discountType: 'none' as const, discountValue: 0, taxRateBps: 0,
       createdAt: '2026-08-15T00:00:00.000Z', updatedAt: '2026-08-15T00:00:00.000Z',
     };
     expect(getCycleServiceProgress(cycle, [{ ...deliverable, status: 'Delivered' }, { ...deliverable, id: 'deliverable-2', sequence: 2, status: 'Ready' }])).toEqual([

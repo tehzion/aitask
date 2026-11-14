@@ -1,3 +1,4 @@
+import { planStatusLabel } from '../lib/serviceStatusLabels';
 import '../lib/pageCopy';
 import SystemMessage from '../components/SystemMessage';
 import { isDeliverableWorkDone } from '../lib/serviceManagement';
@@ -864,7 +865,7 @@ const Clients: React.FC = () => {
                 return (
                   <tr key={client.name} className="border-b border-line/70 bg-surface text-ink transition-colors duration-160 hover:bg-inset/60">
                     <td className="px-5 py-6 align-top">
-                      <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div data-i18n-skip className="font-semibold text-ink">{client.name}</div><div className="mt-1.5 flex flex-wrap gap-1.5">{serviceContext?.plan && <StatusChip tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{t(serviceContext.plan.status)}</StatusChip>}{!client.profile && <StatusChip tone="amber">{t('Needs profile')}</StatusChip>}</div></div></div>
+                      <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{client.name.slice(0, 2).toUpperCase()}</span><div><div data-i18n-skip className="font-semibold text-ink">{client.name}</div><div className="mt-1.5 flex flex-wrap gap-1.5">{serviceContext?.plan && <StatusChip tone={serviceContext.plan.status === 'Active' ? 'emerald' : serviceContext.plan.status === 'Paused' ? 'amber' : 'slate'}>{t(planStatusLabel(serviceContext.plan.status))}</StatusChip>}{!client.profile && <StatusChip tone="amber">{t('Needs profile')}</StatusChip>}</div></div></div>
                       <div className="mt-2 flex flex-wrap gap-1.5">
                         {Array.from(client.sources).map(source => (
                           <span key={source} className={cn('rounded-md border px-2 py-0.5 text-[11px] font-medium', sourceClasses[source])}>
@@ -911,7 +912,7 @@ const Clients: React.FC = () => {
                       <div className="font-semibold text-ink">{client.taskCount} {t('total')}</div>
                       <p className="mt-1 text-xs text-slate-500">{client.openTaskCount} {t('open')}, {client.completedTaskCount} {t('completed')}</p>
                       <p className="mt-1 text-xs text-slate-500">{client.projectIds.size} {t(client.projectIds.size === 1 ? 'company record' : 'company records')}</p>
-                      {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label={t('Cycle progress')} value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
+                      {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label={t('Month progress')} value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
                     </td>
                     <td className="px-5 py-6 align-top">
                       <div className="flex flex-col items-start gap-2">
@@ -1092,7 +1093,7 @@ const Clients: React.FC = () => {
                 <section className="mb-4 rounded-lg border border-red-200 bg-red-50 p-4" aria-label={t('Deletion impact')}>
                   <h3 className="font-semibold text-red-800">{t('Deletion impact')}: <span data-i18n-skip>{selectedClientSnapshot?.name}</span></h3>
                   <dl className="mt-3 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
-                    {[[t('Tasks'), deleteImpact.tasks], [t('Projects'), deleteImpact.projects], [t('Plans'), deleteImpact.plans], [t('Service cycles'), deleteImpact.cycles], [t('Deliverables'), deleteImpact.deliverables]].map(([label, count]) => (
+                    {[[t('Tasks'), deleteImpact.tasks], [t('Projects'), deleteImpact.projects], [t('Plans'), deleteImpact.plans], [t('Months'), deleteImpact.cycles], [t('Deliverables'), deleteImpact.deliverables]].map(([label, count]) => (
                       <div key={label}><dt>{label}</dt><dd className="font-semibold">{count}</dd></div>
                     ))}
                   </dl>

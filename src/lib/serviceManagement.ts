@@ -1,5 +1,4 @@
 import type {
-  Addon,
   ClientServicePlan,
   Deliverable,
   ServiceCycle,
@@ -133,8 +132,6 @@ export const makePricingSnapshot = (data: {
   parentType: ServicePricingSnapshot['parentType'];
   parentId: string;
   items?: ServiceItem[];
-  addonUnitPriceMinor?: number;
-  addonQuantity?: number;
   discountType?: ServicePricingSnapshot['discountType'];
   discountValue?: number;
   taxRateBps?: number;
@@ -144,9 +141,8 @@ export const makePricingSnapshot = (data: {
   const discountType = data.discountType || 'none';
   const discountValue = Math.max(0, Math.trunc(data.discountValue || 0));
   const taxRateBps = Math.max(0, Math.min(10_000, Math.trunc(data.taxRateBps || 0)));
-  const addonSubtotal = Math.max(0, Math.trunc(data.addonUnitPriceMinor || 0)) * Math.max(1, Math.trunc(data.addonQuantity || 1));
   const totals = calculatePlanTotalMinor(items, discountType, discountValue, taxRateBps);
-  const subtotalMinor = totals.subtotal + addonSubtotal;
+  const subtotalMinor = totals.subtotal;
   const discountMinor = discountType === 'percent'
     ? Math.round(subtotalMinor * Math.min(10_000, discountValue) / 10_000)
     : discountType === 'fixed' ? Math.min(subtotalMinor, discountValue) : 0;
@@ -160,7 +156,6 @@ export const makePricingSnapshot = (data: {
     parentId: data.parentId,
     currency: 'MYR',
     itemPrices: items.map(item => ({ serviceItemId: item.id, unitPriceMinor: Math.max(0, Math.trunc(item.unitPriceMinor)) })),
-    addonUnitPriceMinor: data.addonUnitPriceMinor === undefined ? undefined : Math.max(0, Math.trunc(data.addonUnitPriceMinor)),
     discountType,
     discountValue,
     taxRateBps,
@@ -173,7 +168,7 @@ export const makePricingSnapshot = (data: {
   };
 };
 
-export const applyPricingSnapshot = <T extends { serviceItems?: ServiceItem[]; unitPriceMinor?: number; discountType?: ClientServicePlan['discountType']; discountValue?: number; taxRateBps?: number }>(
+export const applyPricingSnapshot = <T extends { serviceItems?: ServiceItem[]; discountType?: ClientServicePlan['discountType']; discountValue?: number; taxRateBps?: number }>(
   item: T,
   pricing?: ServicePricingSnapshot,
 ): T => {
@@ -185,7 +180,6 @@ export const applyPricingSnapshot = <T extends { serviceItems?: ServiceItem[]; u
       ...serviceItem,
       unitPriceMinor: prices.get(serviceItem.id) ?? serviceItem.unitPriceMinor,
     })),
-    unitPriceMinor: pricing.addonUnitPriceMinor ?? item.unitPriceMinor,
     discountType: pricing.discountType,
     discountValue: pricing.discountValue,
     taxRateBps: pricing.taxRateBps,
@@ -282,24 +276,13 @@ export const SHORT_VIDEO_WORKFLOW_TEMPLATE: ServiceWorkflowTemplate = {
   updatedAt: '2026-08-15T00:00:00.000Z',
 };
 
-export const isAddonEffectiveForCycle = (addon: Addon, cycleStart: string, cycleId?: string) => {
-  if (!addon.isActive && addon.billingMode === 'monthly') return false;
-  if (addon.billingMode === 'one_off') return addon.targetCycleId === cycleId;
-  return addon.effectiveFrom <= cycleStart && (!addon.effectiveUntil || addon.effectiveUntil >= cycleStart);
-};
-
 export const makeCycleRecords = (
   plan: ClientServicePlan,
-  addons: Addon[],
   periodStart: string,
   makeId: (prefix: string) => string,
   now = new Date().toISOString(),
 ): { cycle: ServiceCycle; deliverables: Deliverable[] } => {
   const cycleId = makeId('CY');
-  // Pass the freshly generated id so a one-off add-on only applies to the exact
-  // cycle it targets; an untargeted/legacy one-off must not leak into every
-  // generated cycle.
-  const addonSnapshots = addons.filter(addon => isAddonEffectiveForCycle(addon, periodStart, cycleId));
   const cycle: ServiceCycle = {
     id: cycleId,
     clientId: plan.clientId,
@@ -315,7 +298,6 @@ export const makeCycleRecords = (
       platforms: [...item.platforms],
       workflow: item.workflow ? { ...item.workflow, steps: item.workflow.steps.map(step => ({ ...step })) } : undefined,
     })),
-    addonSnapshots: addonSnapshots.map(addon => ({ ...addon, platforms: [...addon.platforms] })),
     discountType: plan.discountType,
     discountValue: plan.discountValue,
     taxRateBps: plan.taxRateBps,
