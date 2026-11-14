@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-10T11:42:36Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "APPLIED 2026-11-10: production records 20261110071019_hod_staff_workload_summary (applied earlier by another session), 20261110114105_rls_read_speedup and 20261110114150_audit_history_actor_snapshot_without_avatar (approved by Y.L). Repository and production migration history are identical (148/148).",
+  "status": "APPLIED 2026-11-10: production records 20261110071019_hod_staff_workload_summary (applied earlier by another session), 20261110114105_rls_read_speedup and 20261110114150_audit_history_actor_snapshot_without_avatar (approved by Y.L). Repository and production migration history are identical (148/148). APPLIED 2026-11-14 via the Supabase connector at the owner's instruction: production records 20261114100403_notification_audience_and_reminder_recipient_scope and 20261114100421_freeze_published_cycle_pricing. Production also records later migrations from the monthly-payments branch (remove_service_addons, release_notice_start_wording, security_email_and_comment_files, hod_cross_department_delegation, hod_project_management) that are not on this branch; production's definitions of the two replaced functions were verified byte-identical (md5) to this branch's prior versions before applying. No backup was taken: both migrations change only functions and a trigger, no data.",
   "validatedMigrationTail": [
     "20261023154255_bind_service_command_entity_types",
     "20261028120000_pm_no_hod_assignment_fallback",
@@ -31,18 +31,22 @@
     "20261110015703_release_notice_everyday_saves",
     "20261110071019_hod_staff_workload_summary",
     "20261110114105_rls_read_speedup",
-    "20261110114150_audit_history_actor_snapshot_without_avatar"
+    "20261110114150_audit_history_actor_snapshot_without_avatar",
+    "20261114100403_notification_audience_and_reminder_recipient_scope",
+    "20261114100421_freeze_published_cycle_pricing"
   ],
   "pendingProductionMigrations": [],
   "productionVerification": {
     "historyAligned": true,
-    "historyThrough": "20261110114150_audit_history_actor_snapshot_without_avatar",
-    "latestAppliedMigration": "20261110114150_audit_history_actor_snapshot_without_avatar"
+    "historyThrough": "20261114100421_freeze_published_cycle_pricing",
+    "latestAppliedMigration": "20261114100421_freeze_published_cycle_pricing"
   },
   "changeSummary": {
     "20261110071019_hod_staff_workload_summary": "Adds a read-only, HOD-authorized staff workload aggregate across departments. It returns member names, departments and counts, not task records, and does not alter existing task visibility.",
     "20261110114105_rls_read_speedup": "Speeds up reads of aitask_entities by evaluating row security once per statement instead of once per row. Adds three private helper functions (aitask_rls_member_context, aitask_rls_visible_entities, aitask_rls_service_clients) and alters only the USING clause of the two read policies 'members can read scoped entities' and 'PM service records stay in portfolio'. Access rules are unchanged: the existing decision functions still make every decision. The migration records what each login can read before and after and aborts if any row differs.",
-    "20261110114150_audit_history_actor_snapshot_without_avatar": "Stops copying the acting member's avatar (about 33 kB) into every aitask_entity_history.actor_snapshot. On 10 Nov 2026 the avatar was 73 MB of the table's 83 MB. Only future rows change; every other snapshot field is unchanged and existing append-only rows are not touched."
+    "20261110114150_audit_history_actor_snapshot_without_avatar": "Stops copying the acting member's avatar (about 33 kB) into every aitask_entity_history.actor_snapshot. On 10 Nov 2026 the avatar was 73 MB of the table's 83 MB. Only future rows change; every other snapshot field is unchanged and existing append-only rows are not touched.",
+    "20261114100403_notification_audience_and_reminder_recipient_scope": "Rejects notifications addressed to the Client role (every client member can read them, so a PM could broadcast across client accounts) and sends deadline reminders only to Project Managers still assigned to the task's project. Function-only; no data touched.",
+    "20261114100421_freeze_published_cycle_pricing": "Makes a service cycle's pricing snapshot write-once and freezes the price terms of published cycles (a client_plan.manage member could otherwise rewrite the snapshot the payment command reads as the charge). Adds one trigger; no data touched. Rollback: drop trigger aitask_guard_published_cycle_pricing on public.aitask_entities."
   },
   "qualityGates": {
     "localDatabase": "PASS: clean replay of all 148 migrations; full pgTAP suite 92 files / 1,285 assertions with 0 failures (baseline before these migrations: 90 files / 1,263; 17 assertions in rls_read_speedup.test.sql compare every role's RLS read with the previous per-row rule; 5 in audit_history_actor_snapshot.test.sql); mutation check: deliberately broken read policies fail 7 and 2 of those assertions, and the avatar assertion fails before its migration and passes after; supabase db lint and advisors report nothing on the new functions.",

@@ -1,8 +1,6 @@
 -- Security audit follow-up: a cycle's pricing snapshot is write-once, and once a
 -- service cycle is published its price terms and snapshot are frozen. Status transitions, attachments and
 -- payment records keep working; only the billing terms are protected.
--- PENDING PRODUCTION APPROVAL: review against any workflow that edits a
--- published cycle's prices before applying.
 create or replace function private.aitask_guard_published_cycle_pricing()
 returns trigger
 language plpgsql
