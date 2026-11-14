@@ -1,0 +1,71 @@
+{
+  "manifestVersion": "2026-11-14.1",
+  "manifestKind": "aitask-release-candidate",
+  "supersedes": "aitask_release_manifest_20261113z_hod_project_payment_applied_production.json",
+  "immutable": false,
+  "capturedAt": "2026-11-14T10:05:00Z",
+  "projectRef": "ohjhwyiffgzyatcmmdql",
+  "status": "APPLIED 2026-11-14: production records 20261114100403_notification_audience_and_reminder_recipient_scope and 20261114100421_freeze_published_cycle_pricing (owner instructed; applied via the Supabase connector). Repository and production migration versions match (155/155). Production's definitions of the two replaced functions were verified byte-identical (md5) to the repository's prior versions before applying. No backup was taken: both migrations change only functions and one trigger, no data.",
+  "validatedMigrationTail": [
+    "20261023063344_task_workflow_action_guards",
+    "20261023154255_bind_service_command_entity_types",
+    "20261028120000_pm_no_hod_assignment_fallback",
+    "20261028130000_service_command_guard_direct_writes",
+    "20261028140000_task_stage_guard_corrections",
+    "20261028150000_hod_patch_empty_defaults",
+    "20261028160000_optional_task_output",
+    "20261029120000_pm_company_handover",
+    "20261102120000_plan_activation_entity_types",
+    "20261102130000_hod_assignee_output_files",
+    "20261102140000_addon_save_entity_types",
+    "20261102150000_task_assigned_at_format",
+    "20261102160000_company_rename_with_projects",
+    "20261103090000_hod_legacy_task_reassign",
+    "20261103125940_hod_department_delegation_disable_staff_creation",
+    "20261103125949_pm_direct_internal_assignment",
+    "20261103143949_service_cycle_payments",
+    "20261104053237_restore_hod_handoff_and_codify_live_grants",
+    "20261104062406_block_project_delete_with_linked_tasks",
+    "20261106041228_optimize_pm_service_access",
+    "20261109141920_r3_s1_project_approval_pm",
+    "20261109193707_aitask_client_events",
+    "20261110015703_release_notice_everyday_saves",
+    "20261110071019_hod_staff_workload_summary",
+    "20261110114105_rls_read_speedup",
+    "20261110114150_audit_history_actor_snapshot_without_avatar",
+    "20261110130438_remove_service_addons",
+    "20261110174255_release_notice_start_wording",
+    "20261111111631_security_email_and_comment_files",
+    "20261112053140_hod_cross_department_delegation",
+    "20261113090000_hod_project_management",
+    "20261114100403_notification_audience_and_reminder_recipient_scope",
+    "20261114100421_freeze_published_cycle_pricing"
+  ],
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261114100421_freeze_published_cycle_pricing",
+    "latestAppliedMigration": "20261114100421_freeze_published_cycle_pricing",
+    "historyCount": 155,
+    "beforeHistoryCount": 153,
+    "productionOnlyMigrations": [],
+    "checks": "Live read-only verification on 2026-11-14: both migrations recorded by version_name; guard function text and aitask_guard_published_cycle_pricing / aitask_0_guard_notification_audience triggers present.",
+    "migrationAnchors": "Release branch is based on live production commit 2c4ace4; a clean local replay applies all migrations including 20261113090000 without anchor errors."
+  },
+  "changeSummary": {
+    "20261113090000_hod_project_management": "An HOD assigned to a project may update its execution details and add or update Staff membership. Company links, HOD membership, Project Manager assignments, creator attribution and deletion remain with Boss Koo, the responsible Project Manager, or the creator.",
+    "payment-save-recovery": "Payment saves now respect pending, upgrade and workspace-lock states. Transient failures offer safe retry without duplicate receipts; terminal rejections offer restore instead of endless retry.",
+    "20261114100403_notification_audience_and_reminder_recipient_scope": "Rejects notifications addressed to the Client role (every client member can read them, so a PM could broadcast across client accounts) and sends deadline reminders only to Project Managers still assigned to the task's project. Function-only; no data touched.",
+    "20261114100421_freeze_published_cycle_pricing": "Makes a service cycle's pricing snapshot write-once and freezes the price terms of published cycles. Adds one trigger; no data touched. Rollback: drop trigger aitask_guard_published_cycle_pricing on public.aitask_entities."
+  },
+  "qualityGates": {
+    "localDatabase": "PASS (2026-11-13): full pgTAP 96 files / 1,338 assertions.",
+    "application": "PASS: typecheck, lint, strict i18n (0 findings / 232 files), unit tests 143 files / 1,129 tests, production build and bundle budgets (272.0 KiB gzip / 300 KiB cap).",
+    "browser": "PASS: HOD project management 1/1, payment recovery 2/2, HOD parity 13/13, monthly payments 2/2, PM plan recovery 14/14, project management release 2/2, save recovery regressions 5/5.",
+    "productionApply": "APPLIED 2026-11-13 after the approved production release merged as 0d8e072; live migration history contains 20261113090000_hod_project_management. Repository and production migration names match exactly (153/153)."
+  },
+  "rollback": {
+    "20261114100403_notification_audience_and_reminder_recipient_scope": "Restore private.aitask_guard_notification_audience() from 20261002164513_universal_notification_audience_guard.sql and private.aitask_generate_due_task_reminders(text, timestamptz) from 20261002100723_initialize_deadline_reminder_claim.sql (create or replace). No data changed.",
+    "20261114100421_freeze_published_cycle_pricing": "drop trigger aitask_guard_published_cycle_pricing on public.aitask_entities; drop function private.aitask_guard_published_cycle_pricing(). No data changed."
+  }
+}

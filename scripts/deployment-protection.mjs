@@ -19,6 +19,7 @@ export const deploymentProtectionHeaders = async (url, fetcher = fetch) => {
     try { claims = JSON.parse(Buffer.from(value.split('.')[1], 'base64url').toString()); } catch { throw new Error('GitHub OIDC returned an invalid token.'); }
     if (claims.aud !== 'https://github.com/tehzion' || claims.repository !== 'tehzion/aitask'
       || !['Authenticated Staging QA', 'Tagged Release Verification'].includes(claims.workflow)
+      || !(claims.ref === 'refs/heads/master' || /^refs\/tags\/v[^/]+$/.test(String(claims.ref)))
       || !Number.isFinite(claims.exp) || claims.exp * 1000 <= Date.now()) throw new Error('GitHub OIDC claims do not match staging QA.');
     cached = { token: value, expires: claims.exp * 1000 };
   }

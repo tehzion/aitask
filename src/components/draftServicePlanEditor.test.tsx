@@ -29,4 +29,30 @@ describe('DraftServicePlanEditor', () => {
     expect(html).toMatch(/Proposed start[^<]*16 Nov 2026/);
     expect(html).not.toContain('16 Oct 2026');
   });
+
+  const renderEditor = (plan: ClientServicePlan, from: ClientServicePlan) => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date(2026, 10, 4, 12));
+    vi.stubGlobal('window', { localStorage: { getItem: () => 'en', setItem: () => undefined, removeItem: () => undefined }, location: { hostname: 'localhost' }, navigator: { language: 'en-GB' }, addEventListener: () => undefined, removeEventListener: () => undefined });
+    useStore.setState({ currentUser: pm, users: [pm], clientPlans: [from, plan], rolePermissions: [] });
+    return renderToStaticMarkup(<I18nProvider><DraftServicePlanEditor plan={plan} source={from} /></I18nProvider>);
+  };
+  const startInput = (html: string) => html.match(/Start date<input[^>]*>/)?.[0] ?? '';
+
+  it('lets a revision of an active plan start on a later billing date', () => {
+    const html = renderEditor({ ...draft, startDate: '2026-12-16' } as ClientServicePlan, source);
+    const input = startInput(html);
+    expect(input).not.toMatch(/\sdisabled=""/);
+    expect(input).toContain('min="2026-11-16"');
+    expect(input).toContain('value="2026-12-16"');
+    expect(html).toMatch(/Proposed start[^<]*16 Dec 2026/);
+    expect(html).toContain('Pick one of this plan’s billing dates, from 16 Nov 2026, up to 12 months ahead.');
+  });
+
+  it('shows the next boundary in the field when the saved date has passed', () => {
+    expect(startInput(renderEditor(draft, source))).toContain('value="2026-11-16"');
+  });
+
+  it('keeps the start date fixed when the plan being revised has ended', () => {
+    expect(startInput(renderEditor(draft, { ...source, status: 'Ended' } as ClientServicePlan))).toMatch(/\sdisabled=""/);
+  });
 });

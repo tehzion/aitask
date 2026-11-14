@@ -33,10 +33,20 @@ it('mints a scoped short-lived token and refuses redirects from the token issuer
   vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_URL', 'https://pipelines.actions.githubusercontent.com/token');
   vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'fake-runner-token');
   const { deploymentProtectionHeaders } = await import('../../scripts/deployment-protection.mjs');
-  const claims = { aud: 'https://github.com/tehzion', repository: 'tehzion/aitask', workflow: 'Authenticated Staging QA', exp: Math.floor(Date.now() / 1000) + 300 };
+  const claims = { aud: 'https://github.com/tehzion', repository: 'tehzion/aitask', workflow: 'Authenticated Staging QA', ref: 'refs/heads/master', exp: Math.floor(Date.now() / 1000) + 300 };
   const token = `fake.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.fake`;
   const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ value: token }) });
   expect(await deploymentProtectionHeaders('https://staging.vercel.app/build-info.json', fetcher)).toEqual({ 'x-vercel-trusted-oidc-idp-token': token });
   expect(fetcher.mock.calls[0][1].redirect).toBe('error');
   expect(fetcher.mock.calls[0][0].searchParams.get('audience')).toBe('https://github.com/tehzion');
+});
+it('rejects OIDC tokens minted from an unreviewed branch ref', async () => {
+  vi.stubEnv('STAGING_PROTECTION_ORIGIN', 'https://staging.vercel.app');
+  vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_URL', 'https://pipelines.actions.githubusercontent.com/token');
+  vi.stubEnv('ACTIONS_ID_TOKEN_REQUEST_TOKEN', 'fake-runner-token');
+  const { deploymentProtectionHeaders } = await import('../../scripts/deployment-protection.mjs');
+  const claims = { aud: 'https://github.com/tehzion', repository: 'tehzion/aitask', workflow: 'Authenticated Staging QA', ref: 'refs/heads/feature-x', exp: Math.floor(Date.now() / 1000) + 300 };
+  const token = `fake.${Buffer.from(JSON.stringify(claims)).toString('base64url')}.fake`;
+  const fetcher = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ value: token }) });
+  await expect(deploymentProtectionHeaders('https://staging.vercel.app/build-info.json', fetcher)).rejects.toThrow('claims do not match');
 });

@@ -91,6 +91,30 @@ describe('monthly service cycle rollover', () => {
     expect(useStore.getState().clientPlans.find(item => item.id === revision.planId)).toMatchObject({ revisionScheduleStatus: 'scheduled', effectiveFromCycleStart: '2026-11-09' });
   });
 
+  it('starts a revision on a later billing date the person chose, and not before it', () => {
+    const id = createPlan();
+    useStore.getState().activateClientPlan(id);
+    const revision = useStore.getState().createClientPlanRevision(id).planId!;
+    const draft = () => useStore.getState().clientPlans.find(item => item.id === revision)!;
+    // Not one of the plan's billing dates, or too far ahead.
+    expect(useStore.getState().updateDraftClientPlan(revision, { startDate: '2026-12-15' })).toMatchObject({ ok: false, error: expect.stringContaining('billing dates') });
+    expect(useStore.getState().updateDraftClientPlan(revision, { startDate: '2027-12-09' }).ok).toBe(false);
+    expect(useStore.getState().updateDraftClientPlan(revision, { startDate: '2026-12-09', name: 'Later scope' }).ok).toBe(true);
+    // The saved choice, not the first boundary, is what can now be scheduled.
+    expect(useStore.getState().scheduleClientPlanRevision(revision, '2026-10-09').ok).toBe(false);
+    expect(useStore.getState().scheduleClientPlanRevision(revision, '2026-12-09').ok).toBe(true);
+    expect(draft()).toMatchObject({ revisionScheduleStatus: 'scheduled', startDate: '2026-12-09', effectiveFromCycleStart: '2026-12-09' });
+
+    for (const [month, day] of [[10, 9], [11, 9]] as const) {
+      setDay(2026, month, day); useStore.getState().generateDueLocalServiceCycles();
+      expect(useStore.getState().clientPlans.find(item => item.id === id)?.status).toBe('Active');
+      expect(draft().status).toBe('Draft');
+    }
+    setDay(2026, 12, 9); useStore.getState().generateDueLocalServiceCycles();
+    expect(useStore.getState().clientPlans.find(item => item.id === id)?.status).toBe('Ended');
+    expect(draft().status).toBe('Active');
+  });
+
   it.each(['Draft', 'Paused', 'Ended'] as const)('does not renew a %s plan', status => {
     const id = createPlan();
     if (status !== 'Draft') {

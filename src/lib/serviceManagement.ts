@@ -46,6 +46,35 @@ export const nextRevisionBoundary = (source: Pick<ClientServicePlan, 'nextCycleS
   source.nextCycleStart && source.nextCycleStart > today ? source.nextCycleStart : nextBillingDate(today, source.billingDay)
 );
 
+/** How far ahead a draft revision may be scheduled, in billing cycles. */
+export const REVISION_START_HORIZON = 12;
+
+/**
+ * True when `date` is one of the source plan's billing boundaries, from the next
+ * boundary up to REVISION_START_HORIZON cycles ahead. Revisions only take effect
+ * at these boundaries, because cycles run billing day to billing day.
+ */
+export const isRevisionStartBoundary = (source: Pick<ClientServicePlan, 'nextCycleStart' | 'billingDay'>, date: string, today: string) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  let boundary = nextRevisionBoundary(source, today);
+  for (let step = 0; step <= REVISION_START_HORIZON; step += 1) {
+    if (boundary === date) return true;
+    if (boundary > date) return false;
+    boundary = nextBillingDate(boundary, source.billingDay);
+  }
+  return false;
+};
+
+/**
+ * The boundary a draft revision will start on: the date the person chose when it
+ * is a valid, later boundary, otherwise the next boundary. A saved date that has
+ * already passed therefore rolls forward instead of going stale.
+ */
+export const resolveRevisionStart = (source: Pick<ClientServicePlan, 'nextCycleStart' | 'billingDay'>, requested: string | undefined, today: string) => {
+  const first = nextRevisionBoundary(source, today);
+  return requested && requested > first && isRevisionStartBoundary(source, requested, today) ? requested : first;
+};
+
 export const cyclePeriodEnd = (periodStart: string, billingDay: number) => {
   const next = utcDate(nextBillingDate(periodStart, billingDay));
   next.setUTCDate(next.getUTCDate() - 1);

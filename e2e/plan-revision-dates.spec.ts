@@ -69,3 +69,64 @@ for (const locale of ['en', 'zh']) test(`revision saves an inherited contract re
   expect(await date.evaluate(input => (input as HTMLInputElement).validity.rangeUnderflow)).toBe(true);
   expect(await page.evaluate(async id => (await import('/src/store/index.ts')).useStore.getState().clientPlans.find(plan => plan.id === id)?.contractEndDate, seeded.revisionId)).toBe('2026-10-03');
 });
+
+test('a revision can start on a later billing date of the plan, and only on a billing date', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-15T04:00:00Z') });
+  await page.goto('/login');
+  await page.waitForFunction(() => Boolean(document.querySelector('form input, main')));
+  const seeded = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const { enablePasswordResetBypass } = await import('/src/lib/auth.ts');
+    const state = useStore.getState();
+    const boss = state.users.find(user => user.isSuperAdmin)!;
+    enablePasswordResetBypass(boss.id);
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${boss.id}`, 'acknowledged');
+    useStore.setState({ currentUser: { ...boss, mustResetPassword: false }, clients: [], projects: [], tasks: [],
+      clientPlans: [], serviceCycles: [], deliverables: [], servicePricingSnapshots: [], addons: [],
+      backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
+    });
+    const created = useStore.getState().createClientWithPlan({ clientName: 'Later Start Co', planName: 'META ADS X GRAPHIC DESIGN', origin: 'custom',
+      serviceItems: [{ id: 'ads', name: 'META ADS X GRAPHIC DESIGN', platforms: ['FB&IG'], unit: 'month', quantity: 1, unitPriceMinor: 100000 }],
+      startDate: '2026-09-09', billingDay: 9, discountType: 'none', discountValue: 0, taxRateBps: 0,
+    });
+    if (!created.ok) throw new Error(created.error);
+    useStore.getState().activateClientPlan(created.planId!);
+    const revision = useStore.getState().createClientPlanRevision(created.planId!);
+    if (!revision.ok) throw new Error(revision.error);
+    return { clientId: created.clientId!, revisionId: revision.planId! };
+  });
+  const stored = () => page.evaluate(async id => {
+    const plan = (await import('/src/store/index.ts')).useStore.getState().clientPlans.find(item => item.id === id)!;
+    return { startDate: plan.startDate, effectiveFromCycleStart: plan.effectiveFromCycleStart, status: plan.revisionScheduleStatus };
+  }, seeded.revisionId);
+
+  await page.goto(`/clients/${seeded.clientId}`);
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
+  const editor = page.getByRole('region', { name: 'Next month’s plan', exact: true });
+  const start = editor.getByLabel('Start date');
+  await expect(start).toBeEnabled();
+  await expect(start).toHaveValue('2026-11-09');
+  await expect(start).toHaveAttribute('min', '2026-11-09');
+  await expect(editor).toContainText('Pick one of this plan’s billing dates, from 9 Nov 2026, up to 12 months ahead.');
+
+  // A day that is not one of the plan's billing dates is refused and nothing is saved.
+  await start.fill('2026-12-15');
+  await editor.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(editor.getByText('Start date must be one of this plan’s billing dates, within the next 12 months.')).toBeVisible();
+  expect((await stored()).startDate).not.toBe('2026-12-15');
+
+  // A later billing date is saved, shown as the proposed start, and survives a reload.
+  await start.fill('2026-12-09');
+  await editor.getByRole('button', { name: 'Save draft', exact: true }).click();
+  await expect(editor.getByText('Draft saved. Review the changes before scheduling.', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: 'Plan & delivery', exact: true }).click();
+  await expect(start).toHaveValue('2026-12-09');
+  await expect(editor).toContainText('Proposed start: 9 Dec 2026');
+
+  // Scheduling uses that date, not the first boundary.
+  await editor.getByRole('button', { name: 'Review changes', exact: true }).click();
+  await editor.getByRole('button', { name: 'Schedule for 9 Dec 2026' }).click();
+  await expect(editor.getByText('Next month’s plan is scheduled.', { exact: true })).toBeVisible();
+  expect(await stored()).toEqual({ startDate: '2026-12-09', effectiveFromCycleStart: '2026-12-09', status: 'scheduled' });
+});
