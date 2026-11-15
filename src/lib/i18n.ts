@@ -2019,6 +2019,8 @@ const zhCopyCoverage: Record<string, string> = {
   'Staff:': '员工：',
   'Current': '当前',
   'Resume the plan before scheduling a revision.': '安排修订前请先恢复方案。',
+  'Resume the active plan before scheduling a revision.': '安排修订前请先恢复启用中的方案。',
+  'The billing date changed. Refresh and review the next cycle before scheduling.': '结算日期已更改。请刷新并查看下一个周期后再排期。',
   'Service item': '服务项目',
   'Only a draft revision can be scheduled.': '只有草稿修订可以排期。',
   'Return this scheduled plan to draft before editing.': '编辑前请先将此已排期方案返回草稿。',

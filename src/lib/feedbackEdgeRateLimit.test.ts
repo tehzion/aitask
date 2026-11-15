@@ -77,4 +77,18 @@ describe('feedback results Edge rate limit', () => {
     expect(response.headers.get('Retry-After')).toBe('37');
     expect(resultsQueries).toBe(0);
   });
+
+  it('ignores client-supplied left-hand x-forwarded-for entries when choosing the bucket', async () => {
+    const request = (forwarded: string) => new Request('https://example.test/feedback', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer reviewer-token', 'Content-Type': 'application/json', 'x-forwarded-for': forwarded },
+      body: JSON.stringify({ action: 'results' }),
+    });
+    await handler(request('198.51.100.1, 203.0.113.7'));
+    await handler(request('192.0.2.99, 203.0.113.7'));
+    await handler(request('203.0.113.8'));
+    const [first, spoofed, other] = rpc.mock.calls.map(call => call[1].p_key_hash);
+    expect(spoofed).toBe(first);
+    expect(other).not.toBe(first);
+  });
 });

@@ -48,9 +48,12 @@ const validEmail = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const validRating = (value: unknown, nullable = false) => (
   (nullable && value === null) || (Number.isInteger(value) && Number(value) >= 1 && Number(value) <= 5)
 );
+// cf-connecting-ip is set by the edge proxy. Otherwise use the right-most
+// x-forwarded-for entry: each proxy appends the address it saw, so the left
+// entries are client-supplied and must not decide the rate-limit bucket.
 const requestIdentity = (request: Request) => (
   request.headers.get('cf-connecting-ip')?.trim() ||
-  request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+  request.headers.get('x-forwarded-for')?.split(',').map(part => part.trim()).filter(Boolean).at(-1) ||
   'unknown'
 );
 const hashIdentity = async (identity: string) => {

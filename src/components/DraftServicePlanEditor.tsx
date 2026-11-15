@@ -6,7 +6,7 @@ import type { ClientServicePlan, ServiceItem } from '../types';
 import { mergeDraft, type DraftConflict } from '../lib/draftMerge';
 import { readRecoveredDraft, writeRecoveredDraft, removeRecoveredDraft } from '../lib/draftRecovery';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { calculatePlanTotalMinor, formatMoney, getPlanContractStartDate, nextBillingDate, nextRevisionBoundary, snapshotWorkflow } from '../lib/serviceManagement';
+import { calculatePlanTotalMinor, formatMoney, getPlanContractStartDate, isRevisionStartBoundary, nextBillingDate, nextRevisionBoundary, resolveRevisionStart, snapshotWorkflow } from '../lib/serviceManagement';
 import { getBillingToday, validateRevisionItems } from '../lib/monthlyRecords';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { canViewServicePrices } from '../lib/access';
@@ -60,7 +60,14 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   // on after each generated cycle while the draft's saved date does not.
   const effectiveDate = source.status === 'Ended'
     ? plan.effectiveFromCycleStart || source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay)
-    : nextRevisionBoundary(source, getBillingToday());
+    : resolveRevisionStart(source, plan.startDate, getBillingToday());
+  // A revision of an active plan may start on any later billing date of that plan.
+  // An ended plan is reactivated from the draft's own boundary, so its date stays fixed.
+  const startLocked = Boolean(plan.supersedesPlanId) && source.status !== 'Active';
+  const startIsRevision = Boolean(plan.supersedesPlanId) && source.status === 'Active';
+  const firstBoundary = nextRevisionBoundary(source, getBillingToday());
+  const startHelpId = React.useId();
+  const startValue = startIsRevision && !isRevisionStartBoundary(source, draft.startDate, getBillingToday()) ? firstBoundary : draft.startDate;
   const contractStartDate = getPlanContractStartDate(plan, store.clientPlans);
   const dateLabel = (value: string) => formatLocalizedDate(parseOptionalDate(value)!, locale);
   const totals = calculatePlanTotalMinor(draft.serviceItems, draft.discountType, draft.discountValue, draft.taxRateBps);
@@ -238,7 +245,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
         <legend className="sr-only">{t('Next month’s plan')}</legend>
         <div className="grid gap-4 border-b border-line p-5 md:grid-cols-2">
           <label className="text-sm font-medium text-ink">{t('Plan name')}<input required maxLength={160} data-i18n-skip className={fieldClass} value={draft.name} onChange={event => update({ name: event.target.value })} /></label>
-          <label className="text-sm font-medium text-ink">{t('Start date')}<input required type="date" disabled={Boolean(plan.supersedesPlanId)} className={fieldClass} value={draft.startDate} onChange={event => update({ startDate: event.target.value })} /></label>
+          <label className="text-sm font-medium text-ink">{t('Start date')}<input required type="date" disabled={startLocked} min={startIsRevision ? firstBoundary : undefined} aria-describedby={startIsRevision ? startHelpId : undefined} className={fieldClass} value={startValue} onChange={event => update({ startDate: event.target.value })} />{startIsRevision && <span id={startHelpId} className="mt-1 block text-xs font-normal text-muted">{t('Pick one of this plan’s billing dates, from {date}, up to 12 months ahead.', { date: dateLabel(firstBoundary) })}</span>}</label>
           <label className="text-sm font-medium text-ink">{t('Monthly billing day')}<input required type="number" min={1} max={31} step={1} className={fieldClass} value={draft.billingDay} onChange={event => update({ billingDay: Number(event.target.value) })} /></label>
           <label className="text-sm font-medium text-ink">{t('Contract end date (reminder only)')}<input type="date" min={contractStartDate} aria-describedby={contractHelpId} className={fieldClass} value={draft.contractEndDate} onChange={event => update({ contractEndDate: event.target.value })} /><span id={contractHelpId} className="mt-1 block text-xs font-normal leading-5 text-muted">{t('This is a reminder for the original contract, not a stop date for the monthly plan.')}</span></label>
         </div>
