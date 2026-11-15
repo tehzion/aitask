@@ -14,7 +14,7 @@
 | CFG-005 | Resolved | The hosted build rejects the password-reset bypass setting. |
 | OPS-006 | Still open | Verify backup restoration, Auth protection and the four-role live smoke. The last read-only timeout query found no matching messages in its 24-hour window. |
 | PERF-007 | Addressed | On 16 Nov the eager JS graph was 272.2 KiB gzip, under the 300 KiB budget. |
-| REL-008 | Partly addressed | Super-admin onboarding has a private reservation journal and retry path, confirmed-email changes use a database synchronization trigger, and deletion reports when the login was removed but member deletion needs retry. Audit the remaining ambiguous invitation and scoped-PM failure cases and add recovery tests before claiming full reconciliation. |
+| REL-008 | Partly addressed | Super-admin onboarding has a private reservation journal and retry path, confirmed-email changes use a database synchronization trigger, and deletion reports when the login was removed but member deletion needs retry. The Auth trigger stamps trusted ownership during admin invitations; the handler test covers a lost invitation response. Audit scoped-PM and deletion failures before claiming full reconciliation. |
 | PERF-009, DATA-010, LIFE-011, SEC-012, SEC-013 | Unverified | The original findings below need fresh code and operational review before being closed. |
 
 The tables below preserve the 17 Oct audit as historical context. Their original severity and evidence are not current status.
