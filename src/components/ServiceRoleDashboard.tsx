@@ -154,8 +154,8 @@ const ServiceRoleDashboard = () => {
       : visibleClientKeys,
     [persona, store.currentUser, store.clients, store.projects, visibleClientKeys],
   );
-  const serviceTasks = visibleTasks.filter(task => Boolean(task.clientId));
-  const myTasks = serviceTasks.filter(task => task.assignedTo === store.currentUser?.id);
+  const serviceTasks = React.useMemo(() => visibleTasks.filter(task => Boolean(task.clientId)), [visibleTasks]);
+  const myTasks = React.useMemo(() => serviceTasks.filter(task => task.assignedTo === store.currentUser?.id), [serviceTasks, store.currentUser?.id]);
   // Project Manager visibility already applies their portfolio boundary and
   // also includes directly created/assigned legacy or independent tasks that
   // may not have a clientId. Keep those tasks in the PM's delivery queues.
@@ -199,7 +199,7 @@ const ServiceRoleDashboard = () => {
   const riskValue = riskSnapshots.reduce((sum, snapshot) => sum + (snapshot?.totalMinor ?? 0), 0);
   const riskValueKnown = riskSnapshots.every(Boolean);
   const todayKey = getTodayInputDate(now);
-  const unlinkedWork = scopeTasks.filter(task => task.clientId && task.dueDate && task.dueDate.slice(0, 7) === todayKey.slice(0, 7)
+  const unlinkedWork = React.useMemo(() => scopeTasks.filter(task => task.clientId && task.dueDate && task.dueDate.slice(0, 7) === todayKey.slice(0, 7)
     && task.status !== 'Cancelled' && !task.generatedFromDeliverable && !isTaskLinkedToDeliverable(task, store.deliverables)
     && canLinkTaskDelivery(store.currentUser, task, store.rolePermissions, { clients: store.clients, projects: store.projects })).map(task => {
       const candidates = isTaskOpen(task) ? store.deliverables.flatMap(item => {
@@ -213,7 +213,7 @@ const ServiceRoleDashboard = () => {
       }).sort((a, b) => b.score - a.score) : [];
       const [best, second] = candidates;
       return { task, suggestion: best && best.score >= 3 && (!second || best.score > second.score) ? best : undefined };
-    });
+    }), [scopeTasks, store.deliverables, store.serviceCycles, store.currentUser, store.rolePermissions, store.clients, store.projects, todayKey]);
   const monthsToPublish = store.serviceCycles.filter(cycle => cycle.status === 'Draft' && cycle.periodStart <= todayKey && cycle.periodEnd >= todayKey && commercialClientKeys.has(getClientKey(cycle.clientName)));
   const renewingSoon = renewalPlans
     .map(plan => ({ plan, days: getContractDaysRemaining(plan.contractEndDate, now) }))
