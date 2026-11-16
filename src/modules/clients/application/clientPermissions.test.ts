@@ -223,10 +223,10 @@ describe('client profile store authorization', () => {
     useStore.setState({ currentUser: hod, clients: [{ id: 'hidden-company', clientName: 'Hidden Co', createdBy: 'other', createdAt: '', updatedAt: '' }], tasks: [], projects: [], rolePermissions: [] });
     expect(useStore.getState().deleteClientProfile('hidden-company').ok).toBe(false);
     expect(useStore.getState().clients).toHaveLength(1);
-    // Owning the profile is not enough; deletion now requires edit capability.
+    // A department lead may maintain and delete a company it created.
     useStore.setState({ clients: [{ id: 'hidden-company', clientName: 'Hidden Co', createdBy: hod.id, createdAt: '', updatedAt: '' }] });
-    expect(useStore.getState().deleteClientProfile('hidden-company').ok).toBe(false);
-    expect(useStore.getState().clients).toHaveLength(1);
+    expect(useStore.getState().deleteClientProfile('hidden-company').ok).toBe(true);
+    expect(useStore.getState().clients).toHaveLength(0);
     // A HOD who can edit the company (assigned task + manageAssignedClients) may delete it.
     const editableHod: User = { ...hod, permissions: { ...defaultRolePermissions.HOD, manageAssignedClients: true } };
     const assigned: Task = { ...assignedTask, id: 'hod-task', clientName: 'Owned Co', assignedTo: hod.id, department: 'Video Editor' };

@@ -5,7 +5,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../../app/store/workspaceStore';
-import { canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../../../shared/authorization/access';
+import { canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isProjectAssignedToUser } from '../../../shared/authorization/access';
 import { useI18n } from '../../../shared/components/I18nProvider';
 import { CountLabel, DataRow, ProgressBar, StatGroup, StatusChip, Surface } from '../../../shared/components/ui';
 import { useLocalToday } from '../../../shared/hooks/useLocalToday';
@@ -142,9 +142,31 @@ const ServiceRoleDashboard = () => {
       : serviceTasks;
   const overdue = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isBefore(due, now) && !isToday(due)); });
   const dueToday = scopeTasks.filter(task => { const due = parseOptionalDate(task.dueDate); return Boolean(due && isTaskOpen(task) && isToday(due)); });
-  const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && commercialClientKeys.has(getClientKey(plan.clientName)));
+  // Project Managers are scoped by canonical client ids, not duplicate display
+  // names. Legacy rows without an id keep the normalized-name fallback.
+  const pmOwnedClientIds = React.useMemo(() => {
+    if (persona !== 'projectManager' || !store.currentUser) return null;
+    const ids = new Set<string>();
+    store.projects
+      .filter(project => isProjectAssignedToUser(store.currentUser, project, store.rolePermissions))
+      .forEach(project => { if (project.clientId) ids.add(project.clientId); });
+    store.clients
+      .filter(client => client.createdBy === store.currentUser?.id && client.id)
+      .forEach(client => ids.add(client.id));
+    return ids;
+  }, [persona, store.currentUser, store.projects, store.clients, store.rolePermissions]);
+  const canAccessPlan = (plan: typeof store.clientPlans[number]) => (
+    persona === 'projectManager' && pmOwnedClientIds
+      ? (plan.clientId ? pmOwnedClientIds.has(plan.clientId) : commercialClientKeys.has(getClientKey(plan.clientName)))
+      : commercialClientKeys.has(getClientKey(plan.clientName))
+  );
+  const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && canAccessPlan(plan));
   const contractedMonthly = canSeePrices ? activePlans.reduce((sum, plan) => sum + (store.servicePricingSnapshots.find(item => item.parentType === 'client_plan' && item.parentId === plan.id)?.totalMinor || 0), 0) : 0;
-  const delivered = store.deliverables.filter(item => item.status === 'Delivered' && commercialClientKeys.has(getClientKey(item.clientName)));
+  const delivered = store.deliverables.filter(item => item.status === 'Delivered' && (
+    persona === 'projectManager' && pmOwnedClientIds
+      ? (item.clientId ? pmOwnedClientIds.has(item.clientId) : commercialClientKeys.has(getClientKey(item.clientName)))
+      : commercialClientKeys.has(getClientKey(item.clientName))
+  ));
   const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
   const waitingInternal = portfolioReviews.internal;
   const waitingClient = portfolioReviews.client;
@@ -278,6 +300,9 @@ const ServiceRoleDashboard = () => {
                 ? 'Awaiting publication'
                 : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
               <CompanyTaskActivity activity={item.taskActivity} />
+              {item.completedUnlinked > 0 && <p className="mt-2 text-xs font-medium text-amber-700">
+                {item.completedUnlinked} {t('completed company tasks not linked to deliverables (all time)')}
+              </p>}
               {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
                 {t('Progress counts confirmed deliveries, not completed tasks.')}
               </p>}
@@ -319,6 +344,9 @@ const ServiceRoleDashboard = () => {
                 ? 'Awaiting publication'
                 : item.currentCycle ? 'No deliverables in this cycle' : 'No current published cycle')}</StatusChip>}
               <CompanyTaskActivity activity={item.taskActivity} />
+              {item.completedUnlinked > 0 && <p className="mt-2 text-xs font-medium text-amber-700">
+                {item.completedUnlinked} {t('completed company tasks not linked to deliverables (all time)')}
+              </p>}
               {item.currentCycle && item.total > 0 && <p className="mt-2 text-xs text-muted">
                 {t('Progress counts confirmed deliveries, not completed tasks.')}
               </p>}

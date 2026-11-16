@@ -122,7 +122,7 @@ const ProjectWorkspace: React.FC = () => {
   }, today);
   const attention = getProjectAttentionTasks(projectTasks, today).slice(0, 12);
   const visibleClientTasks = projectTasks.filter(task => task.clientId === project.clientId || task.clientName.trim().toLowerCase() === project.clientName.trim().toLowerCase());
-  const canOpenClientServices = canOpenServiceClient(state.currentUser, project.clientName, visibleTasks, state.rolePermissions, state.clients, visibleProjects);
+  const canOpenClientServices = canOpenServiceClient(state.currentUser, project.clientName, visibleTasks, state.rolePermissions, state.clients, visibleProjects, project.clientId);
   const clientPlans = canOpenClientServices
     ? state.clientPlans.filter(plan => project.clientId ? plan.clientId === project.clientId : plan.clientName.trim().toLowerCase() === project.clientName.trim().toLowerCase())
     : [];

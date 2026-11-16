@@ -1,6 +1,6 @@
 import { SECURE_WORKSPACE_ID } from '../../../infrastructure/api/workspaceContracts';
 import { isWorkspaceMutationLocked } from '../../../infrastructure/commands/mutationGuard';
-import { canEditTask } from '../../../shared/authorization/access';
+import { canEditTask, isHodUser } from '../../../shared/authorization/access';
 import { canBeTaskReviewLead, canManageTaskReview, getDepartmentReviewers, isIndependentTaskReviewer } from '../../../shared/authorization/taskWorkflowAccess';
 import '../../../shared/i18n/hodReviewCopy';
 import { getEffectiveTaskApprovalMode } from '../../../shared/rules/projectManagement';
@@ -31,7 +31,9 @@ export const attachTaskSupportingFile = (state: StoreState, set: (patch: Partial
   if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMessage };
   const scope = { users: state.users, clients: state.clients, projects: state.projects };
   if (!task || !actor || actor.role === 'Client' || !canEditTask(actor, task, state.rolePermissions, scope)
-    || (task.assignedTo !== actor.id && !canManageTaskReview(actor, task, state.rolePermissions, scope))) return { ok: false, error: 'Only the assigned worker or responsible reviewer can upload supporting files.' };
+    || (task.assignedTo !== actor.id
+      && !canManageTaskReview(actor, task, state.rolePermissions, scope)
+      && !isHodUser(actor, state.rolePermissions))) return { ok: false, error: 'Only the assigned worker or responsible reviewer can upload supporting files.' };
   if (['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status)) return { ok: false, error: 'Supporting files cannot be changed after this task is submitted or closed.' };
   const parts = attachment.path.split('/');
   const allowedTypes = new Set(['application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/gif']);

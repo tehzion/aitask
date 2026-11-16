@@ -15,7 +15,7 @@ import React from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../../../app/store/workspaceStore';
-import { canCreateTasks, getClientKey, getVisibleClientNames, getVisibleTasks } from '../../../shared/authorization/access';
+import { canCreateTasks, getClientKey, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isBossKoo } from '../../../shared/authorization/access';
 import { getClientDeliveryStageLabel, getClientDeliveryStageTone } from '../../../shared/authorization/clientPortal';
 import { useI18n } from '../../../shared/components/I18nProvider';
 import { Badge, Button, EmptyState, PageHeader, ProgressBar, SegmentedTabs, StatusChip } from '../../../shared/components/ui';
@@ -47,6 +47,8 @@ const STATUS_FILTERS: { id: DeliveryTrackerStatusFilter; label: string }[] = [
   { id: 'overdue', label: 'Overdue' },
   { id: 'completed', label: 'Completed' },
 ];
+
+const deliverySummaryKey = (summary: { clientId?: string; clientName: string }) => summary.clientId || summary.clientName;
 
 const readableDate = (value: string | undefined, locale: Parameters<typeof formatLocalizedDate>[1], t: (key: string) => string) => {
   if (!value) return t('No deadline');
@@ -121,9 +123,42 @@ const DeliveryTracker: React.FC = () => {
     () => new Set(visibleClientNames.map(name => name.toLowerCase())),
     [visibleClientNames],
   );
+  // Group by canonical client id when available so two companies that share a
+  // display name never merge into one tracker row.
+  const deliveryClientRefs = React.useMemo(() => {
+    const refs = new Map<string, { id?: string; clientName: string }>();
+    const add = (id: string | undefined, name: string | undefined) => {
+      const clientName = name?.trim();
+      if (!clientName) return;
+      const key = id ? `id:${id}` : `name:${getClientKey(clientName)}`;
+      if (!refs.has(key)) refs.set(key, { id, clientName });
+    };
+    visibleTasks.forEach(task => add(task.clientId, task.clientName));
+    if (isBossKoo(currentUser) || currentUser?.role === 'Project Manager') {
+      getVisibleProjects(currentUser, projects, allTasks, rolePermissions, { clients, projects })
+        .forEach(project => add(project.clientId, project.clientName));
+    }
+    if (isBossKoo(currentUser)) clients.forEach(client => add(client.id, client.clientName));
+    else clients.filter(client => client.createdBy === currentUser?.id).forEach(client => add(client.id, client.clientName));
+    const visibleIds = new Set([...refs.values()].map(ref => ref.id).filter((id): id is string => Boolean(id)));
+    serviceCycles.forEach(cycle => {
+      if ((cycle.clientId && visibleIds.has(cycle.clientId)) || (!cycle.clientId && visibleClientKeys.has(getClientKey(cycle.clientName)))) {
+        add(cycle.clientId, cycle.clientName);
+      }
+    });
+    deliverables.forEach(item => {
+      if ((item.clientId && visibleIds.has(item.clientId)) || (!item.clientId && visibleClientKeys.has(getClientKey(item.clientName)))) {
+        add(item.clientId, item.clientName);
+      }
+    });
+    return [...refs.values()].sort((left, right) => (
+      left.clientName.localeCompare(right.clientName) || (left.id || '').localeCompare(right.id || '')
+    ));
+  }, [allTasks, clients, currentUser, deliverables, projects, rolePermissions, serviceCycles, visibleClientKeys, visibleTasks]);
   const range = React.useMemo(() => getDeliveryPeriodRange(period, anchor, locale), [anchor, locale, period]);
   const summaries = React.useMemo(() => buildClientDeliverySummaries({
     clientNames: visibleClientNames,
+    clientRefs: deliveryClientRefs,
     tasks: visibleTasks,
     deliverables: deliverables.filter(item => visibleClientKeys.has(getClientKey(item.clientName))),
     cycles: serviceCycles.filter(item => visibleClientKeys.has(getClientKey(item.clientName))),
@@ -133,7 +168,7 @@ const DeliveryTracker: React.FC = () => {
     clientView: isClientView,
     today,
     searchQuery: deferredSearch,
-  }), [deferredSearch, deliverables, isClientView, period, range, serviceCycles, today, users, visibleClientKeys, visibleClientNames, visibleTasks]);
+  }), [deferredSearch, deliverables, deliveryClientRefs, isClientView, period, range, serviceCycles, today, users, visibleClientKeys, visibleClientNames, visibleTasks]);
 
   const filteredSummaries = React.useMemo(() => {
     const query = deferredSearch.trim().toLowerCase();
@@ -159,7 +194,12 @@ const DeliveryTracker: React.FC = () => {
 
   React.useEffect(() => {
     const focusedTask = routeTaskId ? visibleTasks.find(task => task.id === routeTaskId) : undefined;
-    const clientToExpand = focusedTask?.clientName || routeClient;
+    const routeSummary = routeClient
+      ? summaries.find(summary => summary.clientName.trim().toLowerCase() === routeClient.trim().toLowerCase())
+      : undefined;
+    const clientToExpand = focusedTask
+      ? (focusedTask.clientId || focusedTask.clientName)
+      : routeSummary ? deliverySummaryKey(routeSummary) : routeClient;
     if (!clientToExpand) return;
     if (focusedTask && period !== 'all') {
       setPeriod('all');
@@ -167,7 +207,7 @@ const DeliveryTracker: React.FC = () => {
     }
     setExpandedClients(current => current.has(clientToExpand) ? current : new Set(current).add(clientToExpand));
     if (focusedTask) setSelectedTaskId(focusedTask.id);
-  }, [period, routeClient, routeTaskId, updateQuery, visibleTasks]);
+  }, [period, routeClient, routeTaskId, summaries, updateQuery, visibleTasks]);
 
   const totals = React.useMemo(() => filteredSummaries.reduce((result, summary) => ({
     open: result.open + summary.open,
@@ -176,11 +216,11 @@ const DeliveryTracker: React.FC = () => {
     delivered: result.delivered + summary.delivered,
   }), { open: 0, overdue: 0, completed: 0, delivered: 0 }), [filteredSummaries]);
 
-  const toggleExpanded = (clientName: string) => {
+  const toggleExpanded = (key: string) => {
     setExpandedClients(current => {
       const next = new Set(current);
-      if (next.has(clientName)) next.delete(clientName);
-      else next.add(clientName);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -252,10 +292,10 @@ const DeliveryTracker: React.FC = () => {
 
         <div className="divide-y divide-line/70">
           {filteredSummaries.map(summary => {
-            const expanded = expandedClients.has(summary.clientName);
+            const expanded = expandedClients.has(deliverySummaryKey(summary));
             const team = assigneeNames(summary.assigneeIds);
             return (
-              <article key={summary.clientName} className="bg-surface">
+              <article key={deliverySummaryKey(summary)} className="bg-surface">
                 <div className="grid gap-4 px-4 py-5 sm:px-5 xl:grid-cols-[minmax(13rem,1.2fr)_minmax(11rem,.9fr)_minmax(11rem,.9fr)_minmax(10rem,.8fr)_auto] xl:items-center">
                   <div className="min-w-0">
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{summary.clientName.slice(0, 2).toUpperCase()}</span><div className="min-w-0"><h3 data-i18n-skip className="truncate font-semibold text-ink">{summary.clientName}</h3><p className="mt-0.5 text-xs text-muted">{summary.cycle ? `${summary.cycle.periodStart} – ${summary.cycle.periodEnd}` : t('No service cycle in this period')}</p></div></div>
@@ -274,21 +314,21 @@ const DeliveryTracker: React.FC = () => {
                     <p className="inline-flex items-center gap-1.5 text-sm font-medium text-ink"><CalendarDays className="h-4 w-4 text-accent" />{readableDate(summary.nextDeadline, locale, t)}</p>
                     <p className="mt-2 truncate text-xs text-muted"><UsersRound className="mr-1 inline h-3.5 w-3.5" />{team.length ? team.join(', ') : t('No team in this period')}</p>
                   </div>
-                  <Button variant="secondary" aria-expanded={expanded} onClick={() => toggleExpanded(summary.clientName)} className="w-full xl:w-auto">{expanded ? t('Hide work') : t('View work')}{expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>
+                  <Button variant="secondary" aria-expanded={expanded} onClick={() => toggleExpanded(deliverySummaryKey(summary))} className="w-full xl:w-auto">{expanded ? t('Hide work') : t('View work')}{expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}</Button>
                 </div>
 
                 {expanded && (
                   <div className="border-t border-line bg-inset/45 px-4 py-5 sm:px-5">
                     <div className="grid gap-5 xl:grid-cols-2">
-                      <section aria-labelledby={`${summary.clientName}-tasks`}>
-                        <h4 id={`${summary.clientName}-tasks`} className="text-sm font-semibold text-ink">{t('Tasks')}</h4>
+                      <section aria-labelledby={`${deliverySummaryKey(summary)}-tasks`}>
+                        <h4 id={`${deliverySummaryKey(summary)}-tasks`} className="text-sm font-semibold text-ink">{t('Tasks')}</h4>
                         <div className="mt-3 space-y-2">
                           {summary.tasks.map(task => <button key={task.id} type="button" onClick={() => setSelectedTaskId(task.id)} className="grid w-full gap-2 rounded-control bg-surface px-3 py-3 text-left ring-1 ring-line/70 transition-colors hover:bg-accent-soft/45 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{task.title}</p><p className="mt-1 text-xs text-muted">{task.serviceType} · {t('due')} {readableDate(task.dueDate, locale, t)}</p></div><Badge tone={isClientView ? getClientDeliveryStageTone(task) : task.isCompleted || task.status === 'Completed' ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{isClientView ? t(getClientDeliveryStageLabel(task)) : getLocalizedTaskStatus(task.status, locale)}</Badge></button>)}
                           {summary.tasks.length === 0 && <p className="rounded-control bg-surface px-3 py-4 text-sm text-muted ring-1 ring-line/70">{t('No tasks in this period.')}</p>}
                         </div>
                       </section>
-                      <section aria-labelledby={`${summary.clientName}-deliverables`}>
-                        <h4 id={`${summary.clientName}-deliverables`} className="text-sm font-semibold text-ink">{t('Deliverables')}</h4>
+                      <section aria-labelledby={`${deliverySummaryKey(summary)}-deliverables`}>
+                        <h4 id={`${deliverySummaryKey(summary)}-deliverables`} className="text-sm font-semibold text-ink">{t('Deliverables')}</h4>
                         <div className="mt-3 space-y-2">
                           {summary.deliverables.map(item => <div key={item.id} className="grid gap-2 rounded-control bg-surface px-3 py-3 ring-1 ring-line/70 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center"><div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{item.title}</p><p className="mt-1 text-xs text-muted">{t('Deliverable')} {item.sequence}{item.deliveredAt ? ` · ${t('completed')} ${readableDate(item.deliveredAt, locale, t)}` : ''}</p></div><StatusChip tone={item.status === 'Delivered' ? 'emerald' : item.status === 'Ready' ? 'amber' : 'slate'}>{t(item.status)}</StatusChip></div>)}
                           {summary.deliverables.length === 0 && <p className="rounded-control bg-surface px-3 py-4 text-sm text-muted ring-1 ring-line/70">{t('No deliverables in this period.')}</p>}

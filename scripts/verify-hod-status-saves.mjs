@@ -177,6 +177,13 @@ try {
   await page.getByRole('button', { name: 'Continue to AiTask', exact: true }).click();
   const openEditor = async () => {
     await page.goto(`${base}tasks?taskId=status-task`);
+    await page.waitForFunction(async () => {
+      const { useStore } = await import('/src/app/store/workspaceStore.ts');
+      const state = useStore.getState();
+      return Boolean(state.currentUser)
+        && state.backend.status !== 'loading'
+        && state.tasks.some(task => task.id === 'status-task');
+    }, undefined, { timeout: 30000 });
     const browserState = await page.evaluate(async () => {
       const { useStore } = await import('/src/app/store/workspaceStore.ts');
       const state = useStore.getState();

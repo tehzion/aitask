@@ -3,7 +3,7 @@ import React, { useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useColorTheme } from '../../../app/lifecycle/useColorTheme';
 import { useStore } from '../../../app/store/workspaceStore';
-import { getVisibleTasks } from '../../../shared/authorization/access';
+import { canViewProductionReports, getVisibleTasks } from '../../../shared/authorization/access';
 import { getClientApprovalDate, getClientDeliveryStageLabel, getClientTaskStage } from '../../../shared/authorization/clientPortal';
 import { useI18n } from '../../../shared/components/I18nProvider';
 import { Button, ChartEmptyState, MetricCard, PageHeader } from '../../../shared/components/ui';
@@ -167,7 +167,7 @@ const Reports: React.FC = () => {
         )}
       />
 
-      {!isClientUser && !projectIdFilter && <MonthlyOperationalReport />}
+      {!isClientUser && !projectIdFilter && canViewProductionReports(currentUser, rolePermissions) && <MonthlyOperationalReport />}
 
       {isClientUser && <section className="rounded-panel bg-surface p-4 ring-1 ring-line/80 sm:p-5" aria-labelledby="client-report-timing-title">
         <h2 id="client-report-timing-title" className="font-semibold text-ink">{t('clientReport.timingTitle')}</h2>

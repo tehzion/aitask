@@ -22,7 +22,13 @@ export interface DeliveryPeriodRange {
   label: string;
 }
 
+export interface DeliveryClientRef {
+  id?: string;
+  clientName: string;
+}
+
 export interface ClientDeliverySummary {
+  clientId?: string;
   clientName: string;
   tasks: Task[];
   deliverables: Deliverable[];
@@ -121,6 +127,7 @@ const normalize = (value: string | null | undefined) => value?.trim().toLowerCas
 
 export const buildClientDeliverySummaries = ({
   clientNames,
+  clientRefs,
   tasks,
   deliverables,
   cycles,
@@ -132,6 +139,7 @@ export const buildClientDeliverySummaries = ({
   searchQuery = '',
 }: {
   clientNames: string[];
+  clientRefs?: DeliveryClientRef[];
   tasks: Task[];
   deliverables: Deliverable[];
   cycles: ServiceCycle[];
@@ -152,19 +160,29 @@ export const buildClientDeliverySummaries = ({
   const completedForView = (item: Task) => clientView ? getClientTaskStage(item) === 'approved' : isTaskCompleted(item);
   const userIds = new Set(users.filter(user => user.role !== 'Client').map(user => user.id));
 
-  return clientNames.map(clientName => {
+  const groups: DeliveryClientRef[] = clientRefs?.length
+    ? clientRefs
+    : clientNames.map(clientName => ({ clientName }));
+  return groups.map(ref => {
+    const clientName = ref.clientName;
     const key = normalize(clientName);
+    const clientId = ref.id?.trim() || undefined;
+    const matchesRef = (item: { clientId?: string; clientName: string }) => (
+      clientId
+        ? (item.clientId ? item.clientId === clientId : normalize(item.clientName) === key)
+        : normalize(item.clientName) === key
+    );
     const clientTasks = tasks.filter(task => (
-      normalize(task.clientName) === key && (period === 'all' || taskAppearsInDeliveryPeriod(task, range, today, clientView))
+      matchesRef(task) && (period === 'all' || taskAppearsInDeliveryPeriod(task, range, today, clientView))
     ));
     const clientTaskIds = new Set(clientTasks.map(task => task.id));
     const clientCycles = cycles
-      .filter(cycle => normalize(cycle.clientName) === key && (!clientView || ['Published', 'Completed'].includes(cycle.status)) && (period === 'all' || cycleOverlaps(cycle, range)))
+      .filter(cycle => matchesRef(cycle) && (!clientView || ['Published', 'Completed'].includes(cycle.status)) && (period === 'all' || cycleOverlaps(cycle, range)))
       .sort((left, right) => right.periodStart.localeCompare(left.periodStart));
     const cycleIds = new Set(clientCycles.map(cycle => cycle.id));
     const clientDeliverables = deliverables.filter(deliverable => {
-      if (normalize(deliverable.clientName) !== key) return false;
-      if (clientView && !cycles.some(cycle => cycle.id === deliverable.cycleId && normalize(cycle.clientName) === key && ['Published', 'Completed'].includes(cycle.status))) return false;
+      if (!matchesRef(deliverable)) return false;
+      if (clientView && !cycles.some(cycle => cycle.id === deliverable.cycleId && matchesRef(cycle) && ['Published', 'Completed'].includes(cycle.status))) return false;
       if (period === 'all') return true;
       const deliveredInPeriod = isWithin(
         dateValue(deliverable.deliveredAt || (deliverable.status === 'Delivered' ? deliverable.updatedAt : undefined)),
@@ -211,6 +229,7 @@ export const buildClientDeliverySummaries = ({
       .sort((left, right) => left.parsed.getTime() - right.parsed.getTime())[0]?.raw;
 
     return {
+      clientId,
       clientName,
       tasks: clientTasks.sort((left, right) => (left.dueDate || '9999').localeCompare(right.dueDate || '9999')),
       deliverables: clientDeliverables.sort((left, right) => left.sequence - right.sequence),

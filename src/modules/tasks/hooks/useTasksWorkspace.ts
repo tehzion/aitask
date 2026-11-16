@@ -382,7 +382,11 @@ export const useTasksWorkspace = () => {
       ? 'Leave feedback'
       : 'View details';
 
-  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, activeQuickTask);
+  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, activeQuickTask, {
+    users,
+    clients: clientProfiles,
+    projects,
+  });
 
   const TABLE_COLUMN_COUNT = isClientUser ? 5 : 8;
 

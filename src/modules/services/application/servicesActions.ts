@@ -8,7 +8,8 @@ import {
   canManageServiceCycles,
   canManageTaskTemplates,
   canOpenServiceClient,
-  canViewServicePrices
+  canViewServicePrices,
+  isHodUser
 } from '../../../shared/authorization/access';
 import {
   isEligibleTaskAssignee
@@ -627,7 +628,7 @@ export const createServicesActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
     if (!isServiceClientInScope(state, deliverable.clientId)) return { ok: false, error: serviceClientScopeError };
     const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => (task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)) && task.assignedTo === actor.id));
-    if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, deliverable.clientName, state.tasks, state.rolePermissions, state.clients))) return { ok: false, error: 'You do not have access to this deliverable.' };
+    if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, deliverable.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, deliverable.clientId))) return { ok: false, error: 'You do not have access to this deliverable.' };
     if (!canSetDeliverableStatus(deliverable, status, state.tasks, state.serviceCycles, state.backend.mode === 'supabase')) return { ok: false, error: 'Deliverable status must match the progress of its required tasks.' };
     set(current => {
       const now = new Date().toISOString();
@@ -653,6 +654,10 @@ export const createServicesActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
     const task = state.tasks.find(item => item.id === taskId);
     if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
+    if (isHodUser(state.currentUser, state.rolePermissions)
+      && (cycleId !== task.serviceCycleId || deliverableId !== task.deliverableId)) {
+      return { ok: false, error: 'HODs can edit task execution details, but not project, company, service, or department ownership.' };
+    }
     if (isWorkflowTask(task) && (cycleId !== task.serviceCycleId || deliverableId !== task.deliverableId)) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
     const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
     if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
@@ -844,7 +849,7 @@ export const createServicesActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
     if (!isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: serviceClientScopeError };
     const authorized = canManageServiceCycles(actor, state.rolePermissions)
-      || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients, state.projects) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
+      || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, cycle.clientId) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
     const clean = text.trim().slice(0, 10_000);
     if (!authorized || !clean) return { ok: false, error: authorized ? 'Comment cannot be empty.' : 'You do not have access to this cycle.' };
     const now = new Date().toISOString();
@@ -859,7 +864,7 @@ export const createServicesActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     if (!comment || comment.userId !== state.currentUser?.id) return { ok: false, error: 'You cannot attach a file to this comment.' };
     if (!isServiceClientInScope(state, comment.clientId)) return { ok: false, error: serviceClientScopeError };
     const authorized = canManageServiceCycles(state.currentUser, state.rolePermissions)
-      || (canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients, state.projects)
+      || (canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, comment.clientId)
         && state.tasks.some(task => task.serviceCycleId === comment.cycleId && task.assignedTo === state.currentUser?.id));
     if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
     set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));

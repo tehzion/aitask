@@ -20,7 +20,7 @@ export const isServiceClientInScope = (state: StoreState, clientId: string) => {
       || state.projects.some(project => project.clientId === clientId && project.createdBy === actor.id);
   }
   // Legacy/discovered records carry no owner, so fall back to the name-based check.
-  return canOpenServiceClient(actor, client.clientName, state.tasks, state.rolePermissions, state.clients, state.projects);
+  return canOpenServiceClient(actor, client.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, client.id);
 };
 
 export const serviceClientScopeError = 'This company is outside your portfolio.';

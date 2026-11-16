@@ -180,6 +180,7 @@ export const createProjectsActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     // assigned to them may perform that broader mutation.
     const canRewriteLinkedTaskIdentity = isBossKoo(currentUser)
       || currentUser.role === 'Project Manager'
+      || actorIsProjectHod
       || linkedTasks.every(task => task.assignedTo === currentUser.id);
     if (identityChanged && !canRewriteLinkedTaskIdentity) {
       return {
@@ -251,7 +252,7 @@ export const createProjectsActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
     const actor = state.currentUser;
     const project = state.projects.find(item => item.id === projectId);
-    if (!actor || !project || !canManageProjectLifecycle(actor, project)) return { ok: false, error: 'You cannot manage milestones for this project.' };
+    if (!actor || !project || !canEditProject(actor, project, state.rolePermissions)) return { ok: false, error: 'You cannot manage milestones for this project.' };
     if (isClosedProject(project)) return { ok: false, error: 'Reopen the project before changing milestones.' };
     const name = input.name.trim();
     if (!name) return { ok: false, error: 'Milestone name is required.' };
@@ -286,7 +287,7 @@ export const createProjectsActions = (set: WorkspaceSet, get: WorkspaceGet): Pic
     if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
     const actor = state.currentUser;
     const project = state.projects.find(item => item.id === projectId);
-    if (!actor || !project || !canManageProjectLifecycle(actor, project)) return { ok: false, error: 'You cannot manage milestones for this project.' };
+    if (!actor || !project || !canEditProject(actor, project, state.rolePermissions)) return { ok: false, error: 'You cannot manage milestones for this project.' };
     if (isClosedProject(project)) return { ok: false, error: 'Reopen the project before changing milestones.' };
     if (state.tasks.some(task => task.projectId === projectId && task.milestoneId === milestoneId)) return { ok: false, error: 'Unlink related tasks before deleting this milestone.' };
     set(current => ({

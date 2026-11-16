@@ -266,3 +266,28 @@ describe('matching tracker records', () => {
     expect(buildClientDeliverySummaries({ ...input, searchQuery: 'Other delivery' })[0].included).toBe(1);
   });
 });
+
+describe('duplicate company names with distinct ids', () => {
+  it('keeps tracker rows and their work separated by client id', () => {
+    const range = getDeliveryPeriodRange('all', new Date(2026, 8, 10));
+    const summaries = buildClientDeliverySummaries({
+      clientNames: ['Acme'],
+      clientRefs: [
+        { id: 'client-a', clientName: 'Acme' },
+        { id: 'client-b', clientName: 'Acme' },
+      ],
+      tasks: [
+        task({ id: 'task-a', clientId: 'client-a', clientName: 'Acme' }),
+        task({ id: 'task-b', clientId: 'client-b', clientName: 'Acme' }),
+      ],
+      deliverables: [], cycles: [], users, period: 'all', range,
+    });
+    expect(summaries.map(summary => ({
+      clientId: summary.clientId,
+      tasks: summary.tasks.map(item => item.id),
+    }))).toEqual([
+      { clientId: 'client-a', tasks: ['task-a'] },
+      { clientId: 'client-b', tasks: ['task-b'] },
+    ]);
+  });
+});

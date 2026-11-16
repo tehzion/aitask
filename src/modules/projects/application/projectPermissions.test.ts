@@ -189,7 +189,7 @@ describe('company store authorization', () => {
       users: [hod, pm, staff],
       projects: [project],
       clients: [{ id: 'scope-client', clientName: 'Acme', createdBy: pm.id, createdAt: '', updatedAt: '' }],
-      tasks: [],
+      tasks: [{ ...linkedTask, id: 'assigned-hod-other-task', projectId: project.id, clientName: 'Acme', assignedTo: otherStaff.id }],
       rolePermissions: [],
     }, true);
 
@@ -204,6 +204,19 @@ describe('company store authorization', () => {
       hodMemberIds: [hod.id],
       projectManagerIds: [pm.id],
     });
+    expect(useStore.getState().updateProject(project.id, {
+      clientId: 'scope-client',
+      clientName: 'Acme',
+      projectName: 'Renamed by assigned HOD',
+      services: ['Design'],
+      startDate: project.startDate,
+    })).toMatchObject({ ok: true });
+    const milestone = useStore.getState().saveProjectMilestone(project.id, {
+      name: 'HOD checkpoint',
+      targetDate: '2026-12-01',
+      status: 'Not Started',
+    });
+    expect(milestone.ok).toBe(true);
     expect(useStore.getState().updateProject(project.id, { hodMemberIds: [] })).toMatchObject({
       ok: false,
       error: 'Only Boss Koo or a Project Manager can change HOD project membership.',

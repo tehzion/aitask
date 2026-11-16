@@ -239,7 +239,21 @@ const handleRequest = async (request: Request): Promise<Response> => {
       .eq('id', targetMemberId)
       .maybeSingle();
     if (targetError) return json({ error: 'Unable to verify the member account' }, 500);
-    if (!target) return json({ error: 'Member account not found' }, 404);
+    if (!target) {
+      // A retry after a committed deletion (for example, a lost HTTP response)
+      // must be idempotent rather than reporting a false failure.
+      const { data: deletionEvent } = await adminClient
+        .from('aitask_audit_events')
+        .select('id')
+        .eq('workspace_id', actor.workspace_id)
+        .eq('action', 'account.delete')
+        .eq('entity_type', 'member')
+        .eq('entity_id', targetMemberId)
+        .limit(1)
+        .maybeSingle();
+      if (deletionEvent) return json({ ok: true, alreadyDeleted: true });
+      return json({ error: 'Member account not found' }, 404);
+    }
     if (target.is_super_admin) return json({ error: 'Protected Super Admin accounts cannot be deleted' }, 403);
 
     if (target.auth_user_id) {
@@ -254,6 +268,18 @@ const handleRequest = async (request: Request): Promise<Response> => {
       p_member_id: targetMemberId,
     });
     if (deleteMemberError) {
+      if (/not found/i.test(deleteMemberError.message)) {
+        const { data: deletionEvent } = await adminClient
+          .from('aitask_audit_events')
+          .select('id')
+          .eq('workspace_id', actor.workspace_id)
+          .eq('action', 'account.delete')
+          .eq('entity_type', 'member')
+          .eq('entity_id', targetMemberId)
+          .limit(1)
+          .maybeSingle();
+        if (deletionEvent) return json({ ok: true, alreadyDeleted: true });
+      }
       return json({ error: `${deleteMemberError.message}. The login is already disabled; retry member removal.` }, 409);
     }
     return json(result);

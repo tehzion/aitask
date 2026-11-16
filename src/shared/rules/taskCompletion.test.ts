@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../types/index';
-import { resolveTaskCompletedAt } from './taskCompletion';
+import { isTaskCompleted, resolveTaskCompletedAt } from './taskCompletion';
 
 const state = (overrides: Partial<Pick<Task, 'isCompleted' | 'status' | 'completedAt'>> = {}) => ({
   isCompleted: false,
@@ -32,5 +32,10 @@ describe('task completion timestamps', () => {
       status: 'Completed',
       completedAt: '2026-07-30T08:00:00.000Z',
     }), false)).toBeUndefined();
+  });
+
+  it('never treats a cancelled task as completed even when the legacy flag is set', () => {
+    expect(isTaskCompleted({ isCompleted: true, status: 'Cancelled' })).toBe(false);
+    expect(isTaskCompleted({ isCompleted: false, status: 'Completed' })).toBe(true);
   });
 });

@@ -1186,7 +1186,7 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
         serviceDeliverable,
         state.deliverables,
       )) return '';
-      if (!canOpenServiceClient(currentUser, serviceDeliverable!.clientName, state.tasks, state.rolePermissions, state.clients, state.projects)) return '';
+      if (!canOpenServiceClient(currentUser, serviceDeliverable!.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, serviceDeliverable!.clientId)) return '';
     }
 
     const title = taskData.title.trim();

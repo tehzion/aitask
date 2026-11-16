@@ -48,6 +48,18 @@ describe('department PM fallback reviewer', () => {
     expect(canReviewTaskInternally(pm, task, [], { ...scope, users })).toBe(true);
     expect(canReviewTaskInternally(pm, { ...task, department: 'Video Editor' }, [], scope)).toBe(true);
   });
+  it('keeps review handoffs inside the task project HOD membership', () => {
+    const otherHod: User = { ...hod, id: 'other-hod', name: 'Other HOD' };
+    const project = {
+      id: 'project', clientId: 'co', clientName: 'Company', projectName: 'Project', services: ['Design'],
+      startDate: '2026-10-01', deadline: '', createdBy: pm.id, hodMemberIds: [hod.id],
+    } as never;
+    const projectScope = { ...scope, users: [...scope.users, hod, otherHod], projects: [project] };
+    const projectTask = { ...task, projectId: 'project' } as Task;
+    expect(getDepartmentReviewers(projectScope.users, projectTask, [], projectScope).map(user => user.id)).toEqual(['hod', 'pm']);
+    expect(canReviewTaskInternally(hod, projectTask, [], projectScope)).toBe(true);
+    expect(canReviewTaskInternally(otherHod, projectTask, [], projectScope)).toBe(false);
+  });
   it('uses canonical actor-bound context over a filtered roster', () => {
     expect(canReviewTaskInternally(pm, { ...task, reviewAccess: { actorId: pm.id, canApprove: false } }, [], scope)).toBe(false);
     expect(canReviewTaskInternally(pm, { ...task, reviewAccess: { actorId: pm.id, canApprove: true } })).toBe(true);
