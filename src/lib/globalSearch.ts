@@ -30,7 +30,7 @@ export function searchWorkspace(snapshot: SearchSnapshot, query: string): Record
   if (canAccessPath(user, '/projects', roles)) {
     add('Companies', getVisibleClientNames(user, tasks, projects, roles, scope).map(name => ({ id: name, type: 'Companies', label: name, path: `/projects?search=${encodeURIComponent(name)}` })));
   }
-  const visibleClients = clients.filter(client => canOpenServiceClient(user, client.clientName, tasks, roles, clients, projects));
+  const visibleClients = clients.filter(client => canOpenServiceClient(user, client.clientName, tasks, roles, clients, projects, client.id));
   if (canAccessPath(user, '/clients', roles)) {
     add('Clients', visibleClients.map(client => ({ id: client.id, type: 'Clients', label: client.clientName, path: `/clients/${encodeURIComponent(client.id)}` })));
     // Commercial plan names are not indexed for client portal or production-only roles.

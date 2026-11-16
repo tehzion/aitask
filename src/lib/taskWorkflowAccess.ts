@@ -11,7 +11,7 @@ export const isTaskAssignmentLocked = (task: Pick<Task, 'status' | 'isCompleted'
 
 export const isIndependentTaskReviewer = (user: User, task: Partial<Task>) => user.id !== task.assignedTo && user.id !== task.workState?.reviewRequestedBy;
 export const canBeTaskReviewLead = (user: User, task: Task, roles: CustomRole[] = [], scope: VisibilityScope = {}) => user.hasLogin !== false
-  && ((isHodUser(user, roles) && isMemberInDepartment(user, task.department)) || user.role === 'Project Manager' && canEditTask(user, task, roles, scope));
+  && ((isHodUser(user, roles) && isMemberInDepartment(user, task.department) && canEditTask(user, task, roles, scope)) || user.role === 'Project Manager' && canEditTask(user, task, roles, scope));
 const isResponsibleProjectManager = (user: User | null | undefined, task: Task, scope: VisibilityScope) => Boolean(user && (isBossKoo(user) || user.role === 'Project Manager'
   && (task.projectId
     ? isTaskInOwnedPortfolio(user, task, scope)
@@ -246,7 +246,9 @@ export const getDepartmentReviewers = (users: readonly User[], task: Pick<Task, 
   if (approvalMode === 'none') return [];
   const eligible = users.filter(user => user.hasLogin !== false && isIndependentTaskReviewer(user, task));
   const cover = task.reviewCover && Date.parse(task.reviewCover.expiresAt) > Date.now() ? eligible.find(user => user.id === task.reviewCover?.reviewerId && canBeTaskReviewLead(user, task as Task, roles, scope)) : undefined;
-  const hods = eligible.filter(user => isHodUser(user, roles) && isMemberInDepartment(user, task.department));
+  const hods = eligible.filter(user => isHodUser(user, roles)
+    && isMemberInDepartment(user, task.department)
+    && canEditTask(user, task as Task, roles, scope));
   const pms = eligible.filter(user => user.role === 'Project Manager' && canEditTask(user, task as Task, roles, scope));
   const fallback = approvalMode === 'pm'
     ? (pms.length ? pms : users.filter(user => user.hasLogin !== false && isBossKoo(user)))

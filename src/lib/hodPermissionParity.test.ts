@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canAccessPath, canAssignTasksToOthers, canDeleteClientProfile, canEditTask, canOpenServiceClient, canLinkTaskToProject, canViewTask, defaultRolePermissions, getEffectivePermissions, getTaskAccess } from './access';
+import { canAccessPath, canAssignTasksToOthers, canDeleteClientProfile, canEditClientProfile, canEditTask, canOpenServiceClient, canLinkTaskToProject, canViewTask, defaultRolePermissions, getEffectivePermissions, getTaskAccess, getVisibleTasks } from './access';
 import type { CustomRole, Project, Task, User } from '../types';
 
 const hod: User = { id: 'hod', name: 'HOD', role: 'HOD', department: 'Video Shooting', departments: ['Video Shooting', 'Video Editor'] };
@@ -9,6 +9,11 @@ describe('HOD permission parity', () => {
   it.each(['Editor', 'video-editor', 'video editing', 'editing'])('recognizes the legacy department %s and grants scoped HOD execution management', department => {
     const work = task({ department: department as Task['department'] });
     expect(getTaskAccess(hod, work)).toMatchObject({ canView: true, canEdit: true, canComment: true, canDelete: false, canAssign: false });
+  });
+  it('keeps legacy department aliases visible through the optimized HOD list', () => {
+    const editorHod: User = { ...hod, department: 'Video Editor', departments: ['Video Editor'] };
+    expect(getVisibleTasks(editorHod, [task({ id: 'legacy-alias', department: 'Editor', assignedTo: 'editor' })]).map(item => item.id))
+      .toEqual(['legacy-alias']);
   });
   it('limits HOD delegation to owned tasks', () => {
     expect(canAssignTasksToOthers(hod, [], task())).toBe(false);
@@ -64,9 +69,9 @@ describe('HOD permission parity', () => {
     expect(canOpenServiceClient(hod, 'Hidden Co', [task({ assignedTo: hod.id })])).toBe(false);
   });
   it('keeps approvals and service administration blocked despite per-member overrides', () => {
-    const hostile = { ...hod, permissions: { ...defaultRolePermissions.HOD, viewApprovals: true, manageUsers: true, viewAllTasks: true, viewAllClients: true, manageClientPlans: true, manageServiceCycles: true, viewServicePrices: true } };
+    const hostile = { ...hod, permissions: { ...defaultRolePermissions.HOD, viewApprovals: true, manageUsers: true, viewAllTasks: true, viewAllClients: true, createProjects: true, manageClientPlans: true, manageServiceCycles: true, viewServicePrices: true } };
     expect(canAccessPath(hostile, '/approvals')).toBe(false);
-    expect(getEffectivePermissions(hostile)).toMatchObject({ viewApprovals: false, manageUsers: false, viewAllTasks: false, viewAllClients: false, manageClientPlans: false, manageServiceCycles: false, viewServicePrices: false });
+    expect(getEffectivePermissions(hostile)).toMatchObject({ viewApprovals: false, manageUsers: false, viewAllTasks: false, viewAllClients: false, createProjects: false, manageClientPlans: false, manageServiceCycles: false, viewServicePrices: false });
   });
   it('gates company deletion on edit capability', () => {
     const profiles = [{ id: 'c', clientName: 'Visible Co', createdBy: 'pm', createdAt: '', updatedAt: '' }];
@@ -77,8 +82,11 @@ describe('HOD permission parity', () => {
     // A HOD who can edit the company (assigned task + manageAssignedClients) may delete it.
     const assigningHod = { ...hod, permissions: { ...defaultRolePermissions.HOD, manageAssignedClients: true } };
     expect(canDeleteClientProfile(assigningHod, 'Visible Co', profiles, [], [task({ assignedTo: hod.id })])).toBe(true);
-    // Owning the profile no longer bypasses the edit requirement.
-    expect(canDeleteClientProfile(hod, 'Visible Co', [{ ...profiles[0], createdBy: hod.id }])).toBe(false);
+    // A department lead may maintain (and therefore delete) a company it
+    // created, without claiming another owner's company.
+    expect(canDeleteClientProfile(hod, 'Visible Co', [{ ...profiles[0], createdBy: hod.id }])).toBe(true);
+    expect(canEditClientProfile(hod, 'Visible Co', [], [], [{ ...profiles[0], createdBy: hod.id }])).toBe(true);
+    expect(canEditClientProfile(hod, 'Visible Co', [], [], profiles)).toBe(false);
     expect(canDeleteClientProfile({ ...hod, permissions: { ...defaultRolePermissions.HOD, deleteClients: false } }, 'Visible Co', profiles, [], [task()])).toBe(false);
   });
   it('offers populated Boss-curated projects without exposing another PM’s projects', () => {
@@ -91,6 +99,14 @@ describe('HOD permission parity', () => {
     expect(canLinkTaskToProject(staff, { ...project, createdBy: 'pm' }, [task({ projectId: 'p' })], [], users)).toBe(false);
   });
 
+  it('keeps work assigned to a HOD visible outside project membership', () => {
+    const project = { id: 'p-out', clientName: 'Outside Co', projectName: 'Outside', createdBy: 'pm', projectManagerIds: ['pm'], hodMemberIds: [], staffMemberIds: [] } as unknown as Project;
+    const assigned = task({ id: 'assigned-out', projectId: 'p-out', assignedTo: hod.id, department: 'Designer' });
+    const delegated = task({ id: 'delegated-out', projectId: 'p-out', assignedTo: 'someone', responsibleHodId: hod.id, department: 'Designer' });
+    const unrelated = task({ id: 'unrelated-out', projectId: 'p-out', assignedTo: 'someone', department: 'Video Editor' });
+    expect(getVisibleTasks(hod, [assigned, delegated, unrelated], [], { projects: [project] }).map(item => item.id).sort())
+      .toEqual(['assigned-out', 'delegated-out']);
+  });
   it('allows reassignment of an owned task outside the HOD department', () => {
     const foreign = task({ department: 'Designer', assignedTo: hod.id });
     expect(getTaskAccess(hod, foreign)).toMatchObject({ canView: true, canEdit: true, canAssign: true });
