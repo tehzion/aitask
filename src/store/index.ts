@@ -1077,16 +1077,21 @@ const excludedServiceMetadataEntityTypes = (user: User | null | undefined, roleP
 };
 
 // A Department Head or Staff member can only write companies they created or
-// are assigned to. The app normalises company rows when it loads them, so a
-// company someone else owns can look "changed" locally; sending that update is
-// refused by the server and, as a command is all-or-nothing, blocks every other
-// change in the same save (assign, accept and submit all fail together).
-const unwritableCompanyRows = (user: User | null | undefined, state: Pick<StoreState, 'tasks' | 'rolePermissions' | 'clients'>) => {
+// are assigned to, and Staff cannot write projects at all. The app normalises
+// these rows when it loads them, so a company or project someone else owns can
+// look "changed" locally; sending that update is refused by the server and, as
+// a command is all-or-nothing, blocks every other change in the same save
+// (assign, accept and submit all fail together).
+const unwritableRows = (user: User | null | undefined, state: Pick<StoreState, 'tasks' | 'rolePermissions' | 'clients'>) => {
   if (!user || isBossKoo(user) || user.role === 'Project Manager' || user.role === 'Client') return undefined;
+  const isStaffOnly = !isHodUser(user, state.rolePermissions);
   return (row: { entityType: string; entityId: string; data: Record<string, unknown> }) => (
-    row.entityType === 'client'
-    && row.data.createdBy !== user.id
-    && !canEditClientProfile(user, String(row.data.clientName || ''), state.tasks, state.rolePermissions, state.clients, row.entityId)
+    (row.entityType === 'project' && isStaffOnly)
+    || (
+      row.entityType === 'client'
+      && row.data.createdBy !== user.id
+      && !canEditClientProfile(user, String(row.data.clientName || ''), state.tasks, state.rolePermissions, state.clients, row.entityId)
+    )
   );
 };
 
@@ -1466,7 +1471,7 @@ export const useStore = create<StoreState>()(
                 excludeSuperAdminEntities: !stateToSave.currentUser?.isSuperAdmin,
                 actorMemberId: stateToSave.currentUser?.id,
                 excludedEntityTypes: excludedServiceMetadataEntityTypes(stateToSave.currentUser, stateToSave.rolePermissions),
-                skipRow: unwritableCompanyRows(stateToSave.currentUser, stateToSave),
+                skipRow: unwritableRows(stateToSave.currentUser, stateToSave),
               },
             );
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
@@ -1994,7 +1999,7 @@ export const useStore = create<StoreState>()(
           excludeSuperAdminEntities: !get().currentUser?.isSuperAdmin,
           actorMemberId: get().currentUser?.id,
           excludedEntityTypes: excludedServiceMetadataEntityTypes(get().currentUser, get().rolePermissions),
-          skipRow: unwritableCompanyRows(get().currentUser, get()),
+          skipRow: unwritableRows(get().currentUser, get()),
         });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         if (result.ok === false) {
