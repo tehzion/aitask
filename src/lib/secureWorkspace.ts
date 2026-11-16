@@ -963,6 +963,11 @@ export type BuildOperationsOptions = {
   // baseline, so the locally seeded copy would otherwise look like a new insert
   // the actor is not allowed to send.
   excludedEntityTypes?: Set<string>;
+  // Rows the actor may never write. The local copy can differ from the server
+  // only because the app normalised it on load; sending that as an update would
+  // be refused and, because a command is all-or-nothing, would block every
+  // other change in the same save.
+  skipRow?: (row: Pick<BaselineRow, 'kind' | 'entityType' | 'entityId' | 'data'>) => boolean;
 };
 
 export const buildOperations = (
@@ -983,6 +988,7 @@ export const buildOperations = (
   // Boss-only `member.manage` and rejected with "Super Admin permission required."
   const skipsRow = (row: BaselineRow) => (
     excludedEntityTypes.has(row.entityType)
+    || options.skipRow?.(row) === true
     || (
       options.excludeSuperAdminEntities === true
       && Boolean(options.actorMemberId)
@@ -2156,6 +2162,10 @@ export const retrySecureWorkspaceCommand = async (
   // update to another member that the earlier bundling path misclassified.
   if (options.excludeSuperAdminEntities && !retryableBatch) {
     command.operations = command.operations.filter(operation => !superAdminOnlyEntityTypes.has(operation.entityType));
+    if (options.skipRow) {
+      command.operations = command.operations.filter(operation => operation.action === 'delete'
+        || !options.skipRow!({ kind: operation.kind, entityType: operation.entityType, entityId: operation.entityId, data: operation.data || {} }));
+    }
     if (options.actorMemberId) {
       command.operations = command.operations.filter(operation => (
         operation.entityType !== 'member' || operation.entityId === options.actorMemberId
