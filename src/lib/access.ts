@@ -927,10 +927,12 @@ export const getVisibleTasks = (
     );
     const departments = new Set(getMemberDepartments(user));
     return tasks.filter(task => {
+      // Work assigned to the HOD stays visible even outside project
+      // membership, exactly as canViewTask allows.
+      if (task.assignedTo === user.id || task.responsibleHodId === user.id) return true;
       if (task.projectId && !hodProjectIds.has(task.projectId)) return false;
       const department = normalizeDepartment(task.department) || task.department;
-      return task.assignedTo === user.id
-        || task.createdBy === user.id
+      return task.createdBy === user.id
         || (departments.size > 0 && departments.has(department));
     });
   }

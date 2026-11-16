@@ -99,6 +99,14 @@ describe('HOD permission parity', () => {
     expect(canLinkTaskToProject(staff, { ...project, createdBy: 'pm' }, [task({ projectId: 'p' })], [], users)).toBe(false);
   });
 
+  it('keeps work assigned to a HOD visible outside project membership', () => {
+    const project = { id: 'p-out', clientName: 'Outside Co', projectName: 'Outside', createdBy: 'pm', projectManagerIds: ['pm'], hodMemberIds: [], staffMemberIds: [] } as unknown as Project;
+    const assigned = task({ id: 'assigned-out', projectId: 'p-out', assignedTo: hod.id, department: 'Designer' });
+    const delegated = task({ id: 'delegated-out', projectId: 'p-out', assignedTo: 'someone', responsibleHodId: hod.id, department: 'Designer' });
+    const unrelated = task({ id: 'unrelated-out', projectId: 'p-out', assignedTo: 'someone', department: 'Video Editor' });
+    expect(getVisibleTasks(hod, [assigned, delegated, unrelated], [], { projects: [project] }).map(item => item.id).sort())
+      .toEqual(['assigned-out', 'delegated-out']);
+  });
   it('allows reassignment of an owned task outside the HOD department', () => {
     const foreign = task({ department: 'Designer', assignedTo: hod.id });
     expect(getTaskAccess(hod, foreign)).toMatchObject({ canView: true, canEdit: true, canAssign: true });
