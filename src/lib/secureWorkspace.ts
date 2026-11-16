@@ -2086,6 +2086,7 @@ export const saveSecureWorkspace = async (
     };
   }
   const pendingOperations = buildOperations(state, options);
+  lastAttemptedEntityTypes = [...new Set(pendingOperations.map(operation => operation.entityType))].sort();
   if (pendingOperations.length === 0) {
     const revision = await loadSecureWorkspaceRevision();
     return { ok: true, data: { ok: true, workspaceVersion: revision.version }, commandId: commandId(), workspaceVersion: revision.version };
@@ -2260,6 +2261,11 @@ export const discardSecureWorkspaceCommand = (options: { preserveSession?: boole
 };
 
 export const getRetainedSecureCommand = (): SecureCommand | null => retryableCommand;
+
+// Entity type names (never ids or data) in the most recent save attempt, so a
+// refused save can be diagnosed without reproducing it in the user's browser.
+let lastAttemptedEntityTypes: string[] = [];
+export const getLastAttemptedEntityTypes = (): string[] => lastAttemptedEntityTypes;
 
 onWorkspaceSessionInvalidated(() => {
   baseline = new Map();
