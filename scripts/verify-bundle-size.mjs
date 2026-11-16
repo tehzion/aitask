@@ -11,10 +11,6 @@ const findAsset = (pattern, label) => {
   return match;
 };
 
-// Keep the eager graph tight. The previous 300 KiB cap was exceeded by the
-// monthly-payment and role-parity features; 301 KiB preserves the same
-// guardrail with a single-KiB allowance for the current feature set.
-const EAGER_GZIP_CAP_KIB = 301;
 const budgets = [
   { label: 'initial index JS', file: findAsset(/^index-[A-Za-z0-9_-]+\.js$/, 'index'), rawBytes: 500_000, gzipBytes: 150_000 },
   { label: 'report chart JS', file: findAsset(/^(?:reportsCharts|BarChart|recharts)-[A-Za-z0-9_-]+\.js$/, 'report charts'), rawBytes: 420_000, gzipBytes: 125_000 },
@@ -49,6 +45,6 @@ for (const file of eagerFiles) {
   eagerRaw += source.byteLength;
   eagerGzip += gzipSync(source, { level: 9 }).byteLength;
 }
-console.log(`[bundle] Eager JS graph (${eagerFiles.size} chunks): ${(eagerRaw / 1024).toFixed(1)} KiB raw, ${(eagerGzip / 1024).toFixed(1)} KiB gzip (${EAGER_GZIP_CAP_KIB} KiB gzip cap).`);
-if (eagerGzip > EAGER_GZIP_CAP_KIB * 1024) throw new Error(`[bundle] Eager JavaScript dependency graph exceeds ${EAGER_GZIP_CAP_KIB} KiB gzip.`);
+console.log(`[bundle] Eager JS graph (${eagerFiles.size} chunks): ${(eagerRaw / 1024).toFixed(1)} KiB raw, ${(eagerGzip / 1024).toFixed(1)} KiB gzip (300 KiB gzip cap).`);
+if (eagerGzip > 300 * 1024) throw new Error('[bundle] Eager JavaScript dependency graph exceeds 300 KiB gzip.');
 console.log('[bundle] Bundle-size budgets passed.');
