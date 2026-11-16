@@ -6,7 +6,7 @@ import { Link } from 'react-router-dom';
 import { isBefore } from 'date-fns/isBefore';
 import { useStore } from '../store';
 import { useShallow } from 'zustand/react/shallow';
-import { canLinkTaskDelivery, canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks } from '../lib/access';
+import { canLinkTaskDelivery, canViewServicePrices, getClientKey, getDashboardPersona, getOwnedPortfolioClientKeys, getVisibleClientNames, getVisibleProjects, getVisibleTasks, isProjectAssignedToUser } from '../lib/access';
 import { formatMoney } from '../lib/serviceManagement';
 import { getTodayInputDate, parseOptionalDate } from '../lib/utils';
 import { getRoleWorkSummary } from '../lib/roleWorkSummary';
@@ -167,9 +167,27 @@ const ServiceRoleDashboard = () => {
   const workSummary = getRoleWorkSummary(scopeTasks, now);
   const overdue = workSummary.overdue;
   const dueToday = workSummary.dueToday;
-  const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && commercialClientKeys.has(getClientKey(plan.clientName)));
+  // Project Managers are scoped by canonical client ids, not duplicate display
+  // names. Legacy rows without an id keep the normalized-name fallback.
+  const pmOwnedClientIds = React.useMemo(() => {
+    if (persona !== 'projectManager' || !store.currentUser) return null;
+    const ids = new Set<string>();
+    store.projects
+      .filter(project => isProjectAssignedToUser(store.currentUser, project, store.rolePermissions))
+      .forEach(project => { if (project.clientId) ids.add(project.clientId); });
+    store.clients
+      .filter(client => client.createdBy === store.currentUser?.id && client.id)
+      .forEach(client => ids.add(client.id));
+    return ids;
+  }, [persona, store.currentUser, store.projects, store.clients, store.rolePermissions]);
+  const inCommercialScope = (item: { clientId?: string; clientName: string }) => (
+    persona === 'projectManager' && pmOwnedClientIds
+      ? (item.clientId ? pmOwnedClientIds.has(item.clientId) : commercialClientKeys.has(getClientKey(item.clientName)))
+      : commercialClientKeys.has(getClientKey(item.clientName))
+  );
+  const activePlans = store.clientPlans.filter(plan => plan.status === 'Active' && inCommercialScope(plan));
   const contractedMonthly = canSeePrices ? activePlans.reduce((sum, plan) => sum + (store.servicePricingSnapshots.find(item => item.parentType === 'client_plan' && item.parentId === plan.id)?.totalMinor || 0), 0) : 0;
-  const delivered = store.deliverables.filter(item => item.status === 'Delivered' && commercialClientKeys.has(getClientKey(item.clientName)));
+  const delivered = store.deliverables.filter(item => item.status === 'Delivered' && inCommercialScope(item));
   const portfolioReviews = getPortfolioReviewQueues(scopeTasks);
   const waitingInternal = portfolioReviews.internal;
   const waitingClient = portfolioReviews.client;

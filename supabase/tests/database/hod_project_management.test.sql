@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(5);
+select plan(7);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 values
@@ -24,6 +24,20 @@ select ok(private.aitask_can_mutate_entity(
   (select data from public.aitask_entities where workspace_id='pgtap-hod-project' and entity_type='project' and entity_id='hod-project'),
   (select data || jsonb_build_object('projectName','HOD project updated','staffMemberIds',jsonb_build_array('hod-project-staff'),'memberResponsibilities',jsonb_build_object('hod-project-staff','Delivery lead')) from public.aitask_entities where workspace_id='pgtap-hod-project' and entity_type='project' and entity_id='hod-project')
 ), 'assigned HOD updates project details and staff');
+
+
+select lives_ok(
+  $update$update public.aitask_entities
+    set data = data || '{"projectName":"HOD project persisted","staffMemberIds":["hod-project-staff"],"memberResponsibilities":{"hod-project-staff":"Delivery lead"}}'::jsonb,
+        updated_at = now()
+    where workspace_id='pgtap-hod-project' and entity_type='project' and entity_id='hod-project'$update$,
+  'assigned HOD can persist project execution and staff changes'
+);
+select is(
+  (select data->>'projectName' from public.aitask_entities where workspace_id='pgtap-hod-project' and entity_type='project' and entity_id='hod-project'),
+  'HOD project persisted',
+  'the assigned HOD project update is stored'
+);
 
 select ok(not private.aitask_can_mutate_entity(
   'pgtap-hod-project','update','project','hod-project',null,
