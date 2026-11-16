@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-16T04:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "CANDIDATE 2026-11-16: four HOD/PM parity migrations (20261116090000, 20261116091000, 20261116092000, 20261116093000) are NOT yet applied to production. Apply them, record the history, and clear pendingProductionMigrations before the production merge.",
+  "status": "APPLIED 2026-11-16: production records 20261116032530, 20261116032558, 20261116032603, 20261116032607 (owner instructed; applied via the Supabase connector). Repository and production migration versions match (159/159). Each migration patches existing functions behind an exactly-once anchor check, so a drifted function would have aborted the apply; all four applied cleanly.",
   "validatedMigrationTail": [
     "20261023063344_task_workflow_action_guards",
     "20261023154255_bind_service_command_entity_types",
@@ -40,15 +40,36 @@
     "20261113090000_hod_project_management",
     "20261114100403_notification_audience_and_reminder_recipient_scope",
     "20261114100421_freeze_published_cycle_pricing",
-    "20261116090000_hod_project_and_client_authority",
-    "20261116091000_pm_scope_delete_and_assignment_parity",
-    "20261116092000_member_deletion_recovery",
-    "20261116093000_hod_create_project_restriction"
+    "20261116032530_hod_project_and_client_authority",
+    "20261116032558_pm_scope_delete_and_assignment_parity",
+    "20261116032603_member_deletion_recovery",
+    "20261116032607_hod_create_project_restriction"
   ],
-  "pendingProductionMigrations": [
-    "20261116090000_hod_project_and_client_authority",
-    "20261116091000_pm_scope_delete_and_assignment_parity",
-    "20261116092000_member_deletion_recovery",
-    "20261116093000_hod_create_project_restriction"
-  ]
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261116032607_hod_create_project_restriction",
+    "latestAppliedMigration": "20261116032607_hod_create_project_restriction",
+    "historyCount": 159,
+    "beforeHistoryCount": 155,
+    "productionOnlyMigrations": [],
+    "checks": "Live read-only verification on 2026-11-16: schema_migrations lists the four versions in order; count 159."
+  },
+  "changeSummary": {
+    "20261116032530_hod_project_and_client_authority": "Assigned HODs may update their project (membership guard); a HOD may maintain a company they created; company updates by a Project Manager resolve by canonical client id first.",
+    "20261116032558_pm_scope_delete_and_assignment_parity": "Projectless task view/edit resolve company by id first; Project Manager task deletion requires creator, assigned-project or owned-company authority; assignment validator keeps the assignedBy fallback and id-first company ownership.",
+    "20261116032603_member_deletion_recovery": "Member deletion is idempotent after a lost response and clears assignedBy/responsibleHodId/accountableLeadId references.",
+    "20261116032607_hod_create_project_restriction": "createProjects is a restricted permission for HODs (cannot be granted by overrides)."
+  },
+  "qualityGates": {
+    "localDatabase": "PASS (2026-11-16): full local Supabase rollout validation (all migrations, pgTAP, browser/REST checks) on the final tree.",
+    "application": "PASS: typecheck, lint, unit tests 143 files / 1,148 tests.",
+    "productionApply": "APPLIED 2026-11-16 before merge; the release-alignment gate requires production to match the repository."
+  },
+  "rollback": {
+    "20261116032530_hod_project_and_client_authority": "Restore the prior definitions of aitask_guard_project_membership_scope, aitask_can_edit_client and aitask_can_mutate_entity_legacy (remove the added branches); drop function private.aitask_can_edit_client_id.",
+    "20261116032558_pm_scope_delete_and_assignment_parity": "Restore the prior aitask_can_view_task / aitask_can_edit_task / aitask_task_assignment_is_valid definitions; rename aitask_can_delete_task_legacy_role back to aitask_can_delete_task (drop the wrapper first).",
+    "20261116032603_member_deletion_recovery": "Restore the previous public.aitask_delete_member_account definition from migration history; no data was changed by the migration itself.",
+    "20261116032607_hod_create_project_restriction": "Remove createProjects from the two HOD restricted-permission lists in aitask_has_permission and aitask_guard_custom_role_scope."
+  }
 }
