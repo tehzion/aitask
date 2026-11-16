@@ -1,6 +1,6 @@
 import { AppNotification, ClientProfile, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
 import { isAwaitingClientReview } from './clientPortal';
-import { getMemberDepartments, isMemberInDepartment } from './departments';
+import { getMemberDepartments, isMemberInDepartment, normalizeDepartment } from './departments';
 import { isClosedProject } from './projectManagement';
 
 export type DashboardPersona = 'boss' | 'projectManager' | 'operation' | 'account' | 'production' | 'client';
@@ -192,6 +192,7 @@ export const hodRestrictedPermissionKeys: RolePermissionKey[] = [
   'viewAllTasks',
   'viewAllClients',
   'viewApprovals',
+  'createProjects',
   'manageServiceCatalog',
   'manageTaskTemplates',
   'manageClientPlans',
@@ -477,26 +478,34 @@ export const canOpenServiceClient = (
   customRoles: CustomRole[] = [],
   profiles: ClientProfile[] = [],
   projects: Project[] = [],
+  clientId?: string,
 ) => {
   if (!user) return false;
   const clientKey = getClientKey(clientName);
+  const exactClientId = clientId?.trim();
+  const matchesClient = (item: { clientId?: string; clientName: string }) => (
+    exactClientId
+      ? (item.clientId ? item.clientId === exactClientId : getClientKey(item.clientName) === clientKey)
+      : getClientKey(item.clientName) === clientKey
+  );
   if (user.role === 'Client') return getClientKey(user.companyName) === clientKey;
   if (isBossKoo(user)) return true;
   if (user.role === 'Project Manager') {
-    if (!clientKey) return false;
-    const clientProjects = projects.filter(project => getClientKey(project.clientName) === clientKey);
+    if (!clientKey && !exactClientId) return false;
+    const clientProjects = projects.filter(matchesClient);
     if (clientProjects.length > 0) {
       return getVisibleProjects(user, clientProjects, tasks, customRoles, { clients: profiles, projects })
-        .some(project => getClientKey(project.clientName) === clientKey);
+        .some(project => matchesClient(project));
     }
-    const ownsProjectlessProfile = profiles.some(profile => profile.createdBy === user.id && getClientKey(profile.clientName) === clientKey);
+    const ownsProjectlessProfile = profiles.some(profile => profile.createdBy === user.id
+      && (exactClientId ? profile.id === exactClientId : getClientKey(profile.clientName) === clientKey));
     if (ownsProjectlessProfile) return true;
     return getVisibleTasks(user, tasks, customRoles, { clients: profiles, projects })
-      .some(task => getClientKey(task.clientName) === clientKey);
+      .some(matchesClient);
   }
   if (hasPermission(user, 'viewAllServiceClients', customRoles)) return true;
   if (!['Staff', 'HOD'].includes(user.role) || !hasPermission(user, 'viewAssignedServiceClients', customRoles)) return false;
-  return Boolean(clientKey) && tasks.some(task => task.assignedTo === user.id && getClientKey(task.clientName) === clientKey);
+  return Boolean(clientKey || exactClientId) && tasks.some(task => task.assignedTo === user.id && matchesClient(task));
 };
 export const canManageClientProfiles = (
   user: User | null | undefined,
@@ -570,7 +579,15 @@ export const canEditClientProfile = (
       getClientKey(task.clientName) === clientKey && (task.createdBy === user.id || task.assignedTo === user.id)
     ));
   }
-  if (!['Staff', 'HOD'].includes(user?.role || '') || !hasPermission(user, 'manageAssignedClients', customRoles)) return false;
+  if (!['Staff', 'HOD'].includes(user?.role || '')) return false;
+  const profile = clientId
+    ? profiles.find(item => item.id === clientId)
+    : profiles.find(item => getClientKey(item.clientName) === clientKey);
+  // A department lead may always maintain a company it created. Editing a
+  // company the lead was merely assigned to still requires the delegated
+  // manageAssignedClients capability.
+  if (user?.role === 'HOD' && profile?.createdBy === user.id) return true;
+  if (!hasPermission(user, 'manageAssignedClients', customRoles)) return false;
   return Boolean(clientKey) && tasks.some(task => (
     task.assignedTo === user.id && getClientKey(task.clientName) === clientKey
   ));
@@ -896,6 +913,27 @@ export const getVisibleTasks = (
         || (!task.assignedTo && task.assignedBy === user.id)
         || task.createdBy === user.id
         || (task.clientId ? ownedClientIds.has(task.clientId) : ownedClientKeys.has(getClientKey(task.clientName)));
+    });
+  }
+  if (isHodScopedUser(user, customRoles)) {
+    // Department-scoped visibility is evaluated for every task on the
+    // dashboard, task list, delivery tracker, and reports. Precompute project
+    // membership and department membership once instead of resolving them
+    // inside the per-task predicate.
+    const hodProjectIds = new Set(
+      (scope.projects || [])
+        .filter(project => isProjectAssignedToUser(user, project, customRoles))
+        .map(project => project.id),
+    );
+    const departments = new Set(getMemberDepartments(user));
+    return tasks.filter(task => {
+      // Work assigned to the HOD stays visible even outside project
+      // membership, exactly as canViewTask allows.
+      if (task.assignedTo === user.id || task.responsibleHodId === user.id) return true;
+      if (task.projectId && !hodProjectIds.has(task.projectId)) return false;
+      const department = normalizeDepartment(task.department) || task.department;
+      return task.createdBy === user.id
+        || (departments.size > 0 && departments.has(department));
     });
   }
   return tasks.filter(task => canViewTask(user, task, customRoles, scope));

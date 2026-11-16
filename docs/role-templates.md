@@ -69,7 +69,14 @@ delivery records in their own portfolio.
 A Staff-based department lead. Sees and edits work in **their departments**
 (tasks and any project carrying those tasks), manages the tasks they create, and
 can add/delete companies. It does **not** get workspace-wide visibility or
-service-administration rights.
+service-administration rights, and it cannot create projects. An HOD listed in a
+project's `hodMemberIds` can maintain that project's execution details, including
+its name, services, dates, staff membership, responsibilities, and milestones.
+Company link, Project Manager/HOD membership, creator attribution, lifecycle
+status, and project deletion remain with Boss Koo or the responsible Project
+Manager. A company created by the HOD can be maintained and deleted by that HOD;
+editing a company reached only through assigned work still requires the
+`manageAssignedClients` capability.
 
 Department oversight grants task editing and commenting. Task deletion requires
 the task to be in the HOD's departments, `manageCreatedTasks`, and either creator
@@ -83,7 +90,9 @@ work outside that department grants routine editing, but no reviewer revision or
 approval authority. Review excludes the assignee and the member who submitted the
 work. HOD accounts without a working login do not block an independent portfolio
 PM fallback. Boss Koo can override self-review only with a reason recorded by the
-server alongside the authenticated reviewer and timestamp.
+server alongside the authenticated reviewer and timestamp. An independent
+department reviewer may attach private supporting files while the task is active;
+output-file upload remains limited to the assigned worker or responsible PM.
 
 The responsible PM or Boss can set a named accountable lead and an independent,
 expiring reviewer cover (maximum 90 days). Active cover receives review handoff;

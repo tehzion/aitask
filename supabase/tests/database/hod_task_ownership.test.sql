@@ -30,7 +30,7 @@ values (
   'pgtap-hod-authorization', 'custom_role', 'builtin-hod',
   jsonb_build_object(
     'id', 'builtin-hod', 'name', 'HOD', 'baseRole', 'HOD', 'isProtected', false, 'isBuiltin', true, 'departmentScoped', true,
-    'permissions', jsonb_build_object('createTasks', true, 'manageCreatedTasks', true, 'createProjects', true),
+    'permissions', jsonb_build_object('createTasks', true, 'manageCreatedTasks', true),
     'createdAt', now(), 'updatedAt', now()
   )
 );
@@ -53,6 +53,7 @@ values
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-assigned', '{"id":"pgtap-hod-assigned","title":"Project Manager assigned task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-unrelated', '{"id":"pgtap-hod-unrelated","title":"Unrelated task","clientName":"HOD Test Client","department":"Video Editor","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-staff","status":"Pending","visibility":"internal"}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-admin-created', '{"id":"pgtap-hod-admin-created","title":"Project Manager created task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb),
+  ('pgtap-hod-authorization', 'project', 'pgtap-hod-visible-project', '{"id":"pgtap-hod-visible-project","clientId":"pgtap-hod-client","clientName":"HOD Test Client","projectName":"Visible HOD Project","services":["Design"],"startDate":"2026-09-10","createdBy":"pgtap-hod","projectManagerIds":[],"hodMemberIds":["pgtap-hod"],"staffMemberIds":[]}'::jsonb),
   ('pgtap-hod-authorization', 'task', 'pgtap-hod-staff-task', '{"id":"pgtap-hod-staff-task","title":"Staff task","clientName":"HOD Test Client","department":"Designer","assignedTo":"pgtap-hod-staff","createdBy":"pgtap-hod-admin","status":"Pending","visibility":"internal"}'::jsonb);
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000000920', true);
@@ -72,8 +73,8 @@ select is(
       )
     ))
   ) ->> 'ok')::boolean,
-  true,
-  'HOD can create a project for a visible client when granted project creation'
+  false,
+  'HOD cannot create a project even when the template can be edited'
 );
 
 select is(
@@ -90,7 +91,7 @@ select is(
     ))
   ) ->> 'ok')::boolean,
   false,
-  'HOD cannot create a project for a hidden client'
+  'HOD project creation is denied regardless of client visibility'
 );
 
 select is(
@@ -107,7 +108,7 @@ select is(
     ))
   ) ->> 'ok')::boolean,
   false,
-  'HOD cannot create a project for a nonexistent client record'
+  'HOD project creation is denied for a nonexistent client record'
 );
 
 select ok(private.aitask_can_view_task('pgtap-hod-authorization', 'pgtap-hod-created'), 'HOD can view a task they created');
