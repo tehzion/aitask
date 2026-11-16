@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canAccessPath, canAssignTasksToOthers, canDeleteClientProfile, canEditClientProfile, canEditTask, canOpenServiceClient, canLinkTaskToProject, canViewTask, defaultRolePermissions, getEffectivePermissions, getTaskAccess, getVisibleTasks } from './access';
+import { canAccessPath, canAssignTasksToOthers, canDeleteClientProfile, canEditClientProfile, canEditTask, canOpenServiceClient, getVisibleClientNames, canLinkTaskToProject, canViewTask, defaultRolePermissions, getEffectivePermissions, getTaskAccess, getVisibleTasks } from './access';
 import type { CustomRole, Project, Task, User } from '../types';
 
 const hod: User = { id: 'hod', name: 'HOD', role: 'HOD', department: 'Video Shooting', departments: ['Video Shooting', 'Video Editor'] };
@@ -107,6 +107,14 @@ describe('HOD permission parity', () => {
     expect(getVisibleTasks(hod, [assigned, delegated, unrelated], [], { projects: [project] }).map(item => item.id).sort())
       .toEqual(['assigned-out', 'delegated-out']);
   });
+  it('shows a HOD the company of every project they can open, without a task for it', () => {
+    const assigned = { id: 'p-assigned', clientName: 'Project Only Co', projectName: 'Assigned', createdBy: 'pm', projectManagerIds: ['pm'], hodMemberIds: [hod.id], staffMemberIds: [] } as unknown as Project;
+    const other = { id: 'p-other', clientName: 'Unrelated Co', projectName: 'Other', createdBy: 'pm', projectManagerIds: ['pm'], hodMemberIds: [], staffMemberIds: [] } as unknown as Project;
+    expect(getVisibleClientNames(hod, [], [assigned, other])).toEqual(['Project Only Co']);
+    const staff = { ...hod, id: 'ordinary-staff', role: 'Staff' } as User;
+    expect(getVisibleClientNames(staff, [], [assigned, other])).toEqual([]);
+  });
+
   it('allows reassignment of an owned task outside the HOD department', () => {
     const foreign = task({ department: 'Designer', assignedTo: hod.id });
     expect(getTaskAccess(hod, foreign)).toMatchObject({ canView: true, canEdit: true, canAssign: true });

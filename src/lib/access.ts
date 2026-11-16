@@ -631,9 +631,15 @@ export const getVisibleClientNames = (
 
   if (!['Staff', 'HOD'].includes(user.role)) return [];
 
-  return collectNames(
-    getVisibleTasks(user, tasks, customRoles, scope).map(task => task.clientName)
-  );
+  // A Department Head works on whole projects, so the company of every project
+  // they can open is visible even before they hold a task for it.
+  const projectCompanyNames = isHodUser(user, customRoles)
+    ? getVisibleProjects(user, projects, tasks, customRoles, scope).map(project => project.clientName)
+    : [];
+  return collectNames([
+    ...getVisibleTasks(user, tasks, customRoles, scope).map(task => task.clientName),
+    ...projectCompanyNames,
+  ]);
 };
 export const canRenameClient = (
   user: User | null | undefined,
