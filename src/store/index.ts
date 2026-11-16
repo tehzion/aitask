@@ -1076,15 +1076,15 @@ const excludedServiceMetadataEntityTypes = (user: User | null | undefined, roleP
   return excluded;
 };
 
-// A Department Head or Staff member can only write companies they created or
-// are assigned to, and Staff cannot write projects at all. The app normalises
+// A Project Manager, Department Head or Staff member can only write companies
+// they created or work on, and Staff cannot write projects at all. The app normalises
 // these rows when it loads them, so a company or project someone else owns can
 // look "changed" locally; sending that update is refused by the server and, as
 // a command is all-or-nothing, blocks every other change in the same save
 // (assign, accept and submit all fail together).
 const unwritableRows = (user: User | null | undefined, state: Pick<StoreState, 'tasks' | 'rolePermissions' | 'clients'>) => {
-  if (!user || isBossKoo(user) || user.role === 'Project Manager' || user.role === 'Client') return undefined;
-  const isStaffOnly = !isHodUser(user, state.rolePermissions);
+  if (!user || isBossKoo(user) || user.role === 'Client') return undefined;
+  const isStaffOnly = user.role !== 'Project Manager' && !isHodUser(user, state.rolePermissions);
   return (row: { entityType: string; entityId: string; data: Record<string, unknown> }) => (
     (row.entityType === 'project' && isStaffOnly)
     || (
