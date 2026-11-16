@@ -1,5 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { waitForWorkspaceHydration } from './helpers/workspaceHydration';
 
 const seedHod = async (page: Page, options: { recipients?: boolean; manage?: boolean } = {}) => {
   await page.goto('/login');
@@ -30,7 +29,6 @@ const seedHod = async (page: Page, options: { recipients?: boolean; manage?: boo
 
 const openDetails = async (page: Page, id: string, title: string) => {
   await page.goto(`/tasks?taskId=${id}`);
-  await waitForWorkspaceHydration(page);
   const sheet = page.getByRole('dialog', { name: title });
   await expect(sheet).toBeVisible();
   const fullEdit = sheet.getByRole('button', { name: 'Edit task', exact: true });
