@@ -96,10 +96,13 @@ const Layout: React.FC = () => {
   const refusedSave = isRefusedSave(backend);
   useEffect(() => {
     if (!refusedSave) return;
-    void useStore.getState().discardMutation().then(() => {
+    // Say so once the saved data is back, even if a late cleanup step after the
+    // restore reports a problem: the screen already matches the server.
+    const announce = () => {
       const latest = useStore.getState().backend;
       if (latest.status === 'live' && !latest.error) useToastStore.getState().addToast(msg('errors.refusedSaveRestored'), 'warning');
-    }).catch(() => undefined);
+    };
+    void useStore.getState().discardMutation().then(announce, announce);
   }, [refusedSave]);
 
   const toggleSidebar = () => {
