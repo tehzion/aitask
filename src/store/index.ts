@@ -113,6 +113,7 @@ import {
   completeSecurePasswordSetup,
   getRetainedSecureMemberMutation,
   getRetainedSecureCommand,
+  getLastAttemptedEntityTypes,
   isWorkspaceConflict,
   loadSecureBackendCapabilities,
   loadSecureWorkspace,
@@ -1470,7 +1471,7 @@ export const useStore = create<StoreState>()(
             );
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (result.ok === false) {
-              if (stateToSave.currentUser) void recordClientEvent(stateToSave.currentUser, { type: 'save_failure', code: result.code });
+              if (stateToSave.currentUser) void recordClientEvent(stateToSave.currentUser, { type: 'save_failure', code: result.code, entityTypes: getLastAttemptedEntityTypes() });
               const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
               if (!upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) return;
               markTaskSavesFailed(get().backend.lastSavedAt, false);
@@ -1997,7 +1998,7 @@ export const useStore = create<StoreState>()(
         });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         if (result.ok === false) {
-          if (get().currentUser) void recordClientEvent(get().currentUser!, { type: 'save_failure', code: result.code });
+          if (get().currentUser) void recordClientEvent(get().currentUser!, { type: 'save_failure', code: result.code, entityTypes: getLastAttemptedEntityTypes() });
           const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
           if (options.automatic && !upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) {
             return { ok: false, code: 'RETRY_REQUIRED', error: 'Saving…' };
