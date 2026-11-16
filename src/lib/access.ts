@@ -441,12 +441,14 @@ export const canCreateTasks = (user: User | null | undefined, customRoles: Custo
 
 /**
  * Global "New task" entry points (header buttons, sidebar, command palette,
- * the N shortcut, calendar day clicks). Everyone else opens tasks from inside a
- * project or deliverable so company and project never need picking from a long
- * list (team feedback, 9 Nov 2026). Boss Koo keeps the global entry.
+ * the N shortcut, calendar day clicks). Boss Koo and Project Managers have the
+ * global entry (Project Managers asked for it, 16 Nov 2026); the form limits a
+ * Project Manager to the projects they manage. Department Heads and Staff open
+ * tasks from inside a project or deliverable so company and project never need
+ * picking from a long list (team feedback, 9 Nov 2026).
  */
 export const canCreateTasksFromAnywhere = (user: User | null | undefined, customRoles: CustomRole[] = []) => (
-  isBossKoo(user) && canCreateTasks(user, customRoles)
+  (isBossKoo(user) || user?.role === 'Project Manager') && canCreateTasks(user, customRoles)
 );
 /**
  * Hand-written tasks (the Create task form). Staff never create tasks, even
