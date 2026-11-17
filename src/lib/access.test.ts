@@ -236,6 +236,17 @@ describe('staff permission matrix', () => {
     ]);
   });
 
+  it('keeps closed projects out of every create-task project picker', () => {
+    const companySet: Project[] = [
+      { ...projects[0], createdBy: admin.id, projectManagerIds: [admin.id] },
+      { ...projects[0], id: 'project-closed', status: 'Closed', createdBy: admin.id, projectManagerIds: [admin.id] },
+    ];
+
+    expect(getAssignableProjects(admin, companySet, tasks, [], members).map(project => project.id)).toEqual([
+      'project-acme',
+    ]);
+  });
+
   it('hides other Project Managers’ companies from the Staff create-task dropdown', () => {
     const otherDeptProject: Project = {
       ...projects[0],
