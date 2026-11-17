@@ -1005,6 +1005,7 @@ export const canLinkTaskToProject = (
   if (isBossKoo(user)) return true;
   if (user.role === 'Project Manager') return getVisibleProjects(user, [project], tasks, customRoles, scope).length > 0;
   if (!['Staff', 'HOD'].includes(user.role)) return false;
+  if (isHodUser(user, customRoles) && project.hodMemberIds?.includes(user.id)) return true;
   if (project.createdBy === user.id) return true;
 
   const linkedTasks = tasks.filter(task => task.projectId === project.id);
