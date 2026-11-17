@@ -50,14 +50,12 @@ const canSkipInternalApproval = (task: Partial<Task> | undefined, scope: Visibil
   && getTaskApprovalMode(task, scope) === 'none'
 );
 
-const canStaffCompleteNoApproval = (
+const canAssignedExecutorCompleteNoApproval = (
   user: User | null | undefined,
   task: Partial<Task> | undefined,
-  roles: CustomRole[] = [],
   scope: VisibilityScope = {},
 ) => Boolean(
-  user?.role === 'Staff'
-  && !isHodUser(user, roles)
+  Boolean(user && ['Staff', 'HOD'].includes(user.role))
   && task?.status === 'In Progress'
   && task.assignedTo === user.id
   && getTaskApprovalMode(task || {}, scope) === 'none'
@@ -103,7 +101,7 @@ export const taskTransitionError = (user: User | null | undefined, before: Task 
   // complete client-visible work at 100%; customer acceptance remains available
   // as a separate, audited decision and does not have to happen first.
   if ((after.status === 'Completed' || after.isCompleted) && !isBossKoo(user)
-    && !canStaffCompleteNoApproval(user, before, roles, scope)
+    && !canAssignedExecutorCompleteNoApproval(user, before, scope)
     && (user?.role !== 'Project Manager' || !before || !isResponsibleProjectManager(user, before, scope)
       || (before.status !== 'Approved' && !canCompleteWithoutInternalApproval(before, scope)))) return 'Only a project manager can confirm completion after internal approval.';
   if (before && ['Waiting Approval', 'Approved', 'Completed'].includes(before.status) && !canRequestTaskRevision(user, before, roles, scope)) return 'Ask the HOD or project manager to return approved work for revision.';

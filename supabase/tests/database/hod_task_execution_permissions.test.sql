@@ -67,7 +67,38 @@ values
     'assignmentState', 'assigned_staff', 'createdBy', 'pm-execution',
     'status', 'Pending', 'priority', 'Medium', 'startDate', '2026-10-23',
     'dueDate', '2026-10-30', 'description', 'Other project brief'
+  )),
+  ('pgtap-hod-execution', 'client', 'execution-client', jsonb_build_object(
+    'id', 'execution-client', 'clientName', 'Execution Co', 'createdBy', 'pm-execution'
+  )),
+  ('pgtap-hod-execution', 'service_cycle', 'hod-output-cycle', jsonb_build_object(
+    'id', 'hod-output-cycle', 'clientId', 'execution-client', 'clientName', 'Execution Co',
+    'status', 'Published', 'serviceItems', '[]'::jsonb
+  )),
+  ('pgtap-hod-execution', 'deliverable', 'hod-output-deliverable', jsonb_build_object(
+    'id', 'hod-output-deliverable', 'clientId', 'execution-client', 'clientName', 'Execution Co',
+    'cycleId', 'hod-output-cycle', 'taskIds', jsonb_build_array('hod-output-task'),
+    'attachments', '[]'::jsonb, 'status', 'In Progress'
+  )),
+  ('pgtap-hod-execution', 'task', 'hod-output-task', jsonb_build_object(
+    'id', 'hod-output-task', 'title', 'HOD output work',
+    'projectId', 'hod-execution-project', 'projectName', 'Execution Project',
+    'clientId', 'execution-client', 'clientName', 'Execution Co',
+    'serviceCycleId', 'hod-output-cycle', 'deliverableId', 'hod-output-deliverable',
+    'serviceType', 'Video editing', 'department', 'Video Editor',
+    'assignedTo', 'hod-execution', 'responsibleHodId', 'hod-execution',
+    'assignmentState', 'pending_hod', 'assignedBy', 'pm-execution', 'createdBy', 'pm-execution',
+    'status', 'In Progress', 'priority', 'Medium', 'startDate', '2026-10-23',
+    'dueDate', '2026-10-30', 'description', 'HOD prepares and delegates output'
   ));
+
+insert into storage.objects(bucket_id, name, owner_id, metadata)
+values (
+  'client-service-files',
+  'pgtap-hod-execution/execution-client/hod-output-cycle/hod-output.pdf',
+  '00000000-0000-0000-0000-000000001301',
+  '{"mimetype":"application/pdf","size":128}'::jsonb
+);
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001301', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -164,6 +195,34 @@ select is((public.aitask_execute_command(
     'data', (select data || jsonb_build_object('description', 'Updated brief', 'startDate', '2026-10-24', 'dueDate', '2026-10-31', 'priority', 'High') from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-execution-task')
   ))
 )->>'ok')::boolean, true, 'HOD execution edit saves through the authenticated command RPC');
+
+select is((public.aitask_execute_command(
+  'pgtap-hod-execution', gen_random_uuid(), 'task.update',
+  jsonb_build_array(jsonb_build_object(
+    'kind', 'entity', 'action', 'update', 'entityType', 'task',
+    'entityId', 'hod-output-task',
+    'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-output-task'),
+    'data', (select data || jsonb_build_object('outputAttachments', jsonb_build_array(jsonb_build_object(
+      'id', 'hod-output-file', 'bucket', 'client-service-files',
+      'path', 'pgtap-hod-execution/execution-client/hod-output-cycle/hod-output.pdf',
+      'fileName', 'hod-output.pdf', 'mimeType', 'application/pdf', 'sizeBytes', 128,
+      'uploadedBy', 'hod-execution', 'uploadedAt', '2026-11-17T00:00:00.000Z'
+    ))) from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-output-task')
+  ))
+)->>'ok')::boolean, true, 'assigned HOD can persist validated output evidence');
+
+select is((public.aitask_execute_command(
+  'pgtap-hod-execution', gen_random_uuid(), 'task.update',
+  jsonb_build_array(jsonb_build_object(
+    'kind', 'entity', 'action', 'update', 'entityType', 'task',
+    'entityId', 'hod-output-task',
+    'expectedVersion', (select version from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-output-task'),
+    'data', (select data || jsonb_build_object(
+      'assignedTo', 'staff-execution-b', 'assignedBy', 'hod-execution',
+      'responsibleHodId', 'hod-execution', 'assignmentState', 'assigned_staff', 'status', 'Pending'
+    ) from public.aitask_entities where workspace_id = 'pgtap-hod-execution' and entity_type = 'task' and entity_id = 'hod-output-task')
+  ))
+)->>'ok')::boolean, true, 'HOD can delegate work after starting it');
 
 select is((public.aitask_execute_command(
   'pgtap-hod-execution', gen_random_uuid(), 'task.update',

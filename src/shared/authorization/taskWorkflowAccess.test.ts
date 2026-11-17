@@ -39,6 +39,9 @@ describe('department PM fallback reviewer', () => {
     const working = { ...task, status: 'In Progress', assignedTo: staff.id, approvalMode: 'none' as const, requiresInternalApproval: false };
     expect(taskTransitionError(otherStaff, working, { ...working, status: 'Completed', isCompleted: true }, [], { users: [staff, otherStaff] })).toBe('Only a project manager can confirm completion after internal approval.');
     expect(taskTransitionError(staff, working, { ...working, status: 'Completed', isCompleted: true }, [], { users: [staff] })).toBeUndefined();
+    const hodExecution = { ...working, assignedTo: hod.id };
+    expect(taskTransitionError(hod, hodExecution, { ...hodExecution, status: 'Completed', isCompleted: true }, [], { users: [hod] })).toBeUndefined();
+    expect(getStaffGuidedAction(hodExecution, ['In Progress', 'Completed'], hod, [], { users: [hod] })).toMatchObject({ targetStatus: 'Completed', disabled: false });
     const reviewTask = { ...working, approvalMode: 'hod' as const, requiresInternalApproval: true };
     expect(taskTransitionError(otherStaff, reviewTask, { ...reviewTask, status: 'Waiting Approval', isCompleted: false }, [], { users: [staff, otherStaff] })).toBe('Only the assigned executor can submit this task for review.');
   });

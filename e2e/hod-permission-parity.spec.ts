@@ -49,6 +49,14 @@ test('HOD delegates assigned work only to an eligible staff member and preserves
     return { assignedTo: task?.assignedTo, createdBy: task?.createdBy };
   })).toEqual({ assignedTo: 'audit-editor', createdBy: 'audit-pm' });
   await expect(dialog.getByRole('heading', { name: 'Task Delegation' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Edit', exact: true }).click();
+  await dialog.getByLabel('Priority').selectOption('High');
+  await dialog.getByRole('button', { name: 'Save Changes', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const task = useStore.getState().tasks.find(item => item.id === 'hod-assigned');
+    return { assignedTo: task?.assignedTo, priority: task?.priority };
+  })).toEqual({ assignedTo: 'audit-editor', priority: 'High' });
 });
 
 test('department oversight permits edits but does not grant reassignment or foreign task access', async ({ page }) => {
@@ -107,6 +115,14 @@ test('HOD can edit foreign-department assigned work without exposing delegation'
   const dialog = await openDetails(page, 'hod-foreign', 'Foreign department work');
   await expect(dialog.getByRole('button', { name: 'Edit', exact: true })).toBeVisible();
   await expect(dialog.getByRole('heading', { name: 'Task Delegation' })).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Edit', exact: true }).click();
+  await dialog.getByLabel('Priority').selectOption('High');
+  await dialog.getByRole('button', { name: 'Save Changes', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const task = useStore.getState().tasks.find(item => item.id === 'hod-foreign');
+    return { assignedTo: task?.assignedTo, priority: task?.priority };
+  })).toEqual({ assignedTo: 'audit-hod', priority: 'High' });
 });
 
 

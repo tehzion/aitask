@@ -143,7 +143,7 @@ export const getStaffGuidedAction = (task: Task, taskStatuses: TaskStatus[], act
       disabled: false,
     };
   }
-  if (task.status === 'In Progress' && approvalMode === 'none' && actor?.role === 'Staff' && task.assignedTo === actor.id && options.includes('Completed')) {
+  if (task.status === 'In Progress' && approvalMode === 'none' && actor && ['Staff', 'HOD'].includes(actor.role) && task.assignedTo === actor.id && options.includes('Completed')) {
     return {
       kind: 'advance',
       label: 'Complete task',

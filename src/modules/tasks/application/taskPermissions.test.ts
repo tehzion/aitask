@@ -220,6 +220,14 @@ describe('task store authorization', () => {
     expect(useStore.getState().notifications.some(notification => (
       notification.targetUserId === delegate.id && notification.title === 'Task Dates Updated'
     ))).toBe(true);
+    const assignedForeignTask = makeTask({
+      id: 'task-scope-assigned-foreign',
+      department: 'Video Editor',
+      assignedTo: hodUser.id,
+      createdBy: otherStaff.id,
+    });
+    useStore.setState({ tasks: [...useStore.getState().tasks, assignedForeignTask] });
+    expect(useStore.getState().updateTask(assignedForeignTask.id, { priority: 'High' })).toEqual({ ok: true });
     // ...but not work owned by another department.
     const otherDepartmentTask = makeTask({
       id: 'task-scope-other-dept',

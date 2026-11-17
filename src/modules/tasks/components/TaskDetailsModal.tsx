@@ -453,6 +453,11 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     }
     if (await confirmPendingMutation('task.update')) {
       setDelegationAssignee('');
+      const savedTask = useStore.getState().tasks.find(item => item.id === task.id);
+      if (savedTask) {
+        editBaseline.current = { ...editBaseline.current, assignedTo: savedTask.assignedTo || '' };
+        setEditForm(current => ({ ...current, assignedTo: savedTask.assignedTo || '' }));
+      }
     }
   };
 

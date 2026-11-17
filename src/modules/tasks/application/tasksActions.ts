@@ -593,7 +593,8 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
     if (!canAssignOthers && nextDepartment !== task.department) {
       return { ok: false, error: 'You do not have permission to change the task department.' };
     }
-    if (canAssignOthers && ['Staff', 'HOD'].includes(currentUser.role) && !isBossKoo(currentUser) && !isMemberInDepartment(currentUser, nextDepartment)) {
+    const assignmentRouteChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
+    if (assignmentRouteChanged && canAssignOthers && ['Staff', 'HOD'].includes(currentUser.role) && !isBossKoo(currentUser) && !isMemberInDepartment(currentUser, nextDepartment)) {
       return { ok: false, error: 'You can only manage tasks within your departments.' };
     }
     const requestedClientName = data.clientName !== undefined ? data.clientName.trim() : task.clientName;
@@ -607,7 +608,7 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
 
     const assignee = nextAssigneeId ? state.users.find(user => user.id === nextAssigneeId && user.role !== 'Client') : undefined;
     if (nextAssigneeId && !assignee) return { ok: false, error: 'Choose a valid internal assignee.' };
-    const assignmentChanged = nextAssigneeId !== task.assignedTo || nextDepartment !== task.department;
+    const assignmentChanged = assignmentRouteChanged;
     if (assignmentChanged && assignee?.hasLogin === false) return { ok: false, error: 'Choose an active internal assignee.' };
     if (assignmentChanged && assignee && !isEligibleTaskAssignee(assignee, nextDepartment)) {
       return { ok: false, error: `${assignee.name} is not assigned to ${nextDepartment}.` };
@@ -635,7 +636,7 @@ export const createTasksActions = (set: WorkspaceSet, get: WorkspaceGet): Pick<S
       ? assignee.id
       : currentResponsibleHodId;
     const shouldPersistAssignmentRouting = Boolean(task.assignmentState || task.responsibleHodId || nextResponsibleHodId);
-    if (nextResponsibleHodId && !nextEligibleHods.some(user => user.id === nextResponsibleHodId)) {
+    if (assignmentChanged && nextResponsibleHodId && !nextEligibleHods.some(user => user.id === nextResponsibleHodId)) {
       return { ok: false, error: 'Choose an HOD assigned to this project and department.' };
     }
     if (assignmentChanged && assignee && assignee.role === 'Staff' && !isHodUser(assignee, state.rolePermissions)
