@@ -8,15 +8,19 @@
   "validatedMigrationTail": [
     "20261116081813_service_command_reports_guard_message",
     "20261116081828_allow_reopening_completed_cycle",
-    "20261117110938_preserve_published_cycle_legacy_addons"
+    "20261117110938_preserve_published_cycle_legacy_addons",
+    "20261117113041_align_delivery_link_and_cycle_guards"
   ],
   "pendingProductionMigrations": [
-    "20261117110938_preserve_published_cycle_legacy_addons"
+    "20261117110938_preserve_published_cycle_legacy_addons",
+    "20261117113041_align_delivery_link_and_cycle_guards"
   ],
   "changeSummary": {
-    "20261117110938_preserve_published_cycle_legacy_addons": "Keep the stored legacy add-on snapshot when a client omits it from a published cycle update. Reject explicit changes to frozen price terms."
+    "20261117110938_preserve_published_cycle_legacy_addons": "Keep the stored legacy add-on snapshot when a client omits it from a published cycle update. Reject explicit changes to frozen price terms.",
+    "20261117113041_align_delivery_link_and_cycle_guards": "Apply the same omission rule to Staff and HOD authorization. Enforce the reopen requirement for new task links to delivered work."
   },
   "rollback": {
-    "20261117110938_preserve_published_cycle_legacy_addons": "Restore private.aitask_guard_published_cycle_pricing from 20261114100421_freeze_published_cycle_pricing.sql. The migration itself rewrites no workspace rows."
+    "20261117110938_preserve_published_cycle_legacy_addons": "Restore private.aitask_guard_published_cycle_pricing from 20261114100421_freeze_published_cycle_pricing.sql. The migration itself rewrites no workspace rows.",
+    "20261117113041_align_delivery_link_and_cycle_guards": "Restore both service command overloads to their preceding definitions. Drop aitask_01_guard_delivered_task_links and private.aitask_guard_delivered_task_links()."
   }
 }
