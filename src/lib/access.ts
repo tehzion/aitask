@@ -982,8 +982,9 @@ export const getAssignableProjects = (
   scope: VisibilityScope = {},
 ) => {
   if (!user) return [];
-  if (!['Staff', 'HOD'].includes(user.role)) return getVisibleProjects(user, projects, tasks, customRoles, scope);
-  return projects.filter(project => canLinkTaskToProject(user, project, tasks, customRoles, users));
+  const activeProjects = projects.filter(project => !isClosedProject(project));
+  if (!['Staff', 'HOD'].includes(user.role)) return getVisibleProjects(user, activeProjects, tasks, customRoles, scope);
+  return activeProjects.filter(project => canLinkTaskToProject(user, project, tasks, customRoles, users));
 };
 
 /**

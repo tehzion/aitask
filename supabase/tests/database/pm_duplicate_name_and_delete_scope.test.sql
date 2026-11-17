@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(9);
+select plan(10);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
   ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000009501','authenticated','authenticated','pm-dup-one@aitask.local','',now(),'{}','{}',now(),now()),
@@ -21,6 +21,11 @@ insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) valu
 
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000009501',true);
 select set_config('request.jwt.claim.role','authenticated',true);
+set local role authenticated;
+
+select is((select count(*)::int from public.aitask_entities where workspace_id='pgtap-pm-dup' and entity_type='client'), 1, 'PM receives only the canonical company row in a duplicate-name set');
+
+reset role;
 
 select ok(private.aitask_can_view_task('pgtap-pm-dup','task-own'), 'PM sees work on its own duplicate-named company');
 select ok(not private.aitask_can_view_task('pgtap-pm-dup','task-foreign-name'), 'PM cannot view another owner task because the company name is identical');
