@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(17);
+select plan(19);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
 ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000008201','authenticated','authenticated','pm-task-one@aitask.local','',now(),'{}','{}',now(),now()),
@@ -14,7 +14,8 @@ insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,d
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
 ('pgtap-pm-task-company','client','own','{"id":"own","clientName":"Own","createdBy":"pm-one"}'),
 ('pgtap-pm-task-company','client','second','{"id":"second","clientName":"Second","createdBy":"pm-one"}'),
-('pgtap-pm-task-company','client','foreign','{"id":"foreign","clientName":"Foreign","createdBy":"pm-two"}');
+('pgtap-pm-task-company','client','foreign','{"id":"foreign","clientName":"Foreign","createdBy":"pm-two"}'),
+('pgtap-pm-task-company','client','foreign-duplicate','{"id":"foreign-duplicate","clientName":"Own","createdBy":"pm-two"}');
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data)
 select 'pgtap-pm-task-company','task',id,jsonb_build_object('id',id,'title','Task','clientId','own','clientName','Own','createdBy','pm-one','department','Designer','assignedTo','','status','Pending','isCompleted',false)
 from unnest(array['rpc-attack','direct-attack','mismatch','move','revoked-create']) id;
@@ -40,6 +41,8 @@ select is(private.aitask_can_access_service_client('pgtap-pm-task-company','fore
 select is(pg_temp.pm_task('insert','foreign-insert','{"clientId":"foreign","clientName":"Foreign"}')->>'ok','false','cannot create standalone work for a foreign company');
 select is(pg_temp.pm_task('insert','forged-id','{"clientId":"foreign","clientName":"Own"}')->>'ok','false','owned name cannot conceal a foreign company ID');
 select is(pg_temp.pm_task('update','mismatch','{"clientId":"foreign"}')->>'ok','false','cannot substitute a foreign ID on existing work');
+select is(pg_temp.pm_task('update','rpc-attack','{"clientId":"foreign-duplicate","clientName":"Own"}')->>'ok','false','owned company name cannot authorize another PM company ID');
+select is(private.aitask_can_access_service_client('pgtap-pm-task-company','foreign-duplicate'),false,'rejected duplicate-name move does not create exact-ID access');
 select is(pg_temp.pm_task('update','move','{"clientId":"second","clientName":"Second"}')->>'ok','true','moving ordinary work between accessible companies remains available');
 select is(pg_temp.pm_task('update','legacy','{"priority":"High"}')->>'ok','true','routine edits preserve existing legacy links');
 select is(pg_temp.pm_task('insert','own-insert','{}')->>'ok','true','owned standalone task creation remains available');

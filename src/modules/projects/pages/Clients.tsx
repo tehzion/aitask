@@ -186,7 +186,7 @@ const Clients: React.FC = () => {
   const [profileBaseline, setProfileBaseline] = React.useState<ClientProfileForm>(emptyProfileForm);
   const [renameBaseline, setRenameBaseline] = React.useState('');
   const [pendingClientChange, setPendingClientChange] = React.useState<
-    { kind: 'profile'; form: ClientProfileForm; name: string } | { kind: 'rename'; name: string } | { kind: 'delete'; name: string }
+    { kind: 'profile'; form: ClientProfileForm; name: string } | { kind: 'rename'; name: string; clientId?: string } | { kind: 'delete'; name: string }
     | { kind: 'owner'; clientId: string; ownerId?: string; name: string } | null
   >(null);
   const [discardAction, setDiscardAction] = React.useState<(() => void) | null>(null);
@@ -328,8 +328,7 @@ const Clients: React.FC = () => {
     const canSeeProfile = (profile: ClientProfile) => {
       if (!currentUser) return false;
       if (canSeeAllClients) return true;
-      if (profile.createdBy && profile.createdBy === currentUser.id) return true;
-      return visibleClientKeys.has(getClientKey(profile.clientName));
+      return canOpenServiceClient(currentUser, profile.clientName, allTasks, rolePermissions, clientProfiles, allProjects, profile.id);
     };
 
     const ensureClient = (name: string) => {
@@ -453,7 +452,7 @@ const Clients: React.FC = () => {
       });
 
     return Array.from(summaries.values()).sort((a, b) => a.name.localeCompare(b.name));
-  }, [canSeeAllClients, clientProfiles, currentUser, projects, tasks, users, visibleClientKeys]);
+  }, [allProjects, allTasks, canSeeAllClients, clientProfiles, currentUser, projects, rolePermissions, tasks, users, visibleClientKeys]);
 
   const filteredClients = React.useMemo(() => {
     const query = searchTerm.trim().toLowerCase();
@@ -702,9 +701,9 @@ const Clients: React.FC = () => {
     if (!selectedClient || isSavingClient || (pendingClientChange && pendingClientChange.kind !== 'rename')) return;
     const submitted = pendingClientChange?.kind === 'rename'
       ? pendingClientChange
-      : { kind: 'rename' as const, name: renameValue.trim() };
+      : { kind: 'rename' as const, name: renameValue.trim(), clientId: selectedClient.profile?.id };
     if (!pendingClientChange) {
-      const result = renameClient(selectedClient.name, submitted.name);
+      const result = renameClient(selectedClient.name, submitted.name, submitted.clientId);
       if (!result.ok) { setRenameError(result.error || 'Unable to rename this client.'); return; }
     }
     setPendingClientChange(submitted);

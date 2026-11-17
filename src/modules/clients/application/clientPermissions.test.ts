@@ -143,6 +143,34 @@ describe('client profile store authorization', () => {
     expect(useStore.getState().tasks[0]?.clientName).toBe('Acme');
   });
 
+  it('renames only the exact owned company when legacy names collide', () => {
+    const pm: User = { id: 'pm-rename-exact', name: 'PM Exact', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    const foreignPm: User = { ...pm, id: 'pm-rename-foreign', name: 'PM Foreign' };
+    const own = { id: 'client-own', clientName: 'Acme', createdBy: pm.id, createdAt: '', updatedAt: '' };
+    const foreign = { id: 'client-foreign', clientName: 'Acme', createdBy: foreignPm.id, createdAt: '', updatedAt: '' };
+    const ownTask = { ...assignedTask, id: 'task-own-company', clientId: own.id, assignedTo: pm.id, createdBy: pm.id };
+    const foreignTask = { ...assignedTask, id: 'task-foreign-company', clientId: foreign.id, assignedTo: foreignPm.id, createdBy: foreignPm.id };
+    useStore.setState({
+      ...initialState,
+      currentUser: pm,
+      users: [pm, foreignPm],
+      clients: [own, foreign],
+      tasks: [ownTask, foreignTask],
+      projects: [],
+      rolePermissions: [],
+    }, true);
+
+    expect(useStore.getState().renameClient('Acme', 'Acme One', own.id)).toEqual({ ok: true });
+    expect(useStore.getState().clients.map(client => [client.id, client.clientName])).toEqual([
+      ['client-own', 'Acme One'],
+      ['client-foreign', 'Acme'],
+    ]);
+    expect(useStore.getState().tasks.map(task => [task.id, task.clientName])).toEqual([
+      ['task-own-company', 'Acme One'],
+      ['task-foreign-company', 'Acme'],
+    ]);
+  });
+
   it('lets a Project Manager create a profile without a service plan and rejects duplicate names', () => {
     const admin: User = { id: 'admin-client-profile', name: 'Project Manager', role: 'Project Manager', departments: ['Management'], department: 'Management' };
     useStore.setState({ ...initialState, currentUser: admin, users: [admin], clients: [], tasks: [], projects: [], rolePermissions: [] }, true);

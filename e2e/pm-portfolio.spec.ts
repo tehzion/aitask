@@ -165,6 +165,43 @@ test('PM delegates assigned work to the department HOD through the full editor',
   await expect(page.getByText('Directly assigned PM work', { exact: true })).toHaveCount(0);
 });
 
+test('PM assignment override survives a later routine edit', async ({ page }) => {
+  await seedPM(page);
+  const staffId = await page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const { defaultRolePermissions } = await import('/src/shared/authorization/access.ts');
+    const state = useStore.getState();
+    const staff = state.users.find(user => user.role === 'Staff')!;
+    const hod = { id: 'pm-override-hod', name: 'Override HOD', role: 'HOD', department: 'Designer', departments: ['Designer'], permissions: defaultRolePermissions.HOD, hasLogin: true };
+    const source = state.tasks.find(task => task.id === 'pm-edit')!;
+    useStore.setState({
+      users: [...state.users.filter(user => user.id !== hod.id), hod],
+      projects: state.projects.map(project => project.id === 'pm-project' ? { ...project, hodMemberIds: [hod.id], staffMemberIds: [staff.id] } : project),
+      tasks: [...state.tasks, { ...source, id: 'pm-override', title: 'PM override work', assignedTo: hod.id, responsibleHodId: hod.id, assignmentState: 'pending_hod', status: 'In Progress' }],
+    });
+    return staff.id;
+  });
+  await page.goto('/tasks?taskId=pm-override');
+  let editor = page.getByRole('dialog', { name: 'PM override work' });
+  await editor.getByRole('button', { name: 'Full edit', exact: true }).click();
+  editor = page.getByRole('dialog', { name: 'PM override work' });
+  await editor.getByRole('combobox', { name: 'Staff member' }).selectOption(staffId);
+  await editor.getByRole('textbox', { name: 'Override reason' }).fill('Urgent client escalation');
+  await editor.getByRole('button', { name: 'Override assignment' }).click();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    return useStore.getState().tasks.find(task => task.id === 'pm-override')?.assignedTo;
+  })).toBe(staffId);
+  await editor.getByRole('button', { name: 'Edit', exact: true }).click();
+  await editor.getByRole('combobox', { name: 'Priority', exact: true }).selectOption('High');
+  await editor.getByRole('button', { name: 'Save Changes', exact: true }).click();
+  await expect.poll(() => page.evaluate(async () => {
+    const { useStore } = await import('/src/app/store/workspaceStore.ts');
+    const task = useStore.getState().tasks.find(item => item.id === 'pm-override');
+    return { assignedTo: task?.assignedTo, priority: task?.priority };
+  })).toEqual({ assignedTo: staffId, priority: 'High' });
+});
+
 test('PM company edits reject foreign scope and save the accessible company ID', async ({ page }) => {
   await seedPM(page);
   await page.evaluate(async () => {

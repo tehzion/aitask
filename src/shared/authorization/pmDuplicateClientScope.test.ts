@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { ClientProfile, User } from '../types/index';
+import type { StoreState } from '../types/workspaceStore';
+import { taskCompanyScopeError } from '../../modules/clients/application/clientScope';
 import { canDeleteClientProfile, canEditClientProfile, canOpenServiceClient } from './access';
 
 const pmA: User = { id: 'pm-a', name: 'PM A', role: 'Project Manager', departments: [] };
@@ -23,12 +25,20 @@ describe('duplicate company names resolve by client id', () => {
   it('lets a PM edit only the record they own when names collide', () => {
     expect(canEditClientProfile(pmA, 'Acme', [], [], profiles, 'a1')).toBe(true);
     expect(canEditClientProfile(pmA, 'Acme', [], [], profiles, 'a2')).toBe(false);
+    const ownTask = { id: 'task-a', clientId: 'a1', clientName: 'Acme', createdBy: pmA.id } as never;
+    expect(canEditClientProfile(pmA, 'Acme', [ownTask], [], profiles, 'a2')).toBe(false);
   });
 
   it('uses the client id for the service workspace when names collide', () => {
     expect(canOpenServiceClient(pmA, 'Acme', [], [], profiles, [], 'a1')).toBe(true);
     expect(canOpenServiceClient(pmA, 'Acme', [], [], profiles, [], 'a2')).toBe(false);
     expect(canOpenServiceClient(pmB, 'Acme', [], [], profiles, [], 'a2')).toBe(true);
+  });
+
+  it('does not let an owned same-name relationship authorize a foreign company id', () => {
+    const task = { id: 'task-a', clientId: 'a1', clientName: 'Acme', createdBy: pmA.id, assignedTo: pmA.id };
+    const state = { currentUser: pmA, clients: profiles, tasks: [task], projects: [], rolePermissions: [] } as unknown as StoreState;
+    expect(taskCompanyScopeError(state, 'Acme', 'a2')).toBe('This company is outside your portfolio.');
   });
 
   it('keeps the legacy name-based fallback when no id is supplied', () => {

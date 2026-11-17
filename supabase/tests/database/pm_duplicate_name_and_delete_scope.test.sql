@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(9);
+select plan(10);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at) values
   ('00000000-0000-0000-0000-000000000000','00000000-0000-0000-0000-000000009501','authenticated','authenticated','pm-dup-one@aitask.local','',now(),'{}','{}',now(),now()),
@@ -16,6 +16,7 @@ insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) valu
   ('pgtap-pm-dup','client','client-b','{"id":"client-b","clientName":"Acme","createdBy":"pm-dup-two"}'),
   ('pgtap-pm-dup','client','client-c','{"id":"client-c","clientName":"Acme","createdBy":"pm-dup-two"}'),
   ('pgtap-pm-dup','task','task-own','{"id":"task-own","title":"Own","clientId":"client-a","clientName":"Acme","createdBy":"pm-dup-one","department":"Designer","assignedTo":"pm-dup-staff","status":"Pending"}'),
+  ('pgtap-pm-dup','task','task-legacy-own','{"id":"task-legacy-own","title":"Legacy own name","clientName":"Acme","createdBy":"pm-dup-one","department":"Designer","assignedTo":"pm-dup-staff","status":"Pending"}'),
   ('pgtap-pm-dup','task','task-foreign-name','{"id":"task-foreign-name","title":"Foreign duplicate name","clientId":"client-b","clientName":"Acme","createdBy":"pm-dup-two","department":"Designer","assignedTo":"pm-dup-staff","status":"Pending"}'),
   ('pgtap-pm-dup','task','task-assigned-foreign','{"id":"task-assigned-foreign","title":"Transient assignment","clientId":"client-b","clientName":"Acme","createdBy":"pm-dup-two","department":"Designer","assignedTo":"pm-dup-one","status":"Pending"}');
 
@@ -29,7 +30,14 @@ select ok(private.aitask_can_view_task('pgtap-pm-dup','task-assigned-foreign'), 
 select ok(not private.aitask_can_delete_task('pgtap-pm-dup','task-assigned-foreign'), 'a transient assignment does not permit deletion');
 select ok(private.aitask_can_delete_task('pgtap-pm-dup','task-own'), 'creator/portfolio authority still permits deletion');
 select ok(private.aitask_can_edit_client_id('pgtap-pm-dup','client-a'), 'id-first company edit allows the owned duplicate-named record');
-select ok(not private.aitask_can_edit_client_id('pgtap-pm-dup','client-c'), 'id-first company edit denies the other duplicate-named record');
+select ok(not private.aitask_can_edit_client_id('pgtap-pm-dup','client-c'), 'id-first company edit denies the other duplicate-named record despite a same-name legacy task');
+set local role authenticated;
+select results_eq(
+  $$select entity_id from public.aitask_entities where workspace_id='pgtap-pm-dup' and entity_type='client' order by entity_id$$,
+  array['client-a','client-b'],
+  'PM reads only exact related company records when display names collide'
+);
+reset role;
 select ok(private.aitask_task_assignment_is_valid(
   'pgtap-pm-dup', 'update',
   jsonb_build_object('assignedTo','','assignedBy','pm-dup-one','createdBy','pm-dup-two','clientId','client-b','clientName','Acme','department','Designer'),

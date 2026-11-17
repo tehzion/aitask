@@ -28,7 +28,7 @@ export const serviceClientScopeError = 'This company is outside your portfolio.'
 export const taskCompanyScopeError = (state: StoreState, clientName: string, clientId?: string) => {
   const actor = state.currentUser;
   if (!actor || isBossKoo(actor) || actor.role !== 'Project Manager') return undefined;
-  if (!canOpenServiceClient(actor, clientName, state.tasks, state.rolePermissions, state.clients, state.projects)) return serviceClientScopeError;
+  if (!canOpenServiceClient(actor, clientName, state.tasks, state.rolePermissions, state.clients, state.projects, clientId)) return serviceClientScopeError;
   if (clientId && !state.clients.some(client => client.id === clientId && normalizeClientKey(client.clientName) === normalizeClientKey(clientName))) {
     return 'Choose a company from the Companies database.';
   }

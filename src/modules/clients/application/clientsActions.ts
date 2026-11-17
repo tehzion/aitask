@@ -109,7 +109,7 @@ export const createClientsActions = (set: WorkspaceSet, get: WorkspaceGet): Pick
 
     return { ok: true, id: profile.id };
   },
-  renameClient: (oldClientName, newClientName) => {
+  renameClient: (oldClientName, newClientName, clientId) => {
     const state = get();
     if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
     const currentUser = state.currentUser;
@@ -122,7 +122,7 @@ export const createClientsActions = (set: WorkspaceSet, get: WorkspaceGet): Pick
     if (!nextName) return { ok: false, error: 'New client name is required.' };
     if (nextName.length > 240) return { ok: false, error: 'Client name must be 240 characters or less.' };
     if (oldKey === nextKey) return { ok: false, error: 'New client name must be different.' };
-    if (!canRenameClient(currentUser, oldName, state.clients)) {
+    if (!canRenameClient(currentUser, oldName, state.clients, clientId)) {
       return { ok: false, error: 'Only Project Managers can rename their own companies.' };
     }
 
@@ -136,29 +136,33 @@ export const createClientsActions = (set: WorkspaceSet, get: WorkspaceGet): Pick
       return { ok: false, error: 'Another client already uses that name.' };
     }
 
-    const hasOldClient = [
-      ...state.clients.map(client => client.clientName),
-      ...state.tasks.map(task => task.clientName),
-      ...state.projects.map(project => project.clientName),
-      ...state.users.filter(user => user.role === 'Client').map(user => user.companyName || ''),
-    ].some(name => normalizeClientKey(name) === oldKey);
+    const hasOldClient = clientId
+      ? state.clients.some(client => client.id === clientId)
+      : [
+          ...state.clients.map(client => client.clientName),
+          ...state.tasks.map(task => task.clientName),
+          ...state.projects.map(project => project.clientName),
+          ...state.users.filter(user => user.role === 'Client').map(user => user.companyName || ''),
+        ].some(name => normalizeClientKey(name) === oldKey);
     if (!hasOldClient) return { ok: false, error: 'Client was not found.' };
 
     const now = new Date().toISOString();
+    const sameNameProfileCount = state.clients.filter(client => normalizeClientKey(client.clientName) === oldKey).length;
+    const canRenameNameOnlyReferences = !clientId || sameNameProfileCount <= 1;
     const renamedProjectIds = new Set(
       state.projects
-        .filter(project => normalizeClientKey(project.clientName) === oldKey)
+        .filter(project => clientId ? project.clientId === clientId : normalizeClientKey(project.clientName) === oldKey)
         .map(project => project.id)
     );
 
     set((current) => ({
       clients: current.clients.map(client => (
-        normalizeClientKey(client.clientName) === oldKey
+        (clientId ? client.id === clientId : normalizeClientKey(client.clientName) === oldKey)
           ? { ...client, clientName: nextName, updatedAt: now }
           : client
       )),
       tasks: current.tasks.map(task => {
-        const matchesClient = normalizeClientKey(task.clientName) === oldKey;
+        const matchesClient = clientId ? task.clientId === clientId : normalizeClientKey(task.clientName) === oldKey;
         const matchesRenamedProject = Boolean(task.projectId && renamedProjectIds.has(task.projectId));
         if (!matchesClient && !matchesRenamedProject) return task;
         const legacyProjectName = normalizeClientKey(task.projectName) === oldKey;
@@ -173,28 +177,28 @@ export const createClientsActions = (set: WorkspaceSet, get: WorkspaceGet): Pick
         };
       }),
       projects: current.projects.map(project => (
-        normalizeClientKey(project.clientName) === oldKey
+        (clientId ? project.clientId === clientId : normalizeClientKey(project.clientName) === oldKey)
           ? { ...project, clientName: nextName, projectName: normalizeClientKey(project.projectName) === oldKey ? nextName : project.projectName, updatedAt: now }
           : project
       )),
       users: current.users.map(user => (
-        user.role === 'Client' && normalizeClientKey(user.companyName) === oldKey
+        canRenameNameOnlyReferences && user.role === 'Client' && normalizeClientKey(user.companyName) === oldKey
           ? { ...user, companyName: nextName, updatedAt: now }
           : user
       )),
-      currentUser: current.currentUser?.role === 'Client' && normalizeClientKey(current.currentUser.companyName) === oldKey
+      currentUser: canRenameNameOnlyReferences && current.currentUser?.role === 'Client' && normalizeClientKey(current.currentUser.companyName) === oldKey
         ? { ...current.currentUser, companyName: nextName, updatedAt: now }
         : current.currentUser,
       notifications: current.notifications.map(notification => (
-        normalizeClientKey(notification.targetClient) === oldKey
+        canRenameNameOnlyReferences && normalizeClientKey(notification.targetClient) === oldKey
           ? { ...notification, targetClient: nextName }
           : notification
       )),
-      clientPlans: current.clientPlans.map(item => item.clientId && normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
-      serviceCycles: current.serviceCycles.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
-      deliverables: current.deliverables.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
-      cycleComments: current.cycleComments.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
-      addons: current.addons.map(item => normalizeClientKey(item.clientName) === oldKey ? { ...item, clientName: nextName, updatedAt: now } : item),
+      clientPlans: current.clientPlans.map(item => (clientId ? item.clientId === clientId : normalizeClientKey(item.clientName) === oldKey) ? { ...item, clientName: nextName, updatedAt: now } : item),
+      serviceCycles: current.serviceCycles.map(item => (clientId ? item.clientId === clientId : normalizeClientKey(item.clientName) === oldKey) ? { ...item, clientName: nextName, updatedAt: now } : item),
+      deliverables: current.deliverables.map(item => (clientId ? item.clientId === clientId : normalizeClientKey(item.clientName) === oldKey) ? { ...item, clientName: nextName, updatedAt: now } : item),
+      cycleComments: current.cycleComments.map(item => (clientId ? item.clientId === clientId : normalizeClientKey(item.clientName) === oldKey) ? { ...item, clientName: nextName, updatedAt: now } : item),
+      addons: current.addons.map(item => (clientId ? item.clientId === clientId : normalizeClientKey(item.clientName) === oldKey) ? { ...item, clientName: nextName, updatedAt: now } : item),
     }));
 
     return { ok: true };

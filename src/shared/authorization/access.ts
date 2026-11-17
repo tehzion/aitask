@@ -473,6 +473,14 @@ export const canOpenServiceClient = (
   if (isBossKoo(user)) return true;
   if (user.role === 'Project Manager') {
     if (!clientKey && !exactClientId) return false;
+    if (exactClientId) {
+      const exactProfile = profiles.find(profile => profile.id === exactClientId);
+      if (exactProfile?.createdBy === user.id) return true;
+      if (getVisibleProjects(user, projects.filter(project => project.clientId === exactClientId), tasks, customRoles, { clients: profiles, projects })
+        .some(project => project.clientId === exactClientId)) return true;
+      return getVisibleTasks(user, tasks, customRoles, { clients: profiles, projects })
+        .some(task => task.clientId === exactClientId);
+    }
     const clientProjects = projects.filter(matchesClient);
     if (clientProjects.length > 0) {
       return getVisibleProjects(user, clientProjects, tasks, customRoles, { clients: profiles, projects })
@@ -550,7 +558,8 @@ export const canEditClientProfile = (
     // Match the backend edit policy: a Project Manager may edit an existing
     // company when they created or are assigned to one of its tasks.
     return Boolean(clientKey) && tasks.some(task => (
-      getClientKey(task.clientName) === clientKey && (task.createdBy === user.id || task.assignedTo === user.id)
+      (clientId ? task.clientId === clientId : getClientKey(task.clientName) === clientKey)
+      && (task.createdBy === user.id || task.assignedTo === user.id)
     ));
   }
   if (!['Staff', 'HOD'].includes(user?.role || '')) return false;
@@ -612,8 +621,11 @@ export const getVisibleClientNames = (
 export const canRenameClient = (
   user: User | null | undefined,
   clientName?: string,
-  profiles: ClientProfile[] = []
-) => canManageClientProfiles(user, clientName, profiles);
+  profiles: ClientProfile[] = [],
+  clientId?: string,
+) => clientId
+  ? Boolean(isBossKoo(user) || user?.role === 'Project Manager' && profiles.some(profile => profile.id === clientId && profile.createdBy === user.id))
+  : canManageClientProfiles(user, clientName, profiles);
 export const canAssignTasksToOthers = (
   user: User | null | undefined,
   customRoles: CustomRole[] = [],

@@ -206,7 +206,7 @@ export interface StoreState {
   deleteProject: (projectId: string) => { ok: boolean; error?: string };
   createClientProfile: (data: { clientName: string } & ClientProfileInput) => { ok: boolean; id?: string; error?: string };
   upsertClientProfile: (clientName: string, data: ClientProfileInput) => { ok: boolean; id?: string; error?: string };
-  renameClient: (oldClientName: string, newClientName: string) => { ok: boolean; error?: string };
+  renameClient: (oldClientName: string, newClientName: string, clientId?: string) => { ok: boolean; error?: string };
   assignClientOwner: (clientId: string, ownerId?: string) => { ok: boolean; error?: string };
   deleteClientProfile: (clientId: string) => { ok: boolean; error?: string };
   saveServicePackage: (data: Omit<ServicePackage, 'id' | 'revision' | 'createdAt' | 'updatedAt' | 'currency'> & { id?: string }) => { ok: boolean; id?: string; error?: string };
