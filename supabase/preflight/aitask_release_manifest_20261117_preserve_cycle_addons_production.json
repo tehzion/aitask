@@ -9,11 +9,13 @@
     "20261116081813_service_command_reports_guard_message",
     "20261116081828_allow_reopening_completed_cycle",
     "20261117110938_preserve_published_cycle_legacy_addons",
-    "20261117113041_align_delivery_link_and_cycle_guards"
+    "20261117113041_align_delivery_link_and_cycle_guards",
+    "20261117115125_hod_company_visibility_by_id"
   ],
   "pendingProductionMigrations": [
     "20261117110938_preserve_published_cycle_legacy_addons",
-    "20261117113041_align_delivery_link_and_cycle_guards"
+    "20261117113041_align_delivery_link_and_cycle_guards",
+    "20261117115125_hod_company_visibility_by_id"
   ],
   "changeSummary": {
     "20261117110938_preserve_published_cycle_legacy_addons": "Keep the stored legacy add-on snapshot when a client omits it from a published cycle update. Reject explicit changes to frozen price terms.",
