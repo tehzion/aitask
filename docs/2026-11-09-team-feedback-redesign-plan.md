@@ -159,7 +159,7 @@ Tabs: **Plan & delivery** · **Activity / Files**.
 
 ---
 
-## D. Approval: PM only (D1)
+## D. Approval: PM only (D1) — superseded 19 Nov 2026: new tasks default to HOD review then PM final approval (a project default still wins)
 
 ### Target flow (all roles)
 **PM creates** → **HOD assigns** to Staff → **Staff does** → **Send for review** → **PM approves = Completed** → optional client review (unchanged).
