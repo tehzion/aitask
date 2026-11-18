@@ -97,9 +97,10 @@ describe('one home per role (team feedback, 9 Nov 2026)', () => {
     expect(getDefaultAccessiblePath(boss)).not.toBe('/tasks');
   });
 
-  it('limits global New task entry points to Boss Koo', () => {
+  it('limits global New task entry points to Boss Koo and Project Managers', () => {
     expect(canCreateTasksFromAnywhere(boss)).toBe(true);
-    [pm, hod, staff].forEach(user => expect(canCreateTasksFromAnywhere(user), user.role).toBe(false));
+    expect(canCreateTasksFromAnywhere(pm)).toBe(true);
+    [hod, staff].forEach(user => expect(canCreateTasksFromAnywhere(user), user.role).toBe(false));
   });
 
   it('never lets Staff write tasks by hand, even with the createTasks permission', () => {

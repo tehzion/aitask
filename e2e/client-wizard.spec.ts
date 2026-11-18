@@ -118,8 +118,7 @@ test('creates a client profile first, then a named project', async ({ page }) =>
   });
   expect(project).toMatchObject({ clientName: 'Flow Test Company', projectName: 'Q4 Launch' });
 
-  // Tasks are opened from inside the project; company and project are fixed.
-  await expect(page.getByRole('button', { name: 'New task', exact: true })).toHaveCount(0);
+  // Tasks are also opened from inside the project; company and project are fixed.
   await page.getByRole('heading', { name: 'Flow Test Company', level: 2 })
     .locator('xpath=ancestor::*[.//button[normalize-space()="Details"]][1]')
     .getByRole('button', { name: 'Details' }).click();

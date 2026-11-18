@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Task, User } from '../types';
 import { useToastStore } from '../store/useToastStore';
-import { acknowledgeActionFeedback, clearActionFeedback, dismissActionFeedback, queueActionFeedback } from './actionFeedback';
+import { acknowledgeActionFeedback, clearActionFeedback, dismissActionFeedback, isRefusedSave, queueActionFeedback } from './actionFeedback';
 import { msg } from './messages';
 import { invalidateWorkspaceSession } from './workspaceSession';
 
@@ -45,5 +45,22 @@ describe('acknowledged action feedback', () => {
     queueActionFeedback(actor.id, 'dates', msg('feedback.datesSaved'), () => true, false);
     acknowledgeActionFeedback({ currentUser: actor, tasks: [], clients: [] });
     expect(useToastStore.getState().toasts).toEqual([]);
+  });
+});
+
+describe('isRefusedSave', () => {
+  const refused = { mode: 'supabase', status: 'refresh_required', errorCode: 'FORBIDDEN', error: 'You do not have permission to make this change.', hasLocalChanges: true, pendingMutations: 1 };
+  it('restores a permanently refused save', () => {
+    expect(isRefusedSave(refused)).toBe(true);
+  });
+  it('leaves a lost session for the user to sign in again', () => {
+    expect(isRefusedSave({ ...refused, error: 'Your session changed. Sign in again.' })).toBe(false);
+  });
+  it('ignores retryable and conflict failures, local mode, and a restore already running', () => {
+    expect(isRefusedSave({ ...refused, errorCode: 'RETRY_REQUIRED', status: 'retry_required' })).toBe(false);
+    expect(isRefusedSave({ ...refused, errorCode: 'CONFLICT', status: 'conflict' })).toBe(false);
+    expect(isRefusedSave({ ...refused, mode: 'local' })).toBe(false);
+    expect(isRefusedSave({ ...refused, isRestoring: true })).toBe(false);
+    expect(isRefusedSave({ ...refused, hasLocalChanges: false, pendingMutations: 0 })).toBe(false);
   });
 });
