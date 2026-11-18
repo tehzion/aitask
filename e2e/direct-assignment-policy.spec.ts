@@ -57,9 +57,9 @@ test('new-task assignee options follow department and changing it clears the pre
     useStore.setState({ currentUser: pm, users: [pm, hod, staff], rolePermissions: [], tasks: [], projects: [], notifications: [], backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
   });
   await page.goto('/tasks');
-  // PMs open tasks from inside a project; this test covers the form's assignee rules.
-  await expect(page.getByRole('button', { name: 'New task', exact: true })).toHaveCount(0);
-  await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.getState().setCreateTaskModalOpen(true); });
+  // PMs have a global New task button; this test covers the form's assignee rules.
+  await expect(page.getByRole('button', { name: 'New task', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'New task', exact: true }).click();
   const department = page.getByRole('combobox', { name: 'Assign to Position/Department *', exact: true });
   const assignee = page.getByRole('combobox', { name: 'Assignee', exact: true });
   await department.selectOption({ label: 'Video Shooting' });

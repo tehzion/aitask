@@ -231,7 +231,7 @@ const OperationsClientWorkspace = () => {
     store.deliverables,
     client.id,
   ).filter(task => canLinkTaskDelivery(store.currentUser, task, store.rolePermissions, { users: store.users, clients: store.clients, projects: store.projects }));
-  if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients, store.projects)) {
+  if (!canOpenServiceClient(store.currentUser, client.clientName, store.tasks, store.rolePermissions, store.clients, store.projects, client.id)) {
     if (store.currentUser?.role === "Client") return <Navigate to="/projects" replace />;
     const departmentLead = isDepartmentScopedUser(store.currentUser, store.rolePermissions);
     return <UnavailableWork hint={departmentLead ? t('You can see this company through your department work, but no service workspace is assigned to you.') : undefined} />;
@@ -275,7 +275,7 @@ const OperationsClientWorkspace = () => {
   const activityCycle = cycles.find(item => item.id === activityCycleId) || selectedCycle;
   const canAddActivityForCycle = Boolean(canManageCycles
     || (activityCycle && store.currentUser
-      && canOpenServiceClient(store.currentUser, activityCycle.clientName, store.tasks, store.rolePermissions, store.clients, store.projects)
+      && canOpenServiceClient(store.currentUser, activityCycle.clientName, store.tasks, store.rolePermissions, store.clients, store.projects, activityCycle.clientId)
       && store.tasks.some(task => task.serviceCycleId === activityCycle.id && task.assignedTo === store.currentUser!.id)));
   const capturedPlan = selectedCycle ? plans.find(plan => plan.id === selectedCycle.planId) : undefined;
   const displayPlan = selectedCycle ? {
