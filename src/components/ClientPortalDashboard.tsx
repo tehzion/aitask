@@ -159,7 +159,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
       <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80" aria-labelledby="needs-review-title">
         <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line/70 px-4 py-4 sm:px-5">
           <div><h2 id="needs-review-title" className="font-semibold text-ink">{t('Waiting on you')}</h2><p className="mt-1 text-sm text-muted">{t('clientPortal.reviewCount', { count: reviewQueue.length })}</p></div>
-          {groups.needs_review.length > 0 && <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">{t('clientPortal.viewAllReviews', { count: groups.needs_review.length })}<ArrowRight className="h-4 w-4" /></Link>}
+          {reviewQueue.length > 0 && <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">{t('clientPortal.viewAllReviews', { count: reviewQueue.length })}<ArrowRight className="h-4 w-4" /></Link>}
         </header>
         <div className="divide-y divide-line/70">
           {reviewQueue.map(task => <article key={task.id} className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
