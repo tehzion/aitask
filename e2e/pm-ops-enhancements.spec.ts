@@ -205,3 +205,37 @@ test('Boss portfolio shows company health even without an active plan', async ({
   await expect(health.getByRole('listitem').filter({ hasText: 'Health test company' })).toContainText('Projects without HOD: 1');
   await expect(health.getByText('Healthy test company')).toHaveCount(0);
 });
+
+test('unlinked work matches the existing filter for a large account', async ({ page }) => {
+  await startApp(page);
+  const pmId = await signInAs(page, 'pm');
+  const today = isoDaysFromToday(0);
+  const expected = await page.evaluate(async ({ pmId, today }) => {
+    const { useStore } = await import('/src/store/index.ts');
+    const { getVisibleTasks, canLinkTaskDelivery } = await import('/src/lib/access.ts');
+    const { isTaskLinkedToDeliverable } = await import('/src/lib/deliveryLinks.ts');
+    const state = useStore.getState();
+    const client = state.clients[0];
+    const base = state.tasks[0];
+    const tasks = Array.from({ length: 500 }, (_, i) => ({
+      ...base, id: `large-task-${i}`, title: `Large task ${i}`, clientId: client.id, clientName: client.clientName,
+      projectId: undefined, dueDate: today, assignedTo: pmId, createdBy: pmId, status: i % 2 ? 'Cancelled' : 'Pending',
+      generatedFromDeliverable: false, deliverableId: undefined, serviceCycleId: undefined,
+    }));
+    const deliverables = Array.from({ length: 50 }, (_, i) => ({
+      ...state.deliverables[0], id: `large-output-${i}`, cycleId: `missing-cycle-${i}`, title: `Output ${i}`,
+    }));
+    useStore.setState({ tasks, deliverables, backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 } });
+    const updated = useStore.getState();
+    const visible = getVisibleTasks(updated.currentUser, tasks, updated.rolePermissions, { clients: updated.clients, projects: updated.projects });
+    return visible.filter(task => task.clientId && task.dueDate && task.dueDate.slice(0, 7) === today.slice(0, 7)
+      && task.status !== 'Cancelled' && !task.generatedFromDeliverable && !isTaskLinkedToDeliverable(task, deliverables)
+      && canLinkTaskDelivery(updated.currentUser, task, updated.rolePermissions, { clients: updated.clients, projects: updated.projects })).length;
+  }, { pmId, today });
+  expect(expected).toBe(250);
+  await page.goto('/');
+  const panel = page.getByRole('heading', { name: 'Unlinked work this month' }).locator('../..');
+  await expect(panel.locator('li')).toHaveCount(expected);
+  await page.getByRole('tab', { name: 'Portfolio', exact: true }).click().catch(() => {});
+  await expect(panel.locator('li')).toHaveCount(expected);
+});
