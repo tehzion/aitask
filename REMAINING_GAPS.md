@@ -1,7 +1,23 @@
 # Remaining Gaps
 
-**Audit date:** 2026-10-17
-**Release posture:** no-go until P1 items are resolved or explicitly accepted by the release owner.
+**Last checked:** 2026-11-16 against repository commit `42d9b87`.
+**Release posture:** confirm outstanding operational and browser evidence before a production release.
+
+## Current status
+
+| ID | Status | Evidence and next action |
+| --- | --- | --- |
+| HIST-001 | Partly resolved | Member login deletion is retryable after Auth deletion. Workspace deletion with retained history still needs a retention decision. See `AUDIT_HISTORY_RETENTION_REVIEW.md`. |
+| REL-002 | Resolved as of 13 Nov | The applied release manifest recorded 153/153 matching migrations. Re-run alignment for each release. |
+| TEST-003 | Resolved | On 16 Nov, 143 unit test files and 1,140 tests passed on this revision. |
+| UX-004 | Still open | The client workspace spec passed 3/3 on 16 Nov. The full browser suite and a four-role live smoke remain unverified. |
+| CFG-005 | Resolved | The hosted build rejects the password-reset bypass setting. |
+| OPS-006 | Still open | Verify backup restoration, Auth protection and the four-role live smoke. The last read-only timeout query found no matching messages in its 24-hour window. |
+| PERF-007 | Addressed | On 16 Nov the eager JS graph was 272.2 KiB gzip, under the 300 KiB budget. |
+| REL-008 | Partly addressed | Super-admin onboarding has a private reservation journal and retry path, confirmed-email changes use a database synchronization trigger, and deletion reports when the login was removed but member deletion needs retry. The Auth trigger stamps trusted ownership during admin invitations; the handler test covers a lost invitation response. Audit scoped-PM and deletion failures before claiming full reconciliation. |
+| PERF-009, DATA-010, LIFE-011, SEC-012, SEC-013 | Unverified | The original findings below need fresh code and operational review before being closed. |
+
+The tables below preserve the 17 Oct audit as historical context. Their original severity and evidence are not current status.
 
 ## Status on 2026-11-10
 
@@ -26,7 +42,7 @@ New since the audit: `aitask_entity_history` holds about 81 MB of the 107 MB pro
 - This supersedes the 148/148 `REL-002` evidence above.
 - Production cleanup: removed four QA/demo member accounts and the `TEST ONLY` client/project after a rollback-only dry run. The targeted rollback snapshot is `private.qa_cleanup_backup_20261113` (RLS enabled, no anon/authenticated access). Post-cleanup state: 8 members, 8 auth users, 0 orphan auth users, 43 clients, 43 projects, 53 tasks.
 
-## P1 — release blockers
+## Historical P1 findings (17 Oct)
 
 | ID | Module | Gap | Impact | Evidence | Action |
 | --- | --- | --- | --- | --- | --- |
@@ -37,7 +53,7 @@ New since the audit: `aitask_entity_history` holds about 81 MB of the 107 MB pro
 | CFG-005 | Build security | Hosted builds do not reject explicit password-reset bypass | A misconfigured hosted deployment could bypass account setup | `auth.ts` allows explicit true; Vite guard omits the flag | Add production build assertion and CI test |
 | OPS-006 | Operations | Live/staging RLS, backups, Auth protection, monitoring, and four-role smoke are not fully evidenced | Cannot claim operational production readiness | No authenticated live session in this review; prior reports list access/plan blockers | Restore access, verify read-only, and document owner/rollback evidence |
 
-## P2 — important hardening
+## Historical P2 findings (17 Oct)
 
 | ID | Gap | Impact | Action |
 | --- | --- | --- | --- |
@@ -49,14 +65,14 @@ New since the audit: `aitask_entity_history` holds about 81 MB of the 107 MB pro
 | SEC-012 | Feedback IP rate-limit identity depends on forwarded headers | Header trust configuration could affect abuse resistance | Verify platform normalization and add independent abuse controls |
 | SEC-013 | CSP permits `unsafe-inline`, broad Supabase wildcard, and third-party avatar host | Larger browser request/style surface | Narrow hosts and document required inline styles |
 
-## P3 — maintainability/optimization
+## Historical P3 findings (17 Oct)
 
 - Retire four-argument command RPC overloads when old clients are gone so every mutation has workspace-version protection.
 - Reduce the size and duplicated predicates in `src/store/index.ts`.
 - Pause background polling while hidden if product freshness allows it.
 - Add a dedicated `/health` endpoint or formally document the existing provenance/sync-status substitute.
 
-## Operational gaps
+## Historical operational gaps
 
 - No scheduled database backups are evidenced for the current plan; manual logical backup discipline must be owned and tested.
 - Leaked-password protection is reported disabled by the existing operational evidence; confirm the current Supabase plan/settings.

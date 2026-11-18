@@ -7,9 +7,15 @@ test('Account reports include assigned work and exclude other departments', asyn
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
   await page.waitForURL(url => !/\/login$/.test(url.pathname));
-  const releaseNotice = page.getByRole('button', { name: 'Happy working' });
-  await releaseNotice.waitFor({ state: 'visible', timeout: 3_000 }).catch(() => undefined);
-  if (await releaseNotice.isVisible().catch(() => false)) await releaseNotice.click();
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const account = useStore.getState().users.find(user => user.name === 'Account Demo');
+    if (!account) throw new Error('Expected Account demo user');
+    localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${account.id}`, 'acknowledged');
+  });
+  await page.goto('/reports');
+  const reportHeading = page.getByRole('heading', { name: 'Four-Week Performance Report' });
+  await expect(reportHeading).toBeVisible();
 
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
@@ -63,9 +69,6 @@ test('Account reports include assigned work and exclude other departments', asyn
     });
   });
 
-  await page.goto('/reports');
-  const reportHeading = page.getByRole('heading', { name: 'Four-Week Performance Report' });
-  await expect(reportHeading).toBeVisible();
   await expect(reportHeading.locator('..').getByText('Internal workspace', { exact: false })).toBeVisible();
   await expect(page.getByText('Due tasks', { exact: true }).first().locator('..').getByText('1', { exact: true })).toBeVisible();
   await expect(page.getByText('Open today', { exact: true }).first().locator('..').getByText('1', { exact: true })).toBeVisible();
