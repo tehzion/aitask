@@ -160,7 +160,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     );
     const names = clients
       .filter(client => !client.discovered)
-      .filter(client => client.createdBy === currentUser?.id || visibleKeys.has(client.clientName.trim().toLowerCase()))
+      .filter(client => currentUser?.role === 'Project Manager'
+        ? client.createdBy === currentUser.id
+        : client.createdBy === currentUser?.id || visibleKeys.has(client.clientName.trim().toLowerCase()))
       .map(client => client.clientName.trim());
     if (selectedProject) names.push(selectedProject.clientName.trim());
     return Array.from(new Set(names.filter(Boolean))).sort((left, right) => left.localeCompare(right));
@@ -405,7 +407,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
 
     const trimmedTitle = title.trim();
     const trimmedClientName = clientName.trim();
-    const selectedClient = clients.find(client => client.clientName.trim().toLowerCase() === trimmedClientName.toLowerCase());
+    const selectedClient = clients.find(client => (
+      client.clientName.trim().toLowerCase() === trimmedClientName.toLowerCase()
+      && (currentUser.role !== 'Project Manager' || client.createdBy === currentUser.id)
+    ));
     const trimmedServiceType = serviceType.trim();
     const finalStartDate = startDate.trim() || getTodayInputDate();
     const finalDueDate = dueDate.trim();

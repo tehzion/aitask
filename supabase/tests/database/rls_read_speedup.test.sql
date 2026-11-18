@@ -120,7 +120,24 @@ begin
     and (
       ((entity_type = 'task') and (private.aitask_member_role(workspace_id) <> 'Client') and private.aitask_can_view_task(workspace_id, entity_id))
       or ((entity_type = any (array['comment', 'approval'])) and (private.aitask_member_role(workspace_id) <> 'Client') and private.aitask_can_view_task(workspace_id, parent_id))
-      or ((entity_type = 'client') and (private.aitask_member_role(workspace_id) <> 'Client') and private.aitask_can_view_client(workspace_id, client_key))
+      or ((entity_type = 'client') and (private.aitask_member_role(workspace_id) <> 'Client') and private.aitask_can_view_client(workspace_id, client_key)
+        -- Project Managers and HODs are also scoped by canonical company id, so a
+        -- duplicate display name never exposes another owner's company.
+        and (
+          private.aitask_is_super_admin(workspace_id)
+          or created_by = private.aitask_member_id(workspace_id)
+          or exists (select 1 from public.aitask_entities p where p.workspace_id = aitask_entities.workspace_id and p.entity_type = 'project'
+            and (p.client_id = aitask_entities.entity_id or (p.client_id is null and p.client_key = aitask_entities.client_key))
+            and private.aitask_can_view_project(p.workspace_id, p.entity_id))
+          or (private.aitask_member_role(workspace_id) <> 'Project Manager' and not private.aitask_is_hod(workspace_id))
+          or (private.aitask_is_hod(workspace_id) and exists (select 1 from public.aitask_entities tk where tk.workspace_id = aitask_entities.workspace_id and tk.entity_type = 'task'
+            and (tk.client_id = aitask_entities.entity_id or (tk.client_id is null and tk.client_key = aitask_entities.client_key))
+            and private.aitask_can_view_task(tk.workspace_id, tk.entity_id)))
+          or (private.aitask_member_role(workspace_id) = 'Project Manager' and exists (select 1 from public.aitask_entities tk where tk.workspace_id = aitask_entities.workspace_id and tk.entity_type = 'task'
+            and (tk.client_id = aitask_entities.entity_id or (tk.client_id is null and tk.client_key = aitask_entities.client_key))
+            and nullif(btrim(coalesce(tk.data ->> 'projectId', tk.parent_id, '')), '') is null
+            and tk.created_by = private.aitask_member_id(workspace_id)))
+        ))
       or ((entity_type = 'project') and (private.aitask_member_role(workspace_id) <> 'Client') and private.aitask_can_view_project(workspace_id, entity_id))
       or ((entity_type = 'task_status') and (private.aitask_member_id(workspace_id) is not null))
       or ((entity_type = 'custom_role') and ((private.aitask_member_role(workspace_id) <> 'Client') or exists (
