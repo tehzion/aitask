@@ -125,7 +125,7 @@ const ClientServiceWorkspace = () => {
         compact
         title={<span data-i18n-skip>{client.clientName}</span>}
         description={t('Your services, delivery progress, shared files, and team updates.')}
-        meta={<><StatusChip tone={activePlan?.status === 'Active' ? 'emerald' : 'slate'}>{activePlan ? t(planStatusLabel(activePlan.status)) : t('No active service')}</StatusChip>{currentCycle && <span>{formatLocalizedDate(parseOptionalDate(currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(currentCycle.periodEnd)!, locale)}</span>}</>}
+        meta={<><StatusChip tone={activePlan?.status === 'Active' ? 'emerald' : 'slate'}>{activePlan ? t(planStatusLabel(activePlan.status)) : t('No active service')}</StatusChip>{currentCycle?.paymentStatus && <StatusChip tone={currentCycle.paymentStatus === 'paid' ? 'emerald' : currentCycle.paymentStatus === 'partial' ? 'amber' : 'slate'}>{t(currentCycle.paymentStatus === 'paid' ? 'Paid' : currentCycle.paymentStatus === 'partial' ? 'Partly paid' : 'Awaiting payment')}</StatusChip>}{currentCycle && <span>{formatLocalizedDate(parseOptionalDate(currentCycle.periodStart)!, locale)} – {formatLocalizedDate(parseOptionalDate(currentCycle.periodEnd)!, locale)}</span>}</>}
       />
       <div className="sticky top-[4.5rem] z-20 border-b border-line/80 bg-canvas/95 py-3 backdrop-blur-md">
         <SegmentedTabs<ClientWorkspaceTab> items={tabs} value={tab} onChange={setTab} label={t('Client service workspace')} idPrefix={TABS_ID} />
