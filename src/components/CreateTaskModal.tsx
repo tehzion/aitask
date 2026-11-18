@@ -87,6 +87,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
   const [description, setDescription] = useState('');
   const [clientName, setClientName] = useState('');
   const [customerDetails, setCustomerDetails] = useState('');
+  const [briefLinks, setBriefLinks] = useState('');
+  const [briefMust, setBriefMust] = useState('');
+  const [briefAvoid, setBriefAvoid] = useState('');
+  const briefIds = { links: React.useId(), must: React.useId(), avoid: React.useId() };
   const [facebookPage, setFacebookPage] = useState('');
   const [website, setWebsite] = useState('');
   const [department, setDepartment] = useState<Department | ''>('');
@@ -185,6 +189,9 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
     setDescription('');
     setClientName('');
     setCustomerDetails('');
+    setBriefLinks('');
+    setBriefMust('');
+    setBriefAvoid('');
     setFacebookPage('');
     setWebsite('');
     setDepartment('');
@@ -457,6 +464,16 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       return;
     }
 
+    const canWriteBrief = currentUser?.role === 'Project Manager';
+    const briefReferences = canWriteBrief ? briefLinks.split('\n').map(line => line.trim()).filter(Boolean) : [];
+    if (briefReferences.some(link => !safeHttpsUrl(link))) {
+      setFormError('Links must be valid HTTPS URLs.');
+      if (additionalDetailsRef.current) additionalDetailsRef.current.open = true;
+      return;
+    }
+    const brief = canWriteBrief && (briefReferences.length || briefMust.trim() || briefAvoid.trim())
+      ? { references: briefReferences.slice(0, 5), mustHave: briefMust.trim() || undefined, avoid: briefAvoid.trim() || undefined, updatedBy: currentUser!.id, updatedAt: new Date().toISOString() }
+      : undefined;
     const resolvedAssignedTo = assignedTo;
     const taskId = addTask({
       title: trimmedTitle,
@@ -473,6 +490,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       clientName: trimmedClientName,
       projectName: projectId ? assignableProjects.find(p => p.id === projectId)?.projectName : undefined,
       customerDetails: customerDetails.trim(),
+      brief,
       facebookPage: safeHttpsUrl(facebookPage) || undefined,
       website: safeHttpsUrl(website) || undefined,
       visibility,
@@ -819,6 +837,21 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 <textarea id={briefId} rows={3} value={description} onChange={e => setDescription(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" placeholder={t('Describe the task requirements...')} />
                 <label htmlFor={facebookId} className="block text-sm font-medium text-ink">{t('Facebook Page')}</label>
                 <input id={facebookId} type="url" value={facebookPage} onChange={e => setFacebookPage(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" placeholder="https://facebook.com/..." />
+                {currentUser?.role === 'Project Manager' && (
+                  <fieldset className="space-y-3 rounded-lg border border-line bg-inset p-3">
+                    <legend className="px-1 text-sm font-semibold text-ink">{t('Client brief')}</legend>
+                    <p className="text-xs text-muted">{t('What the client asked for, so the team does not have to guess.')}</p>
+                    <label htmlFor={briefIds.links} className="block text-xs font-medium text-muted">{t('Reference links (one per line)')}
+                      <textarea id={briefIds.links} rows={2} value={briefLinks} onChange={e => setBriefLinks(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" />
+                    </label>
+                    <label htmlFor={briefIds.must} className="block text-xs font-medium text-muted">{t('Must include')}
+                      <textarea id={briefIds.must} rows={2} maxLength={1000} value={briefMust} onChange={e => setBriefMust(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" />
+                    </label>
+                    <label htmlFor={briefIds.avoid} className="block text-xs font-medium text-muted">{t('Avoid')}
+                      <textarea id={briefIds.avoid} rows={2} maxLength={1000} value={briefAvoid} onChange={e => setBriefAvoid(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" />
+                    </label>
+                  </fieldset>
+                )}
                 <label htmlFor={websiteId} className="block text-sm font-medium text-ink">{t('Company Website')}</label>
                 <input id={websiteId} type="url" value={website} onChange={e => setWebsite(e.target.value)} className="w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" placeholder="https://..." />
               </div>

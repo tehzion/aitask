@@ -268,6 +268,15 @@ export type ClientPlanSetupInput = {
   contractEndDate?: string;
 };
 
+/** A brief written while creating a task: https links only, trimmed, stamped by the server-trusted actor. */
+const sanitizeNewTaskBrief = (brief: Task['brief'], actorId: string, now: string): Task['brief'] => {
+  if (!brief) return undefined;
+  const references = (brief.references || []).map(item => safeHttpsUrl(item)).filter((item): item is string => Boolean(item)).slice(0, 5);
+  const mustHave = brief.mustHave?.trim().slice(0, 1000) || undefined;
+  const avoid = brief.avoid?.trim().slice(0, 1000) || undefined;
+  return references.length || mustHave || avoid ? { references, mustHave, avoid, updatedBy: actorId, updatedAt: now } : undefined;
+};
+
 type ProjectUpdateInput = Partial<Pick<Project,
   'clientId' | 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'
   | 'projectManagerIds' | 'hodMemberIds' | 'staffMemberIds' | 'memberResponsibilities'
@@ -3892,6 +3901,7 @@ export const useStore = create<StoreState>()(
           const isCompleted = status === 'Completed';
           const newTask: Task = {
             ...taskData,
+            brief: currentUser.role === 'Project Manager' ? sanitizeNewTaskBrief(taskData.brief, currentUser.id, now) : undefined,
             id: taskId,
             createdBy: currentUser.id,
             assignedTo: resolvedAssigneeId || '',
