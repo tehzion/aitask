@@ -120,10 +120,10 @@ export const getNavigationSections = (
     // in the main menu instead of the collapsed "More" group.
     const departmentLead = isDepartmentScopedUser(user, rolePermissions);
     const tasksItem = staffSecondary.find(item => item.path === '/tasks');
-    const primaryItems = departmentLead && tasksItem
+    const primaryItems = tasksItem
       ? [staffPrimary[0], tasksItem, ...staffPrimary.slice(1)]
       : staffPrimary;
-    const secondaryItems = departmentLead ? staffSecondary.filter(item => item.path !== '/tasks') : staffSecondary;
+    const secondaryItems = staffSecondary.filter(item => item.path !== '/tasks');
     return {
       primary: filterVisible(user, rolePermissions, forHod(primaryItems)),
       secondary: filterVisible(user, rolePermissions, forHod(secondaryItems)),
