@@ -13,6 +13,7 @@ let loseConfirmation: boolean;
 let failBeforeCommit: boolean;
 const deleteUser = vi.fn();
 const createUser = vi.fn();
+const inviteUserByEmail = vi.fn();
 let actor: { id: string; workspace_id: string; is_super_admin: boolean; role?: string };
 let projectManagerIds: string[];
 let rpcRequests: Array<{ name: string; args: Record<string, unknown> }>;
@@ -22,14 +23,14 @@ beforeEach(() => {
   actor = { id: 'boss', workspace_id: 'aitask-main', is_super_admin: true, role: 'Project Manager' };
   projectManagerIds = ['pm-a'];
   rpcRequests = [];
-  deleteUser.mockReset(); createUser.mockReset();
+  deleteUser.mockReset(); createUser.mockReset(); inviteUserByEmail.mockReset();
   createUser.mockImplementation(async ({ email, app_metadata }) => {
     const user = { id: 'prepared-auth', email, email_confirmed_at: '2026-10-08', app_metadata };
     users.push(user); return { data: { user }, error: null };
   });
   const admin = {
     auth: { getUser: async () => ({ data: { user: { id: 'boss-auth' } }, error: null }), admin: {
-      listUsers: async () => ({ data: { users }, error: null }), createUser, deleteUser,
+      listUsers: async () => ({ data: { users }, error: null }), createUser, deleteUser, inviteUserByEmail,
     } },
     rpc: async (name: string, args: Record<string, unknown>) => {
       rpcRequests.push({ name, args });
@@ -93,6 +94,18 @@ describe('actual onboarding Edge handler', () => {
     expect((await handler(request())).status).toBe(201);
     expect(users).toHaveLength(1);
     expect(completed).toMatchObject({ member: { worker_type: 'freelancer' } });
+    expect(deleteUser).not.toHaveBeenCalled();
+  });
+  it('recovers a lost email invitation response using trusted ownership stamped by the database', async () => {
+    inviteUserByEmail.mockImplementation(async (email: string) => {
+      users.push({ id: 'invited-auth', email, email_confirmed_at: '', app_metadata: {
+        aitask_onboarding_command: commandId, aitask_onboarding_actor: 'boss', aitask_onboarding_workspace: 'aitask-main',
+      } });
+      return { data: { user: null }, error: { message: 'lost invitation acknowledgement' } };
+    });
+    expect((await handler(request({ sendInvitation: true }))).status).toBe(201);
+    expect(users).toHaveLength(1);
+    expect(completed).toMatchObject({ member: { auth_user_id: 'invited-auth' } });
     expect(deleteUser).not.toHaveBeenCalled();
   });
   it('refuses an unrelated existing Auth account', async () => {
