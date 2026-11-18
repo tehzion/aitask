@@ -31,7 +31,7 @@ for (const width of [320, 375, 390, 414, 768, 1024]) {
     await expect(page.locator('#main-content').getByRole('button', { name: 'New task', exact: true })).toHaveCount(0);
     await page.evaluate(async () => { const { useStore } = await import('/src/store/index.ts'); useStore.getState().setCreateTaskModalOpen(true); });
     const dialog = page.getByRole('dialog', { name: /^Create task$/i });
-    await dialog.getByLabel(/Link to Company/).selectOption('ux-project');
+    await dialog.getByLabel(/^(Project|Link to Company)/).selectOption('ux-project');
     await dialog.getByLabel('Task Title').fill(`UX creation ${width}`);
     await dialog.getByLabel('Assign to Position/Department').selectOption('Designer');
     if (role === 'Staff') {

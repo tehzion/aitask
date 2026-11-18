@@ -116,9 +116,17 @@ export const getNavigationSections = (
             : item)
         : items
     );
+    // A department lead lives in the department task list every day, so it sits
+    // in the main menu instead of the collapsed "More" group.
+    const departmentLead = isDepartmentScopedUser(user, rolePermissions);
+    const tasksItem = staffSecondary.find(item => item.path === '/tasks');
+    const primaryItems = departmentLead && tasksItem
+      ? [staffPrimary[0], tasksItem, ...staffPrimary.slice(1)]
+      : staffPrimary;
+    const secondaryItems = departmentLead ? staffSecondary.filter(item => item.path !== '/tasks') : staffSecondary;
     return {
-      primary: filterVisible(user, rolePermissions, forHod(staffPrimary)),
-      secondary: filterVisible(user, rolePermissions, forHod(staffSecondary)),
+      primary: filterVisible(user, rolePermissions, forHod(primaryItems)),
+      secondary: filterVisible(user, rolePermissions, forHod(secondaryItems)),
       footer: filterVisible(user, rolePermissions, [{ path: '/help', label: 'Help', icon: HelpCircle }]),
       mobilePrimary: filterVisible(user, rolePermissions, forHod(staffMobilePrimary)),
     };

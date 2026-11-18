@@ -46,6 +46,8 @@ describe('delivery tracker navigation labels', () => {
     const hodSections = getNavigationSections(hod);
     expect(hodSections.primary.find(entry => entry.path === '/')).toMatchObject({ label: 'Department work' });
     expect([...hodSections.primary, ...hodSections.secondary].find(entry => entry.path === '/tasks')).toMatchObject({ label: 'Department tasks' });
+    expect(hodSections.primary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'Department tasks' });
+    expect(hodSections.secondary.find(entry => entry.path === '/tasks')).toBeUndefined();
     const staffSections = getNavigationSections(staff);
     expect(staffSections.primary.find(entry => entry.path === '/')).toMatchObject({ label: 'My work' });
     expect(staffSections.secondary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'All work' });
@@ -59,7 +61,7 @@ describe('delivery tracker navigation labels', () => {
     };
     const sections = getNavigationSections(lead, [role]);
     expect(sections.primary.find(entry => entry.path === '/')).toMatchObject({ label: 'Department work' });
-    expect(sections.secondary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'Department tasks' });
+    expect(sections.primary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'Department tasks' });
   });
 
   it('keeps the Client portal navigation label as Deliveries', () => {

@@ -84,6 +84,10 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
       : { tone: 'ok', text: t('{saved} of {total} approved.', { saved, total: targets.length }) });
   };
 
+  // Approving several at once only helps with two or more tasks; keep the panel
+  // mounted after a batch so its result message stays visible.
+  if (tasks.length < 2 && !result && !confirming) return null;
+
   return <Surface className="overflow-hidden">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
       <div>

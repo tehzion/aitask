@@ -89,7 +89,7 @@ const TaskQueueContent = ({ title, tasks, empty }: { title: string; tasks: Works
           description={<><span data-i18n-skip>{task.clientName}</span> · {dueDate ? formatLocalizedDate(dueDate, locale) : t('No deadline')}</>}
           meta={task.responsibleHodId
             ? `${t('Responsible HOD')}: ${users.find(user => user.id === task.responsibleHodId)?.name || t('Unavailable member')} · ${t(getAssignmentStateLabel(task))}${assignmentOverdue ? ` · ${t('Overdue assignment')}` : ''}`
-            : task.assignedTo ? t('Assigned') : t('Unassigned')}
+            : task.assignedTo ? `${t('Assigned to')} ${users.find(user => user.id === task.assignedTo)?.name || t('Unavailable member')}` : t('Unassigned')}
           action={<StatusChip tone={task.isCompleted ? 'emerald' : task.status === 'Waiting Approval' ? 'amber' : 'slate'}>{t(task.status)}</StatusChip>}
         />;
       })}
@@ -288,22 +288,39 @@ const ServiceRoleDashboard = () => {
         const rank = { atRisk: 0, attentionRequired: 1, onTrack: 2 } as const;
         return rank[left.health.health] - rank[right.health.health] || right.health.overdueCount - left.health.overdueCount;
       });
+    // Each task appears once, in the most urgent queue that holds it.
+    const shownIds = new Set<string>();
+    const takeUnseen = (tasks: WorkspaceTask[]) => {
+      const unseen = tasks.filter(task => !shownIds.has(task.id));
+      unseen.forEach(task => shownIds.add(task.id));
+      return unseen;
+    };
+    const notAssignedTasks = scopeTasks.filter(task => isTaskOpen(task) && !task.assignedTo);
+    const myDayCandidates = [
+      { key: 'review', title: t('Awaiting your review'), tasks: takeUnseen(personal.mine) },
+      { key: 'finalize', title: t('Ready to finalize'), tasks: takeUnseen(personal.completion) },
+      { key: 'overdue', title: t('Overdue'), tasks: takeUnseen(overdue) },
+      { key: 'today', title: t('Due today'), tasks: takeUnseen(dueToday) },
+      { key: 'unassigned', title: t('Not assigned yet'), tasks: takeUnseen(notAssignedTasks) },
+    ];
+    const myDayQueues = myDayCandidates.filter(queue => queue.tasks.length > 0);
+    const emptyMyDayTitles = myDayCandidates.filter(queue => queue.tasks.length === 0).map(queue => queue.title);
     return <section className="space-y-6" aria-labelledby="portfolio-workbench-title">
       <h2 id="portfolio-workbench-title" className="sr-only">{t('Portfolio delivery')}</h2>
       <MetricStrip label={t('Portfolio summary')} items={[
         { label: t('Open tasks'), value: scopeTasks.filter(isTaskOpen).length, to: '/tasks' },
         { label: t('Overdue'), value: overdue.length, to: '/tasks?queue=needs_action', tone: 'danger' },
+        { label: t('Due today'), value: dueToday.length, to: '/tasks?queue=needs_action' },
         { label: t('Awaiting your review'), value: personal.mine.length, to: '/tasks?queue=needs_action', tone: 'warning' },
         { label: t('Ready to finalize'), value: personal.completion.length, to: '/tasks?queue=needs_action', tone: 'warning' },
+        { label: t('Not assigned yet'), value: notAssignedTasks.length, to: '/tasks?queue=needs_action', tone: 'warning' },
       ]} />
       <section aria-labelledby="pm-day-title" className="space-y-4">
         <h2 id="pm-day-title" className="text-lg font-semibold text-ink">{t('My day')}</h2>
-        <TaskQueue title={t('Awaiting your review')} tasks={personal.mine} empty={t('Nothing is waiting for your review.')} />
+        {myDayQueues.map(queue => <TaskQueue key={queue.key} title={queue.title} tasks={queue.tasks} empty="" />)}
         <BulkApprovePanel tasks={personal.mine} />
-        <TaskQueue title={t('Ready to finalize')} tasks={personal.completion} empty={t('No tasks awaiting final completion.')} />
-        <TaskQueue title={t('Overdue')} tasks={overdue} empty={t('No overdue tasks.')} />
-        <TaskQueue title={t('Due today')} tasks={dueToday} empty={t('No tasks due today.')} />
-        <TaskQueue title={t('Not assigned yet')} tasks={scopeTasks.filter(task => isTaskOpen(task) && !task.assignedTo)} empty={t('Every open task has an owner.')} />
+        {myDayQueues.length === 0 && <p className="calm-surface px-5 py-6 text-center text-sm text-muted">{t('Nothing needs your action right now.')}</p>}
+        {emptyMyDayTitles.length > 0 && myDayQueues.length > 0 && <p className="px-1 text-sm text-muted">{t('Nothing waiting in')}: {emptyMyDayTitles.join(' · ')}</p>}
         <Surface className="overflow-hidden"><div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Months to start')}</h3></div>
           <ul className="divide-y divide-line/60">{monthsToPublish.map(cycle => <li key={cycle.id} className="px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=delivery&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`} className="font-medium text-accent hover:underline"><span data-i18n-skip>{cycle.clientName}</span> · {t('Not started yet')}</Link></li>)}</ul>
           {monthsToPublish.length === 0 && <p className="px-5 py-4 text-sm text-muted">{t('No months waiting to start.')}</p>}

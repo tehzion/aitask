@@ -1597,6 +1597,8 @@ registerUiTranslations({
   'No unlinked work this month.': '本月没有未关联的工作。',
   'No tasks due today.': '今天没有到期任务。',
   'Not assigned yet': '尚未分配',
+  'No project (standalone task)': '不属于任何项目（独立任务）',
+  'Nothing waiting in': '以下队列没有内容',
   'Without a due date this task is never reported as overdue.': '没有截止日期的任务不会被计为逾期。',
   'Every open task has an owner.': '所有未完成任务都已有负责人。',
   'No overdue tasks.': '没有逾期任务。',
