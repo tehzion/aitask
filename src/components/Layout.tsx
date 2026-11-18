@@ -94,16 +94,22 @@ const Layout: React.FC = () => {
   // accept. Restore the saved data by itself and say so, instead of leaving the
   // workspace locked behind a banner. A session problem still needs a sign-in.
   const refusedSave = isRefusedSave(backend);
+  const awaitingRestore = useRef(false);
   useEffect(() => {
     if (!refusedSave) return;
-    // Say so once the saved data is back, even if a late cleanup step after the
-    // restore reports a problem: the screen already matches the server.
-    const announce = () => {
-      const latest = useStore.getState().backend;
-      if (latest.status === 'live' && !latest.error) useToastStore.getState().addToast(msg('errors.refusedSaveRestored'), 'warning');
-    };
-    void useStore.getState().discardMutation().then(announce, announce);
+    awaitingRestore.current = true;
+    void useStore.getState().discardMutation().catch(() => undefined);
   }, [refusedSave]);
+  // Say so once the screen matches the saved data again, whichever way the
+  // restore finished: this watches the state instead of the restore promise, so
+  // a late step after the restore cannot swallow the message.
+  useEffect(() => {
+    if (!awaitingRestore.current) return;
+    if (backend.status === 'live' && !backend.hasLocalChanges && !backend.error) {
+      awaitingRestore.current = false;
+      useToastStore.getState().addToast(msg('errors.refusedSaveRestored'), 'warning');
+    }
+  }, [backend.status, backend.hasLocalChanges, backend.error]);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(current => {
