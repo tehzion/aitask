@@ -128,7 +128,11 @@ export const getNavigationSections = (
       primary: filterVisible(user, rolePermissions, forHod(primaryItems)),
       secondary: filterVisible(user, rolePermissions, forHod(secondaryItems)),
       footer: filterVisible(user, rolePermissions, [{ path: '/help', label: 'Help', icon: HelpCircle }]),
-      mobilePrimary: filterVisible(user, rolePermissions, forHod(staffMobilePrimary)),
+      // On a phone a department lead needs the task list one tap away, and the
+      // long "Department work" label would be cut off in the bottom bar.
+      mobilePrimary: filterVisible(user, rolePermissions, departmentLead && tasksItem
+        ? [{ ...staffPrimary[0], label: 'Work' }, { ...tasksItem, label: 'Tasks' }, staffPrimary[1], staffPrimary[2]]
+        : forHod(staffMobilePrimary)),
     };
   }
 
