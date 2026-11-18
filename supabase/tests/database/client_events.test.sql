@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(10);
+select plan(13);
 select ok(not has_table_privilege('authenticated', 'public.aitask_client_events', 'SELECT'), 'app users cannot read telemetry');
 select ok(not has_table_privilege('authenticated', 'public.aitask_client_events', 'UPDATE'), 'app users cannot update telemetry');
 select ok(not has_table_privilege('anon', 'public.aitask_client_events', 'INSERT'), 'anonymous users cannot insert telemetry');
@@ -20,6 +20,9 @@ select lives_ok($$insert into public.aitask_client_events(member_id,role,event_t
 select throws_ok($$insert into public.aitask_client_events(member_id,role,event_type,detail) values ('telemetry-b','Staff','save_failure','OFFLINE')$$, '42501', null, 'member cannot impersonate another member');
 select throws_ok($$insert into public.aitask_client_events(member_id,role,event_type,detail) values ('telemetry-a','HOD','save_failure','OFFLINE')$$, '42501', null, 'member cannot forge role');
 select throws_ok($$insert into public.aitask_client_events(member_id,role,event_type,detail) values ('telemetry-a','Staff','save_failure','arbitrary sensitive text')$$, '23514', null, 'free text is rejected');
+select lives_ok($$insert into public.aitask_client_events(member_id,role,event_type,detail) values ('telemetry-a','Staff','save_failure','FORBIDDEN:client,task')$$, 'refused save may record entity type names');
+select throws_ok($$insert into public.aitask_client_events(member_id,role,event_type,detail) values ('telemetry-a','Staff','save_failure','FORBIDDEN:Acme Co')$$, '23514', null, 'entity type detail cannot carry names or ids');
+select throws_ok($$insert into public.aitask_client_events(member_id,role,event_type,detail) values ('telemetry-a','Staff','save_failure','FORBIDDEN:client; drop table x')$$, '23514', null, 'entity type detail cannot carry free text');
 select throws_ok($$insert into public.aitask_client_events(member_id,role,event_type,detail) values ('telemetry-a','Staff','save_failure',null)$$, '23514', null, 'required event details cannot be null');
 select lives_ok($$insert into public.aitask_client_events(member_id,role,event_type,duration_ms) values ('telemetry-a','Staff','recovery_duration',1234)$$, 'bounded recovery duration accepted');
 reset role;

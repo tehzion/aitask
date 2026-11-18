@@ -6,7 +6,7 @@ import { useStore } from '../store';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { useSaveAction } from '../hooks/useSaveAction';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
-import { canLinkTaskDelivery, canManageServiceCycles, canOpenServiceClient, getVisibleTasks } from '../lib/access';
+import { canLinkTaskDelivery, canManageServiceCycles, canOpenServiceClient, getClientKey, getVisibleTasks } from '../lib/access';
 import { getDeliveryReviewRecords, isTaskLinkedToDeliverable, hasInvalidDeliveryLink } from '../lib/dashboardData';
 import { isTaskCompleted } from '../lib/taskCompletion';
 import { formatLocalizedDate } from '../lib/i18n';
@@ -38,10 +38,15 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
   // navigation; otherwise a harmless tab switch is mistaken for discarding
   // the review selections.
   useUnsavedChanges(Boolean(pending));
+  const clientName = clientId
+    ? (store.clients.find(client => client.id === clientId)?.clientName
+      || store.serviceCycles.find(cycle => cycle.clientId === clientId)?.clientName)
+    : undefined;
   const visibleTasks = getVisibleTasks(store.currentUser, store.tasks, store.rolePermissions, { clients: store.clients, projects: store.projects })
-    .filter(task => !clientId || task.clientId === clientId);
+    .filter(task => !clientId
+      || (task.clientId ? task.clientId === clientId : Boolean(clientName) && getClientKey(task.clientName) === getClientKey(clientName)));
   const cycles = store.serviceCycles.filter(cycle => (!clientId || cycle.clientId === clientId)
-    && canOpenServiceClient(store.currentUser, cycle.clientName, visibleTasks, store.rolePermissions, store.clients, store.projects));
+    && canOpenServiceClient(store.currentUser, cycle.clientName, visibleTasks, store.rolePermissions, store.clients, store.projects, cycle.clientId));
   const records = getDeliveryReviewRecords(visibleTasks, cycles, store.deliverables, today);
   const reviewTasks = [...records.invalidLinkedTasks, ...(includeOpenTasks ? visibleTasks.filter(task => task.clientId && !isTaskLinkedToDeliverable(task, store.deliverables) && task.status !== 'Cancelled') : records.unlinkedTasks)];
   const canPublish = canManageServiceCycles(store.currentUser, store.rolePermissions);

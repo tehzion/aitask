@@ -103,21 +103,22 @@ select is(
       'expectedVersion', (select version from public.aitask_entities where entity_id = 'hardening-hod-client')
     )), null
   ) ->> 'ok')::boolean,
-  false,
-  'HOD cannot delete an owned company without edit capability'
+  true,
+  'HOD can delete a company it created'
 );
-select is((select count(*)::integer from public.aitask_entities where entity_id = 'hardening-hod-client'), 1, 'uneditable HOD company is retained');
+select is((select count(*)::integer from public.aitask_entities where entity_id = 'hardening-hod-client'), 0, 'created HOD company is removed');
 reset role;
 select set_config('request.jwt.claim.sub','',true);
 update public.aitask_members set permissions=permissions||'{"manageAssignedClients":true}'::jsonb
 where workspace_id='pgtap-authorization-hardening' and id='pgtap-hardening-hod';
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
-('pgtap-authorization-hardening','task','hardening-hod-assignment','{"id":"hardening-hod-assignment","title":"Assigned company work","clientId":"hardening-hod-client","clientName":"HOD Co","department":"Designer","assignedTo":"pgtap-hardening-hod","createdBy":"pgtap-hardening-hod"}');
+('pgtap-authorization-hardening','client','hardening-hod-delete-client','{"id":"hardening-hod-delete-client","clientName":"HOD Delete Co","createdBy":"pgtap-hardening-pm"}'),
+('pgtap-authorization-hardening','task','hardening-hod-assignment','{"id":"hardening-hod-assignment","title":"Assigned company work","clientId":"hardening-hod-delete-client","clientName":"HOD Delete Co","department":"Designer","assignedTo":"pgtap-hardening-hod","createdBy":"pgtap-hardening-pm"}');
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000001003',true);
 set local role authenticated;
 select is((public.aitask_execute_command('pgtap-authorization-hardening',gen_random_uuid(),'client.delete',
- jsonb_build_array(jsonb_build_object('kind','entity','action','delete','entityType','client','entityId','hardening-hod-client','expectedVersion',1)),null)->>'ok')::boolean,true,'HOD can delete an editable company with the delete capability');
-select is((select count(*)::integer from public.aitask_entities where entity_id = 'hardening-hod-client'), 0, 'HOD company is removed');
+ jsonb_build_array(jsonb_build_object('kind','entity','action','delete','entityType','client','entityId','hardening-hod-delete-client','expectedVersion',1)),null)->>'ok')::boolean,true,'HOD can delete an editable company with the delete capability');
+select is((select count(*)::integer from public.aitask_entities where entity_id = 'hardening-hod-delete-client'), 0, 'editable HOD company is removed');
 
 select set_config('request.jwt.claim.sub', '00000000-0000-0000-0000-000000001004', true);
 select is(

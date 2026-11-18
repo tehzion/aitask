@@ -47,10 +47,10 @@ export const getPlanDeliverySummary = (
   const cycleDeliverables = currentCycle
     ? deliverables.filter(item => item.cycleId === currentCycle.id && item.clientId === plan.clientId)
     : [];
-  const completedUnlinked = visibleTasks.filter(task => task.clientId === plan.clientId
-    && (task.isCompleted || task.status === 'Completed')
-    && !task.deliverableId
-    && !deliverables.some(item => item.taskIds?.includes(task.id))).length;
+  const completedUnlinked = getUnlinkedWorkSummary(
+    visibleTasks.filter(task => task.clientId === plan.clientId),
+    deliverables,
+  ).unlinked;
   const count = (status: Deliverable['status']) => cycleDeliverables.filter(item => item.status === status).length;
   return {
     currentCycle, draftCycle, completedUnlinked,
@@ -92,13 +92,36 @@ export const isAwaitingPublication = (client: ClientProfile | undefined, plan: P
   cycles: readonly ServiceCycle[], today: Date) => Boolean(client?.awaitingPublication
     || (plan && getCurrentPlanCycle(plan, cycles.filter(cycle => cycle.status === 'Draft'), today, { includeDraft: true })));
 
+/**
+ * One canonical completed-work partition for every delivery surface. A task is
+ * linked when it has a valid forward or reverse link, invalid when a link is
+ * dangling/cross-company/cycle-mismatched, and unlinked when it has no link at
+ * all. Cancelled work is never completed. This lets dashboard, tracker, review
+ * and report totals reconcile instead of each using a different predicate.
+ */
+export const getUnlinkedWorkSummary = (
+  visibleTasks: readonly Task[],
+  deliverables: readonly Deliverable[],
+) => {
+  const completed = visibleTasks.filter(isTaskCompleted);
+  const invalid = completed.filter(task => hasInvalidDeliveryLink(task, deliverables));
+  const unlinked = completed.filter(task => !isTaskLinkedToDeliverable(task, deliverables)
+    && !hasInvalidDeliveryLink(task, deliverables));
+  return {
+    completed: completed.length,
+    linked: completed.length - invalid.length - unlinked.length,
+    invalid: invalid.length,
+    unlinked: unlinked.length,
+  };
+};
+
 export const getDeliveryReviewRecords = (
   visibleTasks: readonly Task[], cycles: readonly ServiceCycle[], deliverables: readonly Deliverable[], today: Date,
 ) => {
   const day = startOfDay(today);
   return {
     invalidLinkedTasks: visibleTasks.filter(task => task.clientId && hasInvalidDeliveryLink(task, deliverables)),
-    unlinkedTasks: visibleTasks.filter(task => isTaskCompleted(task) && task.clientId && !isTaskLinkedToDeliverable(task, deliverables)),
+    unlinkedTasks: visibleTasks.filter(task => isTaskCompleted(task) && Boolean(task.clientId || task.clientName) && !isTaskLinkedToDeliverable(task, deliverables)),
     expiredDraftCycles: cycles.filter(cycle => {
       const end = parseOptionalDate(cycle.periodEnd);
       return cycle.status === 'Draft' && Boolean(end && startOfDay(end) < day);

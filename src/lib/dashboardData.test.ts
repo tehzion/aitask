@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ServiceCycle, Deliverable, Task } from '../types';
-import { getContractDaysRemaining, getCurrentPlanCycle, getPlanDeliverySummary, getCompanyTaskActivity, getDeliveryReviewRecords, hasInvalidDeliveryLink, isAwaitingPublication } from './dashboardData';
+import { getContractDaysRemaining, getCurrentPlanCycle, getPlanDeliverySummary, getCompanyTaskActivity, getDeliveryReviewRecords, getUnlinkedWorkSummary, hasInvalidDeliveryLink, isAwaitingPublication } from './dashboardData';
 
 const now = new Date(2026, 9, 7, 14);
 const plan = { id: 'active-plan', clientId: 'client-1' };
@@ -189,11 +189,54 @@ describe('delivery records needing review', () => {
     const deliverables = [{ id: 'd', taskIds: ['reverse'] }] as Deliverable[];
     expect(getDeliveryReviewRecords(tasks, [], deliverables, now).unlinkedTasks.map(t => t.id)).toEqual(['unlinked']);
   });
+  it('keeps legacy name-only completed work in the unlinked review set', () => {
+    expect(getDeliveryReviewRecords([
+      { id: 'legacy-unlinked', clientName: 'Audit Company', status: 'Completed' },
+    ] as Task[], [], [], now).unlinkedTasks.map(task => task.id)).toEqual(['legacy-unlinked']);
+  });
   it('reviews only drafts covering today, excluding expired, future, cancelled and malformed cycles', () => {
     const cycles = [cycle({ id: 'current', status: 'Draft' }),
       cycle({ status: 'Draft', periodEnd: '2026-09-30' }),
       cycle({ status: 'Draft', periodStart: '2026-11-01' }),
       cycle({ status: 'Cancelled' }), cycle({ status: 'Draft', periodStart: 'bad' })];
     expect(getDeliveryReviewRecords([], cycles, [], now).draftCycles.map(c => c.id)).toEqual(['current']);
+  });
+});
+
+
+describe('canonical unlinked-work reconciliation', () => {
+  it('partitions completed work into linked, invalid and unlinked without double counting', () => {
+    const deliverables = [
+      { id: 'valid', clientId: plan.clientId, cycleId: 'october', taskIds: [] },
+      { id: 'cross', clientId: 'other-client', cycleId: 'october', taskIds: [] },
+    ] as Deliverable[];
+    const tasks = [
+      { id: 'linked', clientId: plan.clientId, status: 'Completed', deliverableId: 'valid' },
+      { id: 'invalid', clientId: plan.clientId, status: 'Completed', deliverableId: 'cross' },
+      { id: 'unlinked', clientId: plan.clientId, status: 'Completed' },
+      { id: 'cancelled', clientId: plan.clientId, status: 'Cancelled', isCompleted: true },
+      { id: 'open', clientId: plan.clientId, status: 'In Progress' },
+    ] as Task[];
+    expect(getUnlinkedWorkSummary(tasks, deliverables)).toEqual({
+      completed: 3,
+      linked: 1,
+      invalid: 1,
+      unlinked: 1,
+    });
+  });
+
+  it('stays stable for a large completed backlog', () => {
+    const tasks = Array.from({ length: 2000 }, (_, index) => ({
+      id: `task-${index}`,
+      clientId: index % 3 === 0 ? 'other-client' : plan.clientId,
+      status: 'Completed',
+      deliverableId: index % 5 === 0 ? 'valid' : undefined,
+    })) as Task[];
+    const summary = getUnlinkedWorkSummary(tasks, [
+      { id: 'valid', clientId: plan.clientId, cycleId: 'october', taskIds: [] },
+    ] as Deliverable[]);
+    expect(summary.completed).toBe(2000);
+    expect(summary.linked + summary.invalid + summary.unlinked).toBe(2000);
+    expect(summary.unlinked).toBe(1600);
   });
 });

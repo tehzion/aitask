@@ -40,3 +40,18 @@ export const taskStatusMessage = (status: string) => status === 'Waiting Approva
   : status === 'Approved' ? msg('feedback.reviewApproved') : msg('task.statusUpdated', { status });
 
 export const canRetrySave = (backend: { errorCode?: string }) => !['FORBIDDEN', 'VALIDATION', 'NOT_FOUND'].includes(backend.errorCode || '');
+
+/**
+ * A save the server permanently refused for this account (not a lost session):
+ * the screen shows a change that will never be accepted, so the saved data can
+ * be restored automatically.
+ */
+export const isRefusedSave = (backend: {
+  mode?: string; status?: string; errorCode?: string; error?: string;
+  hasLocalChanges?: boolean; pendingMutations?: number; isRestoring?: boolean;
+}) => backend.mode === 'supabase'
+  && backend.status === 'refresh_required'
+  && backend.errorCode === 'FORBIDDEN'
+  && !/sign in/i.test(backend.error || '')
+  && Boolean(backend.hasLocalChanges || (backend.pendingMutations ?? 0) > 0)
+  && !backend.isRestoring;
