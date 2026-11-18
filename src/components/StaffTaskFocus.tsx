@@ -343,6 +343,9 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const footer = canEdit ? (
     <div className="space-y-2">
       {footerHint && <p id={completionHintId} className="text-sm text-amber-800 dark:text-[#fff2c2]">{t(footerHint)}</p>}
+      {revisionAvailable && revision.allowance.included !== undefined && revision.allowance.used + 1 > revision.allowance.included && (
+        <p role="status" className="text-sm text-amber-800 dark:text-[#fff2c2]">{t('This will be one more revision than the project includes.')}</p>
+      )}
       {revisionAvailable && revisionNoteOpen && <form onSubmit={event => void requestRevisionNow(event)} data-onboarding-target="task-review">
         <label className="block text-xs font-medium text-muted">{t('Revision note (optional)')}
           <textarea value={revisionNote} onChange={event => setRevisionNote(event.target.value)} rows={2} maxLength={2000} className={`${inputBase} mt-1.5 resize-none px-3 py-2`} />

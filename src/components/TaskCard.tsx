@@ -76,6 +76,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   const revisionNote = open && task.status !== 'Waiting Approval' ? getLatestRevisionNote(task) : undefined;
   const flags = [
     task.revisionCount > 0 && open && revision.label,
+    open && task.brief && t('Has brief'),
     open && task.workState?.blocker && t('Help requested'),
     !waitingToStart && blockers > 0 && `${blockers} ${t(blockers === 1 ? 'blocker' : 'blockers')}`,
     !waitingToStart && hiddenStepsOpen && t('Waits on an earlier step'),
