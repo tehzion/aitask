@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(4);
+select plan(6);
 
 insert into auth.users(instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at)
 values
@@ -14,6 +14,7 @@ insert into public.aitask_members(id,workspace_id,auth_user_id,name,email,role,d
   ('hod-vis-staff','pgtap-hod-vis','00000000-0000-0000-0000-000000009503','Vis Staff','hod-vis-staff@aitask.local','Staff','Designer',array['Designer'],'{}');
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
   ('pgtap-hod-vis','client','vis-company','{"id":"vis-company","clientName":"Visible Via Project","createdBy":"hod-vis-pm"}'),
+  ('pgtap-hod-vis','client','duplicate-company','{"id":"duplicate-company","clientName":"Visible Via Project","createdBy":"hod-vis-pm"}'),
   ('pgtap-hod-vis','client','other-company','{"id":"other-company","clientName":"Unrelated Company","createdBy":"hod-vis-pm"}'),
   ('pgtap-hod-vis','project','vis-project','{"id":"vis-project","clientId":"vis-company","clientName":"Visible Via Project","projectName":"Vis project","services":["Design"],"startDate":"2026-10-01","deadline":"2026-11-30","projectManagerIds":["hod-vis-pm"],"hodMemberIds":["hod-vis-hod"],"staffMemberIds":[],"createdBy":"hod-vis-pm","status":"Active","defaultApprovalMode":"hod","requireClearClosureChecklist":false,"memberResponsibilities":{},"milestones":[]}');
 
@@ -21,6 +22,10 @@ select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000009501'
 select set_config('request.jwt.claim.role','authenticated',true);
 select ok(private.aitask_can_view_client('pgtap-hod-vis','visible via project'), 'a HOD sees the company of a project they are assigned to');
 select ok(not private.aitask_can_view_client('pgtap-hod-vis','unrelated company'), 'a HOD does not see unrelated companies');
+set local role authenticated;
+select is((select count(*)::int from public.aitask_entities where workspace_id='pgtap-hod-vis' and entity_type='client' and entity_id='vis-company'),1,'assigned project company is readable');
+select is((select count(*)::int from public.aitask_entities where workspace_id='pgtap-hod-vis' and entity_type='client' and entity_id='duplicate-company'),0,'duplicate company owned by another person is hidden');
+reset role;
 
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000009503',true);
 select ok(not private.aitask_can_view_client('pgtap-hod-vis','visible via project'), 'non-HOD Staff keep the task-based rule');

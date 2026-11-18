@@ -193,3 +193,30 @@ test('PM company edits reject foreign scope and save the accessible company ID',
     return { id: task?.clientId, name: task?.clientName };
   })).toEqual({ id: 'pm-second', name: 'Second PM company' });
 });
+
+test('PM create-task choices require a project for assigned companies and hide closed projects', async ({ page }) => {
+  await seedPM(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const state = useStore.getState();
+    useStore.setState({
+      clients: [
+        ...state.clients,
+        { id: 'assigned-company', clientName: 'Assigned Company', createdBy: 'another-pm', createdAt: '', updatedAt: '' },
+      ],
+      projects: [
+        ...state.projects,
+        { ...state.projects[0], id: 'assigned-project', clientId: 'assigned-company', clientName: 'Assigned Company', projectName: 'Assigned campaign', createdBy: 'another-pm' },
+        { ...state.projects[0], id: 'closed-project', projectName: 'Closed campaign', status: 'Closed' },
+      ],
+    });
+    useStore.getState().setCreateTaskModalOpen(true);
+  });
+
+  const dialog = page.getByRole('dialog', { name: 'Create task', exact: true });
+  const project = dialog.getByLabel('Link to Company / Brand (Optional)');
+  await expect(project.getByRole('option', { name: 'Assigned campaign (Assigned Company)' })).toHaveCount(1);
+  await expect(project.getByRole('option', { name: 'Closed campaign (PM Company)' })).toHaveCount(0);
+  await expect(dialog.getByLabel('Client / Brand Name').getByRole('option', { name: 'Assigned Company' })).toHaveCount(0);
+  await expect(dialog.getByLabel('Client / Brand Name').getByRole('option', { name: 'PM Company' })).toHaveCount(1);
+});

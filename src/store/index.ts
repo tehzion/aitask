@@ -1567,6 +1567,7 @@ export const useStore = create<StoreState>()(
 
         if (!shouldUseSupabase()) return;
         if (get().backend.isPulling) return;
+        if (get().backend.isRestoring && (!options.force || options.silent)) return;
         if (get().backend.isSaving && !options.force) return;
         if (!options.force && isPullBlockedByPendingChange(get())) return;
         const statusBeforePull = get().backend.status;

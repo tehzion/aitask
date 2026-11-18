@@ -982,8 +982,9 @@ export const getAssignableProjects = (
   scope: VisibilityScope = {},
 ) => {
   if (!user) return [];
-  if (!['Staff', 'HOD'].includes(user.role)) return getVisibleProjects(user, projects, tasks, customRoles, scope);
-  return projects.filter(project => canLinkTaskToProject(user, project, tasks, customRoles, users));
+  const activeProjects = projects.filter(project => !isClosedProject(project));
+  if (!['Staff', 'HOD'].includes(user.role)) return getVisibleProjects(user, activeProjects, tasks, customRoles, scope);
+  return activeProjects.filter(project => canLinkTaskToProject(user, project, tasks, customRoles, users));
 };
 
 /**
@@ -1005,6 +1006,7 @@ export const canLinkTaskToProject = (
   if (isBossKoo(user)) return true;
   if (user.role === 'Project Manager') return getVisibleProjects(user, [project], tasks, customRoles, scope).length > 0;
   if (!['Staff', 'HOD'].includes(user.role)) return false;
+  if (isHodUser(user, customRoles) && project.hodMemberIds?.includes(user.id)) return true;
   if (project.createdBy === user.id) return true;
 
   const linkedTasks = tasks.filter(task => task.projectId === project.id);

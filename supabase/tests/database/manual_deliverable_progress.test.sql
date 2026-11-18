@@ -24,6 +24,9 @@ end;
 $$;
 select * from pg_temp.check_manual_statuses();
 
+-- Reopen the manual delivery before attaching real work.
+update public.aitask_entities set data=data || '{"status":"Ready"}'
+  where workspace_id='manual-progress-test' and entity_type='deliverable' and entity_id='manual-output';
 insert into public.aitask_entities(workspace_id,entity_type,entity_id,data) values
 ('manual-progress-test','task','linked-task','{"id":"linked-task","clientId":"manual-client","deliverableId":"manual-output","status":"Pending","isCompleted":false}');
 select is((select data->>'status' from public.aitask_entities where workspace_id='manual-progress-test' and entity_type='deliverable' and entity_id='manual-output'),'Planned','same-client tasks still determine progress');
