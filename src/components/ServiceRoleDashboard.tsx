@@ -303,6 +303,7 @@ const ServiceRoleDashboard = () => {
         <TaskQueue title={t('Ready to finalize')} tasks={personal.completion} empty={t('No tasks awaiting final completion.')} />
         <TaskQueue title={t('Overdue')} tasks={overdue} empty={t('No overdue tasks.')} />
         <TaskQueue title={t('Due today')} tasks={dueToday} empty={t('No tasks due today.')} />
+        <TaskQueue title={t('Not assigned yet')} tasks={scopeTasks.filter(task => isTaskOpen(task) && !task.assignedTo)} empty={t('Every open task has an owner.')} />
         <Surface className="overflow-hidden"><div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Months to start')}</h3></div>
           <ul className="divide-y divide-line/60">{monthsToPublish.map(cycle => <li key={cycle.id} className="px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(cycle.clientId)}?tab=delivery&cycleId=${encodeURIComponent(cycle.id)}#cycle-${encodeURIComponent(cycle.id)}`} className="font-medium text-accent hover:underline"><span data-i18n-skip>{cycle.clientName}</span> · {t('Not started yet')}</Link></li>)}</ul>
           {monthsToPublish.length === 0 && <p className="px-5 py-4 text-sm text-muted">{t('No months waiting to start.')}</p>}

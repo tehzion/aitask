@@ -463,8 +463,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
       description: description.trim(),
       projectId: projectId || undefined,
       milestoneId: milestoneId || undefined,
-      // Decision D1 (9 Nov 2026): the PM approves every task; HOD only assigns.
-      approvalMode: 'pm',
+      // Review flow (19 Nov 2026, supersedes D1): a project's own default wins;
+      // otherwise the department HOD reviews submitted work and the responsible
+      // PM gives the final approval. Without an eligible HOD it falls back to the PM.
+      approvalMode: selectedProject?.defaultApprovalMode || 'hod',
       clientId: createTaskInitialClientId || selectedProject?.clientId || selectedClient?.id,
       serviceCycleId: createTaskInitialCycleId || (countsTowardId ? currentCycle?.id : undefined),
       deliverableId: createTaskInitialDeliverableId || countsTowardId || undefined,
@@ -794,8 +796,10 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     id={dueDateInputId}
                     type="date"
                     value={dueDate} onChange={e => setDueDate(e.target.value)}
+                    aria-describedby={dueDate ? undefined : `${dueDateInputId}-hint`}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 outline-none shadow-sm"
                   />
+                  {!dueDate && <p id={`${dueDateInputId}-hint`} className="mt-1 text-xs text-slate-500">{t('Without a due date this task is never reported as overdue.')}</p>}
                 </div>
               </div>
 
