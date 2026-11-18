@@ -317,6 +317,22 @@ describe('buildOperations', () => {
     expect(excluded.some(operation => operation.entityType === 'service_workflow_template')).toBe(false);
   });
 
+  it('lets the caller skip rows the actor can never write', () => {
+    const state: PersistedWorkspaceState = {
+      ...stateWithUser('hod-1'),
+      clients: [
+        { id: 'CL-owned', clientName: 'Owned Co', createdBy: 'hod-1', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z' },
+        { id: 'CL-theirs', clientName: 'Theirs Co', createdBy: 'pm-1', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-01T00:00:00.000Z' },
+      ],
+    };
+    const all = buildOperations(state);
+    expect(all.filter(operation => operation.entityType === 'client').map(operation => operation.entityId).sort()).toEqual(['CL-owned', 'CL-theirs']);
+    const filtered = buildOperations(state, {
+      skipRow: row => row.entityType === 'client' && row.data.createdBy !== 'hod-1',
+    });
+    expect(filtered.filter(operation => operation.entityType === 'client').map(operation => operation.entityId)).toEqual(['CL-owned']);
+  });
+
   it('never emits an auto-discovered placeholder client as an insert', () => {
     const state: PersistedWorkspaceState = {
       ...stateWithUser('member-1'),
