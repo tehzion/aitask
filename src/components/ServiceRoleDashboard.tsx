@@ -237,6 +237,15 @@ const ServiceRoleDashboard = () => {
     .map(plan => ({ plan, days: getContractDaysRemaining(plan.contractEndDate, now) }))
     .filter((item): item is { plan: typeof item.plan; days: number } => item.days !== null && item.days >= 0 && item.days <= 30);
 
+  const clientHealth = store.currentUser?.isSuperAdmin ? store.clients.map(client => {
+        const item = { clientId: client.id, clientName: client.clientName };
+        const months = getMonthsToTidy(store.serviceCycles.filter(cycle => cycle.clientId === item.clientId), store.deliverables, todayKey);
+        const overdueMonths = months.filter(cycle => getMonthHousekeeping(cycle, store.deliverables, todayKey).kind === 'overdue').length;
+        const unpublished = months.filter(cycle => getMonthHousekeeping(cycle, store.deliverables, todayKey).kind === 'never-published').length;
+        const missingHod = visibleProjects.filter(project => project.clientId === item.clientId && projectStatus(project) === 'Active' && projectHasNoHod(project)).length;
+        const oldReviews = visibleTasks.filter(task => task.clientId === item.clientId && task.status === 'Waiting Approval' && task.workState?.reviewRequestedAt && Date.parse(task.workState.reviewRequestedAt) < Date.now() - 2 * 86400000).length;
+        return { item, overdueMonths, unpublished, missingHod, oldReviews };
+  }).filter(row => row.overdueMonths || row.unpublished || row.missingHod || row.oldReviews) : [];
   if (persona === 'client') return null;
 
   if (persona === 'production') {
@@ -389,16 +398,8 @@ const ServiceRoleDashboard = () => {
       { label: t('Months to tidy up'), value: monthsToTidy.length, to: '/clients', tone: monthsToTidy.length ? 'warning' : undefined },
     ]} />
     {store.currentUser?.isSuperAdmin && <Surface className="overflow-hidden" aria-labelledby="company-health-title">
-      <div className="border-b border-line/70 px-5 py-4"><h3 id="company-health-title" className="font-semibold text-ink">{t('Weekly company health')}</h3><p className="mt-1 text-sm text-muted">{t('Open issues by client, updated daily.')}</p></div>
-      <ul className="divide-y divide-line/60">{store.clients.map(client => {
-        const item = { clientId: client.id, clientName: client.clientName };
-        const months = getMonthsToTidy(store.serviceCycles.filter(cycle => cycle.clientId === item.clientId), store.deliverables, todayKey);
-        const overdueMonths = months.filter(cycle => getMonthHousekeeping(cycle, store.deliverables, todayKey).kind === 'overdue').length;
-        const unpublished = months.filter(cycle => getMonthHousekeeping(cycle, store.deliverables, todayKey).kind === 'never-published').length;
-        const missingHod = visibleProjects.filter(project => project.clientId === item.clientId && projectStatus(project) === 'Active' && projectHasNoHod(project)).length;
-        const oldReviews = visibleTasks.filter(task => task.clientId === item.clientId && task.status === 'Waiting Approval' && task.workState?.reviewRequestedAt && Date.parse(task.workState.reviewRequestedAt) < Date.now() - 2 * 86400000).length;
-        return <li key={item.clientId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="font-semibold text-ink hover:text-accent">{item.clientName}</Link><span className="text-muted">{t('Overdue months')}: {overdueMonths} · {t('Never started')}: {unpublished} · {t('Projects without HOD')}: {missingHod} · {t('Reviews over 2 days')}: {oldReviews}</span></li>;
-      })}</ul>
+      <div className="border-b border-line/70 px-5 py-4"><h3 id="company-health-title" className="font-semibold text-ink">{t('Client health')}</h3><p className="mt-1 text-sm text-muted">{t('Open issues by client, as of now.')}</p></div>
+      {clientHealth.length ? <ul className="divide-y divide-line/60">{clientHealth.map(({ item, overdueMonths, unpublished, missingHod, oldReviews }) => <li key={item.clientId} className="flex flex-wrap items-center justify-between gap-3 px-5 py-3 text-sm"><Link to={`/clients/${encodeURIComponent(item.clientId)}`} data-i18n-skip className="font-semibold text-ink hover:text-accent">{item.clientName}</Link><span className="text-muted">{t('Overdue months')}: {overdueMonths} · {t('Never started')}: {unpublished} · {t('Projects without HOD')}: {missingHod} · {t('Reviews over 2 days')}: {oldReviews}</span></li>)}</ul> : <p className="px-5 py-4 text-sm text-muted">{t('No open issues.')}</p>}
     </Surface>}
     <MonthsToTidyPanel months={monthsToTidy} deliverables={store.deliverables} todayKey={getTodayInputDate(now)} canManage={canManageServiceCycles(store.currentUser, store.rolePermissions)} />
     {store.currentUser?.isSuperAdmin && <StaffingGapsPanel users={store.users} projects={store.projects} tasks={store.tasks} />}

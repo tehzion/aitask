@@ -1632,4 +1632,7 @@ registerUiTranslations({
   'Staff cannot start or manually change months.': '员工不能开始或手动更改月份。',
   'Staff cannot manage months.': '员工不能管理月份。',
   'Coming up': '即将开始',
+  'Client health': '客户健康状况',
+  'Open issues by client, as of now.': '各客户目前的待处理问题。',
+  'No open issues.': '没有待处理的问题。',
 });

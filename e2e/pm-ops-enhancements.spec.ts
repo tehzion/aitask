@@ -189,17 +189,19 @@ test('Boss portfolio shows company health even without an active plan', async ({
   await signInAs(page, 'boss');
   await page.goto('/');
   await page.getByRole('tab', { name: 'Portfolio', exact: true }).click();
-  await expect(page.getByRole('heading', { name: 'Weekly company health' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Client health' })).toBeVisible();
   await expect(page.getByText('Monthly contract value at risk')).toBeVisible();
   await page.evaluate(async () => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
+    state.createClientProfile({ clientName: 'Healthy test company' });
     const client = state.createClientProfile({ clientName: 'Health test company' });
     useStore.setState({ projects: [...useStore.getState().projects, {
       id: 'health-project', clientId: client.id, clientName: 'Health test company', projectName: 'Health project',
       services: ['Design'], startDate: '2026-01-01', deadline: '', status: 'Active', hodMemberIds: [],
     }] });
   });
-  const health = page.getByRole('region', { name: 'Weekly company health' });
+  const health = page.getByRole('region', { name: 'Client health' });
   await expect(health.getByRole('listitem').filter({ hasText: 'Health test company' })).toContainText('Projects without HOD: 1');
+  await expect(health.getByText('Healthy test company')).toHaveCount(0);
 });
