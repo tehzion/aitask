@@ -47,6 +47,8 @@ import { fieldLabel, inputBase } from './uiTokens';
 import ContextualTutorialLink from './ContextualTutorialLink';
 import ActionAvailabilityNotice from './ActionAvailabilityNotice';
 import UserAvatar from './UserAvatar';
+import TaskRatingControl from './TaskRatingControl';
+import { getRevisionAllowance } from '../lib/revisionAllowance';
 
 interface Props {
   isOpen: boolean;
@@ -265,6 +267,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const creator = users.find(u => u.id === task.createdBy);
   const assignedByMember = users.find(u => u.id === task.assignedBy);
   const taskAccess = getTaskAccess(currentUser, task, rolePermissions, { users, clients, projects });
+  const revisionAllowance = { allowance: getRevisionAllowance(task, projects) };
   if (!taskAccess.canView) return null;
   const pendingResolution = isPendingMutationResolution(backend);
   const canEditTask = !isDeletingTask && !upgradeRequired && !pendingResolution && taskAccess.canEdit;
@@ -958,9 +961,14 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </div>
                 <div className="bg-slate-50 border border-slate-100 rounded-lg p-3">
                   <label className="block text-xs font-medium text-slate-500 mb-1">{t('Revisions')}</label>
-                  <span className="text-sm font-bold text-slate-800">{task.revisionCount}</span>
+                  <span className="text-sm font-bold text-slate-800">{revisionAllowance.allowance.included === undefined ? task.revisionCount : t('delivery.revisionsUsedOf', { used: task.revisionCount, included: revisionAllowance.allowance.included })}</span>
+                  {revisionAllowance.allowance.over && <p className="mt-1 text-xs font-medium text-amber-700">{t('Beyond the revisions included in this project.')}</p>}
                 </div>
               </div>
+
+              {!isClientTaskViewer && task.visibility !== 'internal' && (task.isCompleted || task.status === 'Completed') && (
+                <TaskRatingControl task={task} canRate={currentUser?.role === 'Project Manager' && taskAccess.canEdit} />
+              )}
 
               {isClientTaskViewer && (
                 <div className="space-y-3 rounded-lg border border-blue-100 bg-blue-50/70 p-4 text-sm text-blue-950">

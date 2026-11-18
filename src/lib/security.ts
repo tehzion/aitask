@@ -19,10 +19,13 @@ import type {
   Role,
   Task,
   TaskApprovalEvent,
+  TaskBrief,
+  TaskClientRating,
   TaskComment,
   User,
 } from '../types';
 import { getTodayInputDate } from './utils';
+import { normalizeIncludedRevisions } from './revisionAllowance';
 import { getLegacyDepartmentMirror, normalizeDepartment, normalizeMemberDepartments } from './departments';
 
 const roles = new Set<Role>(['Project Manager', 'HOD', 'Staff', 'Client']);
@@ -234,6 +237,28 @@ const parseApprovalEvent = (value: unknown): TaskApprovalEvent | null => {
   };
 };
 
+const parseTaskBrief = (value: unknown): TaskBrief | undefined => {
+  if (!isRecord(value)) return undefined;
+  const updatedBy = cleanText(value.updatedBy, 160);
+  const updatedAt = safeIsoTimestamp(value.updatedAt);
+  if (!updatedBy || !updatedAt) return undefined;
+  const references = (Array.isArray(value.references) ? value.references : [])
+    .map(item => safeHttpsUrl(item)).filter((item): item is string => Boolean(item)).slice(0, 5);
+  const mustHave = optionalText(value.mustHave, 1000);
+  const avoid = optionalText(value.avoid, 1000);
+  if (!references.length && !mustHave && !avoid) return undefined;
+  return { references, mustHave, avoid, updatedBy, updatedAt };
+};
+
+const parseClientRating = (value: unknown): TaskClientRating | undefined => {
+  if (!isRecord(value)) return undefined;
+  const stars = Math.trunc(Number(value.stars));
+  const ratedBy = cleanText(value.ratedBy, 160);
+  const ratedAt = safeIsoTimestamp(value.ratedAt);
+  if (!(stars >= 1 && stars <= 5) || !ratedBy || !ratedAt) return undefined;
+  return { stars: stars as TaskClientRating['stars'], comment: optionalText(value.comment, 500), ratedBy, ratedAt };
+};
+
 const parseUser = (value: unknown): User | null => {
   if (!isRecord(value)) return null;
   const id = cleanText(value.id, 160);
@@ -364,6 +389,7 @@ const parseProject = (value: unknown): Project | null => {
       confirmedAt: safeIsoTimestamp(value.closureWarningSnapshot.confirmedAt) || new Date(0).toISOString(),
     } : undefined,
     requireClearClosureChecklist: typeof value.requireClearClosureChecklist === 'boolean' ? value.requireClearClosureChecklist : undefined,
+    includedRevisions: normalizeIncludedRevisions(value.includedRevisions),
     defaultApprovalMode: ['none', 'hod', 'pm'].includes(cleanText(value.defaultApprovalMode, 10)) ? cleanText(value.defaultApprovalMode, 10) as Project['defaultApprovalMode'] : undefined,
     milestones,
     updatedAt: safeIsoTimestamp(value.updatedAt),
@@ -463,6 +489,8 @@ export const parseTask = (value: unknown): Task | null => {
     isCompleted: value.isCompleted === true,
     completedAt: safeIsoTimestamp(value.completedAt),
     revisionCount: Math.max(0, Number(value.revisionCount) || 0),
+    clientRating: parseClientRating(value.clientRating),
+    brief: parseTaskBrief(value.brief),
     clientApprovalStatus: approvalStatuses.has(clientApprovalStatus) ? clientApprovalStatus : 'Pending',
     isRecurring: value.isRecurring === true,
     recurrenceFrequency: recurrenceFrequencies.has(recurrenceFrequency) ? recurrenceFrequency : 'None',

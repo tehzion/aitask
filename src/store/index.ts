@@ -1,3 +1,4 @@
+import { normalizeIncludedRevisions } from '../lib/revisionAllowance';
 import { recordClientEvent } from '../lib/clientTelemetry';
 import { changedTaskIds, clearTaskSaveMarks, markTaskSavesFailed, markTasksChanged } from '../lib/taskSaveMarks';
 import { cyclePaymentSummary } from '../lib/cyclePayments';
@@ -270,7 +271,7 @@ export type ClientPlanSetupInput = {
 type ProjectUpdateInput = Partial<Pick<Project,
   'clientId' | 'clientName' | 'projectName' | 'services' | 'startDate' | 'deadline'
   | 'projectManagerIds' | 'hodMemberIds' | 'staffMemberIds' | 'memberResponsibilities'
-  | 'defaultApprovalMode' | 'requireClearClosureChecklist'
+  | 'defaultApprovalMode' | 'requireClearClosureChecklist' | 'includedRevisions'
 >>;
 type ClientProfileInput = Partial<Pick<ClientProfile, 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes' | 'clientSince'>>;
 type ClientPlanInput = Omit<ClientPlanSetupInput, 'clientName' | 'contactPerson' | 'email' | 'phone' | 'address' | 'website' | 'facebookPage' | 'notes'>;
@@ -387,6 +388,10 @@ export interface StoreState {
   updateTaskStatus: (taskId: string, status: TaskStatus) => MutationActionResult;
   updateTaskWork: (taskId: string, intent: TaskWorkIntent) => MutationActionResult;
   updateTaskPriority: (taskId: string, priority: Priority) => MutationActionResult;
+  /** Record the satisfaction rating of an accepted delivery. Project Managers only for now. */
+  rateTaskDelivery: (taskId: string, stars: number, comment?: string) => MutationActionResult;
+  /** Write what the client asked for. Project Managers only. */
+  updateTaskBrief: (taskId: string, brief: { references: string[]; mustHave?: string; avoid?: string }) => MutationActionResult;
   updateTaskAssignee: (taskId: string, assignedTo: string) => MutationActionResult;
   overrideTaskAssignee: (taskId: string, assignedTo: string, reason: string) => MutationActionResult;
   updateTaskDueDate: (taskId: string, newDueDate: string) => MutationActionResult;
@@ -2909,6 +2914,70 @@ export const useStore = create<StoreState>()(
         return result;
       },
 
+      rateTaskDelivery: (taskId, stars, comment) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to save the rating.' };
+        set((state) => {
+          if (isWorkspaceMutationLocked(state)) {
+            useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+            result = { ok: false, error: pendingMutationMessage };
+            return state;
+          }
+          const task = state.tasks.find(t => t.id === taskId);
+          const currentUser = state.currentUser;
+          const scope = { users: state.users, clients: state.clients, projects: state.projects };
+          if (!task || !currentUser || currentUser.role !== 'Project Manager' || !canEditTask(currentUser, task, state.rolePermissions, scope)) {
+            result = { ok: false, error: 'You do not have permission to rate this delivery.' };
+            return state;
+          }
+          if (!(task.isCompleted || task.status === 'Completed')) {
+            result = { ok: false, error: 'Only an accepted delivery can be rated.' };
+            return state;
+          }
+          const rounded = Math.trunc(Number(stars));
+          if (!(rounded >= 1 && rounded <= 5)) {
+            result = { ok: false, error: 'Choose a rating from 1 to 5.' };
+            return state;
+          }
+          const now = new Date().toISOString();
+          const clientRating = { stars: rounded as 1 | 2 | 3 | 4 | 5, comment: comment?.trim().slice(0, 500) || undefined, ratedBy: currentUser.id, ratedAt: now };
+          const newTasks = state.tasks.map(t => t.id === taskId ? { ...t, clientRating, updatedAt: now } : t);
+          result = { ok: true };
+          return { tasks: newTasks };
+        });
+        return result;
+      },
+
+      updateTaskBrief: (taskId, input) => {
+        let result: MutationActionResult = { ok: false, error: 'Unable to save the brief.' };
+        set((state) => {
+          if (isWorkspaceMutationLocked(state)) {
+            useToastStore.getState().addToast(pendingMutationMessage, 'warning');
+            result = { ok: false, error: pendingMutationMessage };
+            return state;
+          }
+          const task = state.tasks.find(t => t.id === taskId);
+          const currentUser = state.currentUser;
+          const scope = { users: state.users, clients: state.clients, projects: state.projects };
+          if (!task || !currentUser || currentUser.role !== 'Project Manager' || !canEditTask(currentUser, task, state.rolePermissions, scope)) {
+            result = { ok: false, error: 'You do not have permission to edit this brief.' };
+            return state;
+          }
+          const references = (input.references || []).map(item => safeHttpsUrl(item)).filter((item): item is string => Boolean(item)).slice(0, 5);
+          if ((input.references || []).some(item => item.trim() && !safeHttpsUrl(item))) {
+            result = { ok: false, error: 'Links must be valid HTTPS URLs.' };
+            return state;
+          }
+          const mustHave = input.mustHave?.trim().slice(0, 1000) || undefined;
+          const avoid = input.avoid?.trim().slice(0, 1000) || undefined;
+          const now = new Date().toISOString();
+          const brief = references.length || mustHave || avoid ? { references, mustHave, avoid, updatedBy: currentUser.id, updatedAt: now } : undefined;
+          const newTasks = state.tasks.map(t => t.id === taskId ? { ...t, brief, updatedAt: now } : t);
+          result = { ok: true };
+          return { tasks: newTasks };
+        });
+        return result;
+      },
+
       updateTaskAssignee: (taskId, assignedTo) => {
         let result: MutationActionResult = { ok: false, error: 'Unable to update the task assignee.' };
         set((state) => {
@@ -3948,6 +4017,7 @@ export const useStore = create<StoreState>()(
             .map(([id, responsibility]) => [id, responsibility.trim().slice(0, 160)])),
           status: projectData.status || 'Active',
           defaultApprovalMode: projectData.defaultApprovalMode,
+          includedRevisions: normalizeIncludedRevisions(projectData.includedRevisions),
           requireClearClosureChecklist: Boolean(projectData.requireClearClosureChecklist),
           milestones: projectData.milestones || [],
           createdBy: currentUser.id,
@@ -4048,6 +4118,7 @@ export const useStore = create<StoreState>()(
               .map(([id, responsibility]) => [id, responsibility.trim().slice(0, 160)])),
           }),
           ...(data.defaultApprovalMode === undefined ? {} : { defaultApprovalMode: data.defaultApprovalMode }),
+          ...(!('includedRevisions' in data) ? {} : { includedRevisions: normalizeIncludedRevisions(data.includedRevisions) }),
           ...(data.requireClearClosureChecklist === undefined ? {} : { requireClearClosureChecklist: Boolean(data.requireClearClosureChecklist) }),
           updatedAt: new Date().toISOString(),
         };
