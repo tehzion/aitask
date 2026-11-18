@@ -91,7 +91,7 @@ test('an HOD sees the department delivery pulse and the brief flag on department
   await page.evaluate(async ({ pmId, hodId, staffId }) => {
     const { useStore } = await import('/src/store/index.ts');
     const state = useStore.getState();
-    const base = { ...state.users, ...{} } && { ...(state.tasks[0] || {}) };
+    const base = { ...(state.tasks[0] || {}) };
     const iso = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString();
     const ymd = (offset: number) => iso(offset).slice(0, 10);
     const task = (id: string, extra: Record<string, unknown>) => ({ ...base, id, title: id, clientId: 'journey-co', clientName: 'Journey Co', projectId: 'journey-project', projectName: 'Journey project',
