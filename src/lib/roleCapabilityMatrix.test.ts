@@ -85,7 +85,7 @@ describe('role capability matrix', () => {
     const paths = (actor: Actor) => getNavigationSections(actors[actor]).primary.map(item => item.path);
     expect(paths('pm')).toContain('/tasks');
     expect(paths('hod')).toEqual(expect.arrayContaining(['/', '/tasks']));
-    expect(paths('staff')).toContain('/');
+    expect(paths('staff')).toEqual(expect.arrayContaining(['/', '/tasks']));
     expect(paths('staff')).not.toContain('/approvals');
   });
 });

@@ -55,7 +55,8 @@ describe('delivery tracker navigation labels', () => {
     expect(hodSections.secondary.find(entry => entry.path === '/tasks')).toBeUndefined();
     const staffSections = getNavigationSections(staff);
     expect(staffSections.primary.find(entry => entry.path === '/')).toMatchObject({ label: 'My work' });
-    expect(staffSections.secondary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'All work' });
+    expect(staffSections.primary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'All work' });
+    expect(staffSections.secondary.find(entry => entry.path === '/tasks')).toBeUndefined();
   });
 
   it('labels a department-scoped Staff lead for oversight like the page header', () => {
