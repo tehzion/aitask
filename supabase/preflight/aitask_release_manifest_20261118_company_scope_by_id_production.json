@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-18T10:30:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "CANDIDATE 2026-11-18: migrations 20261117113041, 20261117115125, 20261117173204 are NOT yet applied to production.",
+  "status": "APPLIED 2026-11-18: production records 20261118124341, 20261118124350, 20261118124404 (owner approved; applied via the Supabase connector). Repository and production migration versions match (167/167).",
   "validatedMigrationTail": [
     "20261023063344_task_workflow_action_guards",
     "20261023154255_bind_service_command_entity_types",
@@ -48,14 +48,19 @@
     "20261116043420_hod_sees_assigned_project_company",
     "20261116081813_service_command_reports_guard_message",
     "20261116081828_allow_reopening_completed_cycle",
-    "20261117113041_align_delivery_link_and_cycle_guards",
-    "20261117115125_hod_company_visibility_by_id",
-    "20261117173204_pm_company_scope",
-    "20261118080621_preserve_published_cycle_legacy_addons"
+    "20261118080621_preserve_published_cycle_legacy_addons",
+    "20261118124341_align_delivery_link_and_cycle_guards",
+    "20261118124350_hod_company_visibility_by_id",
+    "20261118124404_pm_company_scope"
   ],
-  "pendingProductionMigrations": [
-    "20261117113041_align_delivery_link_and_cycle_guards",
-    "20261117115125_hod_company_visibility_by_id",
-    "20261117173204_pm_company_scope"
-  ]
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261118124404_pm_company_scope",
+    "latestAppliedMigration": "20261118124404_pm_company_scope",
+    "historyCount": 167,
+    "beforeHistoryCount": 164,
+    "productionOnlyMigrations": [],
+    "checks": "Live read-only verification on 2026-11-18: three versions recorded via the Supabase connector (20261118124341, 20261118124350, 20261118124404); migration list shows 167 entries."
+  }
 }
