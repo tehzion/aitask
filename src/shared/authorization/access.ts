@@ -717,7 +717,7 @@ export const canDeleteTask = (
     || task.createdBy === user.id
     || isTaskInOwnedPortfolio(user, task, scope))
   && (user?.role !== 'Staff' || isBossKoo(user) || isHodUser(user, customRoles)
-    || (!['Waiting Approval', 'Approved', 'Completed'].includes(task.status) && !task.isCompleted))
+    || (!['Waiting Approval', 'Approved', 'Completed', 'Cancelled'].includes(task.status) && !task.isCompleted))
   && (isBossKoo(user) || !isDepartmentScopedUser(user, customRoles)
     // HOD oversight grants delegation, but it must not silently become
     // destructive authority over every task in the department. Keep deletion

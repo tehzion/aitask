@@ -208,7 +208,7 @@ test('PM can create direct Staff work when the project has no eligible HOD', asy
   })).toEqual({ assignedTo: 'fallback-staff', assignmentState: undefined, responsibleHodId: undefined });
 });
 
-for (const status of ['Waiting Approval', 'Approved', 'Completed']) {
+for (const status of ['Waiting Approval', 'Approved', 'Completed', 'Cancelled']) {
   test(`Staff cannot delete ${status} work while the portfolio PM retains management`, async ({ page }) => {
     await seed(page);
     await page.evaluate(async status => {

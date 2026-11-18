@@ -24,7 +24,7 @@ select 'submitted-delete-test','task',actor||'-'||status,jsonb_build_object(
  'id',actor||'-'||status,'title',actor||'-'||status,'clientName','Deletion Company','department','Designer',
  'createdBy',actor,'assignedTo','delete-staff','status',status,'isCompleted',status='Completed','visibility','internal')
 from (values('delete-staff'),('delete-hod'),('delete-pm'),('delete-boss')) actors(actor)
-cross join (values('Pending'),('Waiting Approval'),('Approved'),('Completed'),('Revision')) stages(status);
+cross join (values('Pending'),('Waiting Approval'),('Approved'),('Completed'),('Cancelled'),('Revision')) stages(status);
 
 create function pg_temp.delete_stage(p_id text) returns jsonb language sql as $$
  select public.aitask_execute_command('submitted-delete-test',gen_random_uuid(),'task.delete',jsonb_build_array(jsonb_build_object(
@@ -34,13 +34,13 @@ $$;
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','00000000-0000-0000-0000-000000006601',true);
 select ok(not private.aitask_can_delete_task('submitted-delete-test','delete-staff-'||status),'Staff cannot erase '||status||' work')
-from (values('Waiting Approval'),('Approved'),('Completed')) stages(status);
+from (values('Waiting Approval'),('Approved'),('Completed'),('Cancelled')) stages(status);
 set local role authenticated;
 select is(pg_temp.delete_stage('delete-staff-'||status)->>'code','FORBIDDEN','command rejects Staff deletion at '||status)
-from (values('Waiting Approval'),('Approved'),('Completed')) stages(status);
-select is((select count(*)::integer from public.aitask_entities where workspace_id='submitted-delete-test' and entity_id like 'delete-staff-%'),5,'rejected commands leave all task rows intact');
-select throws_ok($$delete from public.aitask_entities where workspace_id='submitted-delete-test' and entity_type='task' and entity_id in ('delete-staff-Waiting Approval','delete-staff-Approved','delete-staff-Completed')$$,'42501','permission denied for table aitask_entities','direct table deletion is denied before reaching business records');
-select is((select count(*)::integer from public.aitask_entities where workspace_id='submitted-delete-test' and entity_id like 'delete-staff-%'),5,'direct table deletion cannot bypass the command restriction');
+from (values('Waiting Approval'),('Approved'),('Completed'),('Cancelled')) stages(status);
+select is((select count(*)::integer from public.aitask_entities where workspace_id='submitted-delete-test' and entity_id like 'delete-staff-%'),6,'rejected commands leave all task rows intact');
+select throws_ok($$delete from public.aitask_entities where workspace_id='submitted-delete-test' and entity_type='task' and entity_id in ('delete-staff-Waiting Approval','delete-staff-Approved','delete-staff-Completed','delete-staff-Cancelled')$$,'42501','permission denied for table aitask_entities','direct table deletion is denied before reaching business records');
+select is((select count(*)::integer from public.aitask_entities where workspace_id='submitted-delete-test' and entity_id like 'delete-staff-%'),6,'direct table deletion cannot bypass the command restriction');
 select is((select count(*)::integer from public.aitask_entities where workspace_id='submitted-delete-test' and entity_type='notification'),0,'blocked deletion generates no misleading notices');
 select is((pg_temp.delete_stage('delete-staff-'||status)->>'ok')::boolean,true,'Staff retains deletion for ordinary '||status||' work')
 from (values('Pending'),('Revision')) stages(status);
