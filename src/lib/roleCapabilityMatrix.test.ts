@@ -14,7 +14,8 @@ import { getNavigationSections } from './navigation';
  *   adds companies, manages company details, plans, projects and prices, and
  *   hands work to an HOD.
  * - An HOD receives that work, accepts it and delegates to Staff inside the
- *   department; creates tasks only inside a project they belong to.
+ *   department; creates tasks only inside a project they belong to. An HOD may
+ *   also add and delete company profiles (confirmed by the owner, 19 Nov 2026).
  * - Staff receive assigned work and update it. They create nothing.
  * - A Client only reviews their own company's client-visible work.
  */
