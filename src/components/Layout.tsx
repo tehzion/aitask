@@ -1,7 +1,7 @@
 import '../lib/pageCopy';
 import { recordClientEvent, setClientTelemetryActor } from '../lib/clientTelemetry';
 import { useSaveAction } from '../hooks/useSaveAction';
-import { acknowledgeActionFeedback, canRetrySave } from '../lib/actionFeedback';
+import { acknowledgeActionFeedback, canRetrySave, isRefusedSave } from '../lib/actionFeedback';
 import SystemMessage from './SystemMessage';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Outlet, NavLink, Link, useLocation, useNavigate } from 'react-router-dom';
@@ -18,6 +18,8 @@ import { shouldUseSecureSupabase } from '../lib/supabaseClient';
 import { useColorTheme } from '../hooks/useColorTheme';
 import { getNavigationShortcut, isEditableShortcutTarget } from '../lib/keyboard';
 import { useI18n } from './I18nProvider';
+import { msg } from '../lib/messages';
+import { useToastStore } from '../store/useToastStore';
 import { getMobileNavigation } from '../lib/navigation';
 import { useHodWaitingCounts } from '../hooks/useHodWaitingCounts';
 import OnboardingExperience from './OnboardingExperience';
@@ -87,6 +89,21 @@ const Layout: React.FC = () => {
     rolePermissions: state.rolePermissions,
   })));
   const notificationReadActions = useNotificationReadActions();
+
+  // A refused save leaves the screen showing a change the server will never
+  // accept. Restore the saved data by itself and say so, instead of leaving the
+  // workspace locked behind a banner. A session problem still needs a sign-in.
+  const refusedSave = isRefusedSave(backend);
+  useEffect(() => {
+    if (!refusedSave) return;
+    // Say so once the saved data is back, even if a late cleanup step after the
+    // restore reports a problem: the screen already matches the server.
+    const announce = () => {
+      const latest = useStore.getState().backend;
+      if (latest.status === 'live' && !latest.error) useToastStore.getState().addToast(msg('errors.refusedSaveRestored'), 'warning');
+    };
+    void useStore.getState().discardMutation().then(announce, announce);
+  }, [refusedSave]);
 
   const toggleSidebar = () => {
     setIsSidebarCollapsed(current => {

@@ -397,7 +397,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
     : task.comments?.length
       ? 'Leave feedback'
       : 'View details';
-  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, activeQuickTask);
+  const canAssignOthers = canAssignTasksToOthers(currentUser, rolePermissions, activeQuickTask, { users, clients: clientProfiles, projects });
   const TABLE_COLUMN_COUNT = isClientUser ? 4 : 6;
   const hasAnyFilter = [searchTerm, dateFrom, dateTo, activeClient, assigneeRouteFilter, periodRouteFilter, routeFocus, needsActionOnly].some(Boolean) || [filterDepartment, filterAssignee, filterClient, filterStatus, filterPriority].some(value => value !== 'All') || projectIdFilter || taskIdFilter;
   const activeFilterLabels = [

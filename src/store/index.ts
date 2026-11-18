@@ -113,6 +113,7 @@ import {
   completeSecurePasswordSetup,
   getRetainedSecureMemberMutation,
   getRetainedSecureCommand,
+  getLastAttemptedEntityTypes,
   isWorkspaceConflict,
   loadSecureBackendCapabilities,
   loadSecureWorkspace,
@@ -790,7 +791,7 @@ const isServiceClientInScope = (state: StoreState, clientId: string) => {
       || state.projects.some(project => project.clientId === clientId && project.createdBy === actor.id);
   }
   // Legacy/discovered records carry no owner, so fall back to the name-based check.
-  return canOpenServiceClient(actor, client.clientName, state.tasks, state.rolePermissions, state.clients, state.projects);
+  return canOpenServiceClient(actor, client.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, client.id);
 };
 
 const serviceClientScopeError = 'This company is outside your portfolio.';
@@ -1073,6 +1074,25 @@ const excludedServiceMetadataEntityTypes = (user: User | null | undefined, roleP
   if (!canManageServiceCatalog(user, rolePermissions)) excluded.add('service_package');
   if (!canViewServicePrices(user, rolePermissions)) { excluded.add('service_pricing_snapshot'); excluded.add('service_cycle_payment'); }
   return excluded;
+};
+
+// A Project Manager, Department Head or Staff member can only write companies
+// they created or work on, and Staff cannot write projects at all. The app normalises
+// these rows when it loads them, so a company or project someone else owns can
+// look "changed" locally; sending that update is refused by the server and, as
+// a command is all-or-nothing, blocks every other change in the same save
+// (assign, accept and submit all fail together).
+const unwritableRows = (user: User | null | undefined, state: Pick<StoreState, 'tasks' | 'rolePermissions' | 'clients'>) => {
+  if (!user || isBossKoo(user) || user.role === 'Client') return undefined;
+  const isStaffOnly = user.role !== 'Project Manager' && !isHodUser(user, state.rolePermissions);
+  return (row: { entityType: string; entityId: string; data: Record<string, unknown> }) => (
+    (row.entityType === 'project' && isStaffOnly)
+    || (
+      row.entityType === 'client'
+      && row.data.createdBy !== user.id
+      && !canEditClientProfile(user, String(row.data.clientName || ''), state.tasks, state.rolePermissions, state.clients, row.entityId)
+    )
+  );
 };
 
 const makeWorkspacePatch = (current: StoreState, snapshot: SnapshotResult) => {
@@ -1451,11 +1471,12 @@ export const useStore = create<StoreState>()(
                 excludeSuperAdminEntities: !stateToSave.currentUser?.isSuperAdmin,
                 actorMemberId: stateToSave.currentUser?.id,
                 excludedEntityTypes: excludedServiceMetadataEntityTypes(stateToSave.currentUser, stateToSave.rolePermissions),
+                skipRow: unwritableRows(stateToSave.currentUser, stateToSave),
               },
             );
             if (!isWorkspaceSessionCurrent(sessionToken)) return;
             if (result.ok === false) {
-              if (stateToSave.currentUser) void recordClientEvent(stateToSave.currentUser, { type: 'save_failure', code: result.code });
+              if (stateToSave.currentUser) void recordClientEvent(stateToSave.currentUser, { type: 'save_failure', code: result.code, entityTypes: getLastAttemptedEntityTypes() });
               const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
               if (!upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) return;
               markTaskSavesFailed(get().backend.lastSavedAt, false);
@@ -1978,10 +1999,11 @@ export const useStore = create<StoreState>()(
           excludeSuperAdminEntities: !get().currentUser?.isSuperAdmin,
           actorMemberId: get().currentUser?.id,
           excludedEntityTypes: excludedServiceMetadataEntityTypes(get().currentUser, get().rolePermissions),
+          skipRow: unwritableRows(get().currentUser, get()),
         });
         if (!isWorkspaceSessionCurrent(sessionToken)) return { ok: false, error: 'Your session changed. Sign in again.' };
         if (result.ok === false) {
-          if (get().currentUser) void recordClientEvent(get().currentUser!, { type: 'save_failure', code: result.code });
+          if (get().currentUser) void recordClientEvent(get().currentUser!, { type: 'save_failure', code: result.code, entityTypes: getLastAttemptedEntityTypes() });
           const upgradeRequired = result.error === BACKEND_UPGRADE_REQUIRED_MESSAGE;
           if (options.automatic && !upgradeRequired && scheduleAutomaticRecovery(result, sessionToken)) {
             return { ok: false, code: 'RETRY_REQUIRED', error: 'Saving…' };
@@ -3769,7 +3791,7 @@ export const useStore = create<StoreState>()(
             serviceDeliverable,
             state.deliverables,
           )) return '';
-          if (!canOpenServiceClient(currentUser, serviceDeliverable!.clientName, state.tasks, state.rolePermissions, state.clients, state.projects)) return '';
+          if (!canOpenServiceClient(currentUser, serviceDeliverable!.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, serviceDeliverable!.clientId)) return '';
         }
 
         const title = taskData.title.trim();
@@ -4037,6 +4059,7 @@ export const useStore = create<StoreState>()(
         // assigned to them may perform that broader mutation.
         const canRewriteLinkedTaskIdentity = isBossKoo(currentUser)
           || currentUser.role === 'Project Manager'
+          || actorIsProjectHod
           || linkedTasks.every(task => task.assignedTo === currentUser.id);
         if (identityChanged && !canRewriteLinkedTaskIdentity) {
           return {
@@ -4110,7 +4133,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const actor = state.currentUser;
         const project = state.projects.find(item => item.id === projectId);
-        if (!actor || !project || !canManageProjectLifecycle(actor, project)) return { ok: false, error: 'You cannot manage milestones for this project.' };
+        if (!actor || !project || !canEditProject(actor, project, state.rolePermissions)) return { ok: false, error: 'You cannot manage milestones for this project.' };
         if (isClosedProject(project)) return { ok: false, error: 'Reopen the project before changing milestones.' };
         const name = input.name.trim();
         if (!name) return { ok: false, error: 'Milestone name is required.' };
@@ -4144,7 +4167,7 @@ export const useStore = create<StoreState>()(
         if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
         const actor = state.currentUser;
         const project = state.projects.find(item => item.id === projectId);
-        if (!actor || !project || !canManageProjectLifecycle(actor, project)) return { ok: false, error: 'You cannot manage milestones for this project.' };
+        if (!actor || !project || !canEditProject(actor, project, state.rolePermissions)) return { ok: false, error: 'You cannot manage milestones for this project.' };
         if (isClosedProject(project)) return { ok: false, error: 'Reopen the project before changing milestones.' };
         if (state.tasks.some(task => task.projectId === projectId && task.milestoneId === milestoneId)) return { ok: false, error: 'Unlink related tasks before deleting this milestone.' };
         set(current => ({ projects: current.projects.map(item => item.id === projectId
@@ -5039,7 +5062,7 @@ export const useStore = create<StoreState>()(
         if (!deliverable || !actor) return { ok: false, error: 'Deliverable not found.' };
         if (!isServiceClientInScope(state, deliverable.clientId)) return { ok: false, error: serviceClientScopeError };
         const authorized = canManageServiceCycles(actor, state.rolePermissions) || (['Staff', 'HOD'].includes(actor.role) && state.tasks.some(task => (task.deliverableId === deliverable.id || deliverable.taskIds.includes(task.id)) && task.assignedTo === actor.id));
-        if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, deliverable.clientName, state.tasks, state.rolePermissions, state.clients))) return { ok: false, error: 'You do not have access to this deliverable.' };
+        if (!authorized || (!canManageServiceCycles(actor, state.rolePermissions) && !canOpenServiceClient(actor, deliverable.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, deliverable.clientId))) return { ok: false, error: 'You do not have access to this deliverable.' };
         if (!canSetDeliverableStatus(deliverable, status, state.tasks, state.serviceCycles, state.backend.mode === 'supabase')) return { ok: false, error: 'Deliverable status must match the progress of its required tasks.' };
         set(current => {
           const now = new Date().toISOString();
@@ -5086,6 +5109,10 @@ export const useStore = create<StoreState>()(
         const task = state.tasks.find(item => item.id === taskId);
         if (!task || !canEditTask(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'You cannot edit this task.' };
         if (!canLinkTaskDelivery(state.currentUser, task, state.rolePermissions, { users: state.users, clients: state.clients, projects: state.projects })) return { ok: false, error: 'Ask the project manager to link this task to a deliverable.' };
+        if (isHodUser(state.currentUser, state.rolePermissions)
+          && (cycleId !== task.serviceCycleId || deliverableId !== task.deliverableId)) {
+          return { ok: false, error: 'HODs can edit task execution details, but not project, company, service, or department ownership.' };
+        }
         if (isWorkflowTask(task) && (cycleId !== task.serviceCycleId || deliverableId !== task.deliverableId)) return { ok: false, error: 'Workflow identity and review records cannot be edited directly.' };
         const deliverable = deliverableId ? state.deliverables.find(item => item.id === deliverableId) : undefined;
         if (deliverableId && (!deliverable || deliverable.cycleId !== cycleId || deliverable.clientId !== task.clientId)) return { ok: false, error: 'The task and deliverable must belong to the same client and cycle.' };
@@ -5280,7 +5307,7 @@ export const useStore = create<StoreState>()(
         if (!cycle || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot comment on this cycle.' };
         if (!isServiceClientInScope(state, cycle.clientId)) return { ok: false, error: serviceClientScopeError };
         const authorized = canManageServiceCycles(actor, state.rolePermissions)
-          || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients, state.projects) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
+          || (canOpenServiceClient(actor, cycle.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, cycle.clientId) && state.tasks.some(task => task.serviceCycleId === cycle.id && task.assignedTo === actor.id));
         const clean = text.trim().slice(0, 10_000);
         if (!authorized || !clean) return { ok: false, error: authorized ? 'Comment cannot be empty.' : 'You do not have access to this cycle.' };
         const now = new Date().toISOString();
@@ -5296,7 +5323,7 @@ export const useStore = create<StoreState>()(
         if (!comment || comment.userId !== state.currentUser?.id) return { ok: false, error: 'You cannot attach a file to this comment.' };
         if (!isServiceClientInScope(state, comment.clientId)) return { ok: false, error: serviceClientScopeError };
         const authorized = canManageServiceCycles(state.currentUser, state.rolePermissions)
-          || (canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients, state.projects)
+          || (canOpenServiceClient(state.currentUser, comment.clientName, state.tasks, state.rolePermissions, state.clients, state.projects, comment.clientId)
             && state.tasks.some(task => task.serviceCycleId === comment.cycleId && task.assignedTo === state.currentUser?.id));
         if (!authorized) return { ok: false, error: 'You do not have access to this cycle.' };
         set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, attachments: [...item.attachments, attachment], updatedAt: new Date().toISOString() } : item) }));
