@@ -16,6 +16,7 @@ import { projectHasNoHod } from '../lib/taskWorkflowAccess';
 import { canManageServiceCycles } from '../lib/access';
 import MonthsToTidyPanel from './MonthsToTidyPanel';
 import BulkApprovePanel from './BulkApprovePanel';
+import { getClientReviewFollowUps } from '../lib/clientReviewFollowUp';
 import StaffingGapsPanel from './StaffingGapsPanel';
 import { isTaskCompleted } from '../lib/taskCompletion';
 import { isTaskOpen } from '../lib/taskReporting';
@@ -302,6 +303,7 @@ const ServiceRoleDashboard = () => {
       { key: 'overdue', title: t('Overdue'), tasks: takeUnseen(overdue) },
       { key: 'today', title: t('Due today'), tasks: takeUnseen(dueToday) },
       { key: 'unassigned', title: t('Not assigned yet'), tasks: takeUnseen(notAssignedTasks) },
+      { key: 'client-silent', title: t('Client has not responded'), tasks: takeUnseen(getClientReviewFollowUps(scopeTasks, now)) },
     ];
     const myDayQueues = myDayCandidates.filter(queue => queue.tasks.length > 0);
     const emptyMyDayTitles = myDayCandidates.filter(queue => queue.tasks.length === 0).map(queue => queue.title);

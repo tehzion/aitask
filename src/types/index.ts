@@ -433,8 +433,25 @@ export interface Project {
   requireClearClosureChecklist?: boolean;
   /** Existing projects omit this so their historical task approval behaviour is preserved. */
   defaultApprovalMode?: ProjectApprovalMode;
+  /** Revision rounds included in the project; unset means no allowance is tracked. */
+  includedRevisions?: number;
   milestones?: ProjectMilestone[];
   updatedAt?: string;
+}
+
+export interface TaskBrief {
+  references: string[];
+  mustHave?: string;
+  avoid?: string;
+  updatedBy: string;
+  updatedAt: string;
+}
+
+export interface TaskClientRating {
+  stars: 1 | 2 | 3 | 4 | 5;
+  comment?: string;
+  ratedBy: string;
+  ratedAt: string;
 }
 
 export type ProjectLifecycleStatus = 'Active' | 'Completed' | 'Closed';
@@ -555,6 +572,10 @@ export interface Task {
   isCompleted: boolean;
   completedAt?: string;
   revisionCount: number;
+  /** Satisfaction rating recorded when the delivery is accepted. */
+  clientRating?: TaskClientRating;
+  /** What the client asked for, written once so the team does not guess. */
+  brief?: TaskBrief;
   clientApprovalStatus: ClientApprovalStatus;
   isRecurring: boolean;
   recurrenceFrequency?: RecurrenceFrequency;
