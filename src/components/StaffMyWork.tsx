@@ -27,6 +27,7 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import { getStaffDashboardMetrics } from '../lib/staffDashboard';
 import { useQuickTaskAction } from '../hooks/useQuickTaskAction';
 import HodStaffWorkload from './HodStaffWorkload';
+import DepartmentDeliveryGlance from './DepartmentDeliveryGlance';
 
 /**
  * The focus card's main button is the next step when it takes one click, such
@@ -271,6 +272,8 @@ const StaffMyWork: React.FC = () => {
         </div>
         {contextUnavailableDependencyTaskCount > 0 && <p className="flex items-start gap-2 border-t border-line px-5 py-3 text-sm text-muted"><AlertTriangle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" /><span>{t(contextUnavailableDependencyTaskCount === 1 ? '{count} task waits on an earlier step you cannot see. Ask your PM if it is urgent.' : '{count} tasks wait on earlier steps you cannot see. Ask your PM if one is urgent.', { count: contextUnavailableDependencyTaskCount })}</span></p>}
       </Surface>
+
+      {isHod && isDepartmentLead && <DepartmentDeliveryGlance tasks={departmentTasks} />}
 
       {persona === 'account' && !isDepartmentLead && renewalPlans.length > 0 && <section aria-labelledby="account-renewals-title">
         <h2 id="account-renewals-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{t('Upcoming renewals')}</h2>
