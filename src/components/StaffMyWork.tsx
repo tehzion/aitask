@@ -234,7 +234,7 @@ const StaffMyWork: React.FC = () => {
         </Surface>
       )}
 
-      <section aria-labelledby="staff-queue-title">
+      {!(isHod && bucketOrder.every(bucket => queue[bucket].length === 0)) && <section aria-labelledby="staff-queue-title">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div><h2 id="staff-queue-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{isHod && scope === 'department' ? t('Department queue') : isHod && scope === 'delegated' ? t('Delegated by me') : t('Assigned queue')}</h2><p className="mt-1 text-sm text-muted">{t('Work is ordered by revision, deadline, state, and priority.')}</p></div>
           <Link to={isHod ? `/tasks?scope=${scope}` : "/tasks?period=all"} className="inline-flex min-h-11 items-center gap-2 text-sm font-semibold text-ink hover:text-accent hover:underline">{t(isDepartmentLead ? 'Department tasks' : 'All work')} <ArrowRight className="h-4 w-4" /></Link>
@@ -257,7 +257,7 @@ const StaffMyWork: React.FC = () => {
           {queue[activeBucket].slice(0, 8).map(task => <StaffWorkItem key={task.id} task={task} allTasks={accessibleTasks} users={users} onOpen={item => openTask(item.id)} />)}
           {queue[activeBucket].length === 0 && <div className="px-5 py-12 text-center"><ListChecks className="mx-auto h-7 w-7 text-muted/60" aria-hidden="true" /><p className="mt-3 text-sm font-semibold text-ink">{t(activeBucket === 'needs_action' ? 'feedback.noNeedsAction' : activeBucket === 'up_next' ? 'feedback.noUpNext' : activeBucket === 'waiting' ? 'feedback.noWaiting' : 'feedback.noDone')}</p><p className="mt-1 text-sm text-muted">{t('Choose another queue to review your work.')}</p></div>}
         </Surface>
-      </section>
+      </section>}
 
       </div>
 

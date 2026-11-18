@@ -214,7 +214,7 @@ test('PM create-task choices require a project for assigned companies and hide c
   });
 
   const dialog = page.getByRole('dialog', { name: 'Create task', exact: true });
-  const project = dialog.getByLabel('Link to Company / Brand (Optional)');
+  const project = dialog.getByLabel('Project (Optional)');
   await expect(project.getByRole('option', { name: 'Assigned campaign (Assigned Company)' })).toHaveCount(1);
   await expect(project.getByRole('option', { name: 'Closed campaign (PM Company)' })).toHaveCount(0);
   await expect(dialog.getByLabel('Client / Brand Name').getByRole('option', { name: 'Assigned Company' })).toHaveCount(0);

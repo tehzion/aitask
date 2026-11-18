@@ -26,7 +26,7 @@ const openTask = async (page: Page) => {
   await page.goto('/tasks');
   await page.getByRole('button', { name: 'New task', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Create task', exact: true });
-  await dialog.getByLabel(/Link to Company \/ Brand/).selectOption('creation-project');
+  await dialog.getByLabel(/^(Project|Link to Company \/ Brand)/).selectOption('creation-project');
   await dialog.getByLabel('Task Title').fill('Recoverable creation');
   await dialog.getByLabel(/Assign to Position\/Department/).selectOption('Designer');
   await dialog.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption('u-hod-demo-local');

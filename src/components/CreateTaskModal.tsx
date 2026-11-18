@@ -13,7 +13,7 @@ import { Department, Priority, ServiceType, TaskApprovalMode, TaskVisibility } f
 import CreateProjectModal from './CreateProjectModal';
 import { useNavigate } from 'react-router-dom';
 import { getServiceOptions, hasChoice } from '../lib/choiceOptions';
-import { canAssignTasksToOthers, canCreateManualTasks, canManageProjects, canManageServiceCycles, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../lib/access';
+import { canAssignTasksToOthers, canCreateManualTasks, canManageProjects, isHodUser, canManageServiceCycles, getAssignableProjects, getVisibleClientNames, getVisibleTasks } from '../lib/access';
 import { safeHttpsUrl } from '../lib/security';
 import { getTodayInputDate } from '../lib/utils';
 import { getCurrentPublishedCycle, getLinkableDeliverables, suggestDeliverableForTask } from '../lib/deliveryLinks';
@@ -553,7 +553,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
               <div>
                 <div className="mb-1 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
                   <label htmlFor={projectSelectId} className="block text-sm font-medium text-slate-700">
-                    {t('Link to Company / Brand')} {isStaffTaskCreator ? <span className="text-red-500">*</span> : t('(Optional)')}
+                    {isStaffTaskCreator ? <>{t('Link to Company / Brand')} <span className="text-red-500">*</span></> : <>{t('Project')} {t('(Optional)')}</>}
                   </label>
                   {canCreateProjects && !isStaffTaskCreator && (
                     <button
@@ -572,7 +572,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     onChange={e => selectProject(e.target.value)}
                     className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"
                   >
-                    <option value="">{t(isStaffTaskCreator ? 'Choose an available company or brand' : 'No Company Link / Independent Task')}</option>
+                    <option value="">{t(isStaffTaskCreator ? 'Choose an available company or brand' : 'No project (standalone task)')}</option>
                     {assignableProjects.map(p => (
                       <option key={p.id} data-i18n-skip value={p.id}>{p.projectName} ({p.clientName})</option>
                     ))}
@@ -675,8 +675,14 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                       id={departmentId}
                       value={department}
                       onChange={e => {
-                        setDepartment(e.target.value as Department);
-                        setAssignedTo(''); // Reset assignee when department changes
+                        const nextDepartment = e.target.value as Department;
+                        setDepartment(nextDepartment);
+                        // A PM hands work to the department's HOD; preselect the only eligible one.
+                        const onlyHod = currentUser?.role === 'Project Manager' && nextDepartment
+                          ? assignableTaskAssignees(currentUser, nextDepartment, users, rolePermissions)
+                            .filter(user => user.id !== currentUser.id && isHodUser(user, rolePermissions))
+                          : [];
+                        setAssignedTo(onlyHod.length === 1 ? onlyHod[0].id : ''); // Reset assignee when department changes
                         setAssignmentError('');
                       }}
                       className="w-full bg-white border border-slate-300 text-slate-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block p-2.5 pr-10 outline-none shadow-sm cursor-pointer appearance-none"

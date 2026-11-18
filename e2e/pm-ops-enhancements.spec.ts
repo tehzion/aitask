@@ -51,10 +51,11 @@ test('PM re-dates long-overdue work and assigns unowned work from the dashboard'
   await page.goto('/');
 
   const day = page.getByRole('region', { name: 'My day' });
-  await expect(day.getByRole('heading', { name: 'Awaiting your review' })).toBeVisible();
-  await expect(day.getByRole('heading', { name: 'Ready to finalize' })).toBeVisible();
+  // Queues with work show as sections; empty ones collapse into one line.
   await expect(day.getByRole('heading', { name: 'Overdue', exact: true })).toBeVisible();
-  await expect(day.getByRole('heading', { name: 'Due today', exact: true })).toBeVisible();
+  await expect(day.getByRole('heading', { name: 'Not assigned yet' })).toBeVisible();
+  await expect(day.getByText(/Nothing waiting in:/)).toContainText('Awaiting your review');
+  await expect(day.getByText(/Nothing waiting in:/)).toContainText('Ready to finalize');
   await expect(day.getByRole('heading', { name: 'Months to start' })).toBeVisible();
   await expect(day.getByRole('heading', { name: 'Unlinked work this month' })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Stuck work' })).toBeVisible();

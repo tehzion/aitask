@@ -66,7 +66,8 @@ test('new-task assignee options follow department and changing it clears the pre
   await expect(assignee.locator('option')).toHaveText(['Unassigned', 'Department HOD (HOD)']);
   await assignee.selectOption({ label: 'Department HOD (HOD)' });
   await department.selectOption({ label: 'Designer' });
-  await expect(assignee).toHaveValue('');
+  // The previous department's HOD is cleared; Designer's own HOD (if any) is preselected.
+  await expect(assignee).not.toHaveValue('department-hod');
   await expect(assignee.locator('option')).toContainText(['Unassigned', 'Design Staff']);
   await expect(assignee.getByRole('option', {name:'Department HOD (HOD)',exact:true})).toHaveCount(0);
   await department.selectOption({ label: 'Video Editor' });

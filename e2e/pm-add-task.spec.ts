@@ -36,7 +36,7 @@ test('a PM adds a task from the Tasks header and hands it to a HOD to handle', a
   await page.getByRole('button', { name: 'New task', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Create task', exact: true });
   await expect(dialog).toBeVisible();
-  await dialog.getByLabel(/Link to Company \/ Brand/).selectOption('pm-flow-project');
+  await dialog.getByLabel(/^Project/).selectOption('pm-flow-project');
   await dialog.getByLabel('Task Title').fill('PM handed task');
   await dialog.getByLabel(/Assign to Position\/Department/).selectOption('Video Shooting');
   await dialog.getByRole('combobox', { name: 'Assignee', exact: true }).selectOption({ label: 'Flow HOD (HOD)' });
