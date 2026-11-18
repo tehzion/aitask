@@ -13,6 +13,7 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import { useTaskNextStep } from '../hooks/useTaskNextStep';
 import { useQuickTaskAction } from '../hooks/useQuickTaskAction';
 import { useQuickAssign } from '../hooks/useQuickAssign';
+import { useRevisionAllowance } from '../hooks/useRevisionAllowance';
 import { isAwaitingHodAssignment } from '../lib/taskWorkflowAccess';
 import { StatusChip } from './ui';
 import TaskSaveNote from './TaskSaveNote';
@@ -54,6 +55,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   const nextStep = useTaskNextStep(task);
   const quickAction = useQuickTaskAction(task);
   const quickAssign = useQuickAssign(task);
+  const revision = useRevisionAllowance(task);
   const currentUserId = useStore(state => state.currentUser?.id);
   // An HOD's task waiting to be handed out: assigning is the next step; with no
   // eligible Staff, say so, since starting it yourself is then the only option.
@@ -73,7 +75,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   // What to fix, without opening the task (role UX: revision reason on the card).
   const revisionNote = open && task.status !== 'Waiting Approval' ? getLatestRevisionNote(task) : undefined;
   const flags = [
-    task.revisionCount > 0 && open && `${t('Revision')} ${task.revisionCount}`,
+    task.revisionCount > 0 && open && revision.label,
     open && task.workState?.blocker && t('Help requested'),
     !waitingToStart && blockers > 0 && `${blockers} ${t(blockers === 1 ? 'blocker' : 'blockers')}`,
     !waitingToStart && hiddenStepsOpen && t('Waits on an earlier step'),

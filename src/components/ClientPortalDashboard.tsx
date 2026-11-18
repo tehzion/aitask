@@ -157,7 +157,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
       </section>
 
       <section className="overflow-hidden rounded-panel bg-surface ring-1 ring-line/80" aria-labelledby="needs-review-title">
-        <header className="flex flex-wrap items-end justify-between gap-3 border-b border-line/70 px-4 py-4 sm:px-5">
+        <header className={`flex flex-wrap items-end justify-between gap-3 px-4 py-4 sm:px-5 ${reviewQueue.length > 0 ? 'border-b border-line/70' : ''}`}>
           <div><h2 id="needs-review-title" className="font-semibold text-ink">{t('Waiting on you')}</h2><p className="mt-1 text-sm text-muted">{t('clientPortal.reviewCount', { count: reviewQueue.length })}</p></div>
           {reviewQueue.length > 0 && <Link to="/tasks?stage=needs_review" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold text-accent">{t('clientPortal.viewAllReviews', { count: reviewQueue.length })}<ArrowRight className="h-4 w-4" /></Link>}
         </header>
@@ -166,7 +166,6 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
             <div><p data-i18n-skip className="font-semibold text-ink">{getClientTaskTitle(task)}</p><p className="mt-1 text-xs text-muted"><span data-i18n-skip>{task.serviceType}</span> · {expectedDate(task, locale, t('Date to be confirmed'))}</p></div>
             <button type="button" onClick={() => setReviewTaskId(task.id)} className="min-h-11 rounded-control px-3 text-sm font-semibold text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{t('Review deliverable')} <ArrowRight className="ml-1 inline h-4 w-4" /></button>
           </article>)}
-          {reviewQueue.length === 0 && <p className="px-5 py-8 text-sm text-muted">{t('clientPortal.nothingWaiting')}</p>}
         </div>
       </section>
 

@@ -32,12 +32,17 @@ describe('delivery tracker navigation labels', () => {
         path: '/clients',
       });
     });
-    internalUsers.slice(2).forEach(user => {
-      expect(getMobileNavigation(user).find(entry => entry.path === '/clients')).toMatchObject({
-        label: 'Deliveries',
-        path: '/clients',
-      });
+    // Staff keep Deliveries in the bottom bar; an HOD swaps it for the department
+    // task list (Deliveries stays one tap away under More).
+    const staffUser = internalUsers.find(user => user.id === 'staff')!;
+    expect(getMobileNavigation(staffUser).find(entry => entry.path === '/clients')).toMatchObject({
+      label: 'Deliveries',
+      path: '/clients',
     });
+    const hodUser = internalUsers.find(user => user.id === 'hod')!;
+    const hodMobile = getMobileNavigation(hodUser);
+    expect(hodMobile.map(entry => entry.path)).toEqual(['/', '/tasks', '/calendar', '/notifications']);
+    expect(hodMobile.map(entry => entry.label)).toEqual(['Work', 'Tasks', 'Schedule', 'Inbox']);
   });
 
   it('labels the HOD primary destinations for department oversight', () => {
@@ -50,7 +55,8 @@ describe('delivery tracker navigation labels', () => {
     expect(hodSections.secondary.find(entry => entry.path === '/tasks')).toBeUndefined();
     const staffSections = getNavigationSections(staff);
     expect(staffSections.primary.find(entry => entry.path === '/')).toMatchObject({ label: 'My work' });
-    expect(staffSections.secondary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'All work' });
+    expect(staffSections.primary.find(entry => entry.path === '/tasks')).toMatchObject({ label: 'All work' });
+    expect(staffSections.secondary.find(entry => entry.path === '/tasks')).toBeUndefined();
   });
 
   it('labels a department-scoped Staff lead for oversight like the page header', () => {

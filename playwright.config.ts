@@ -7,7 +7,9 @@ export default defineConfig({
   testDir: './e2e',
   testIgnore: ['**/localdb/**', '**/pwa-install.spec.ts', '**/login-recovery-i18n.spec.ts', '**/staging-release.spec.ts'],
   fullyParallel: false,
-  workers: 1,
+  // Two workers in CI halved the local run (12.7 vs 22.6 minutes at three);
+  // CI retries absorb the rare timing flake that parallel load can cause.
+  workers: process.env.CI ? 2 : 1,
   retries: process.env.CI ? 2 : 0,
   reporter: 'list',
   use: {

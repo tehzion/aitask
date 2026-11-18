@@ -20,6 +20,7 @@ import { Button, MetaLine, SegmentedTabs, StatusChip, Surface } from './ui';
 import ShortcutKey from './ShortcutKey';
 import BackendFreshness from './BackendFreshness';
 import StaffWorkItem from './StaffWorkItem';
+import { useRevisionAllowance } from '../hooks/useRevisionAllowance';
 import { formatLocalizedWeekdayDate } from '../lib/i18n';
 import { useI18n } from './I18nProvider';
 import { useLocalToday } from '../hooks/useLocalToday';
@@ -108,6 +109,7 @@ const StaffMyWork: React.FC = () => {
     [allTasks, clients, currentUser, deliverables, isBlocked, isHod, projects, rolePermissions, serviceCycles, taskStatuses, tasks, today, users],
   );
   const focusTask = getStaffFocusTask(queue, isBlocked);
+  const focusRevisionLabel = useRevisionAllowance(focusTask ?? { revisionCount: 0, projectId: undefined }).label;
   const waitingOnEarlierSteps = [...queue.needs_action, ...queue.up_next].filter(isBlocked).length;
   // Finished work never opens by default; Done stays one tab away as history.
   const defaultBucket = queue.needs_action.length > 0 ? 'needs_action' : queue.up_next.length > 0 ? 'up_next' : queue.waiting.length > 0 ? 'waiting' : 'needs_action';
@@ -210,9 +212,10 @@ const StaffMyWork: React.FC = () => {
               <h2 data-i18n-skip id="staff-focus-title" className="mt-2 text-balance text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-3xl">{focusTask.title}</h2>
               <MetaLine className="mt-2"><span data-i18n-skip>{focusTask.clientName}{focusTask.projectName ? ` · ${focusTask.projectName}` : ''}</span> · {t('Assigned')}: <span data-i18n-skip>{users.find(member => member.id === focusTask.assignedTo)?.name || t('Unassigned')}</span></MetaLine>
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
-                <StatusChip tone={focusTask.revisionCount > 0 ? 'amber' : focusTask.status === 'In Progress' ? 'blue' : 'slate'}>{focusTask.revisionCount > 0 ? `${t('Revision')} ${focusTask.revisionCount}` : getLocalizedTaskStatus(focusTask.status, locale)}</StatusChip>
+                <StatusChip tone={focusTask.revisionCount > 0 ? 'amber' : focusTask.status === 'In Progress' ? 'blue' : 'slate'}>{focusTask.revisionCount > 0 ? focusRevisionLabel : getLocalizedTaskStatus(focusTask.status, locale)}</StatusChip>
                 <span className="calm-meta">{getRelativeDueDateString(focusTask.dueDate, focusTask.isCompleted, focusTask.status, locale)}</span>
                 <span className="calm-meta">{t('Priority')}: {t(focusTask.priority)}</span>
+                {isBlocked(focusTask) && <StatusChip tone="slate">{t('Waits on an earlier step')}</StatusChip>}
               </div>
               {focusTask.status === 'In Progress' && (
                 <div className="mt-5 max-w-md">

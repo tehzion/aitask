@@ -2,6 +2,7 @@ import '../lib/pageCopy';
 import TaskOutputFiles, { ReviewSettingsDisclosure, type OutputUploadState } from './TaskOutputFiles';
 import { formatLocalizedDateRange } from '../lib/i18n';
 import { useReviewCoverExpiry } from '../hooks/useReviewCoverExpiry';
+import { useRevisionAllowance } from '../hooks/useRevisionAllowance';
 import { getLocalizedTaskStatus } from '../lib/localeLabels';
 import { acknowledgeActionFeedback, dismissActionFeedback, queueActionFeedback } from '../lib/actionFeedback';
 import { msg } from '../lib/messages';
@@ -24,6 +25,8 @@ import SideSheet from './SideSheet';
 import BackendFreshness from './BackendFreshness';
 import SessionRecoveryButton from './SessionRecoveryButton';
 import { useI18n } from './I18nProvider';
+import TaskRatingControl from './TaskRatingControl';
+import TaskBriefPanel from './TaskBriefPanel';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { getVisibleTasks, getTaskAccess } from '../lib/access';
 import { canRequestTaskRevision, getDepartmentReviewers, getInternalReviewLane } from '../lib/taskWorkflowAccess';
@@ -105,6 +108,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   const operationGeneration = React.useRef(0);
   const clearUnsaved = useUnsavedChanges(isOpen && Boolean(comment.trim() || helpReason.trim() || revisionNote.trim() || isSaving || pendingSave || outputUpload.busy || outputUpload.pending));
   const liveTask = task ? tasks.find(item => item.id === task.id) || null : null;
+  const revision = useRevisionAllowance(liveTask ?? { revisionCount: 0, projectId: undefined });
   useReviewCoverExpiry(liveTask?.reviewCover?.expiresAt);
 
   React.useEffect(() => {
@@ -438,10 +442,14 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
             <TaskStatusBadges task={liveTask} />
             <span className="text-muted">{t(liveTask.priority)} {t('priority')}</span>
             <span className={overdue ? 'font-semibold text-red-700 dark:text-red-300' : 'text-muted'}>{getRelativeDueDateString(liveTask.dueDate, liveTask.isCompleted, liveTask.status, locale)}</span>
-            {liveTask.revisionCount > 0 && <span className="font-medium text-amber-700">{t('Revision')} {liveTask.revisionCount}</span>}
+            {liveTask.revisionCount > 0 && <span className="font-medium text-amber-700">{revision.label}{revision.allowance.over ? ` · ${t('Beyond the revisions included in this project.')}` : ''}</span>}
           </div>
         </section>
         {liveTask.status !== 'Cancelled' && <TaskWorkflowSteps task={liveTask} label={t('Task progress')} progress={taskProgress} />}
+        <TaskBriefPanel task={liveTask} canEdit={currentUser?.role === 'Project Manager' && canEdit && isTaskOpen(liveTask)} />
+        {liveTask.visibility !== 'internal' && (liveTask.isCompleted || liveTask.status === 'Completed') && (
+          <TaskRatingControl task={liveTask} canRate={currentUser?.role === 'Project Manager' && canEdit} />
+        )}
 
         {incompletePredecessors.length > 0 && (
           <section className="rounded-panel bg-amber-50 p-4 text-[#6b3f00] ring-1 ring-amber-200 dark:bg-[#31240f] dark:text-[#fff2c2] dark:ring-[#765d22]" aria-labelledby="staff-task-blockers">

@@ -18,6 +18,7 @@ import { useColorTheme } from '../hooks/useColorTheme';
 import { useLocalToday } from '../hooks/useLocalToday';
 import ContextualTutorialLink from '../components/ContextualTutorialLink';
 import MonthlyOperationalReport from '../components/MonthlyOperationalReport';
+import DeliveryQualityPanel from '../components/DeliveryQualityPanel';
 
 
 /** A rate with nothing tracked yet reads as "—", not a failing 0% (role audit). */
@@ -165,6 +166,7 @@ const Reports: React.FC = () => {
       />
 
       {!isClientUser && <MonthlyOperationalReport />}
+      {!isClientUser && <DeliveryQualityPanel />}
 
       {isClientUser && <section className="rounded-panel bg-surface p-4 ring-1 ring-line/80 sm:p-5" aria-labelledby="client-report-timing-title">
         <h2 id="client-report-timing-title" className="font-semibold text-ink">{t('clientReport.timingTitle')}</h2>

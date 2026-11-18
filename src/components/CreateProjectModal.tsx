@@ -22,6 +22,7 @@ import { fieldLabel, modalFooter } from './uiTokens';
 import { canCreateClientProfiles, canDeleteProject, canViewAllClients, getVisibleClientNames, isBossKoo, isHodUser } from '../lib/access';
 import CreateClientProfileModal from './CreateClientProfileModal';
 import { useI18n } from './I18nProvider';
+import { MAX_INCLUDED_REVISIONS, normalizeIncludedRevisions } from '../lib/revisionAllowance';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 
 // Decision D1 (9 Nov 2026): the PM approves every task; the HOD only assigns.
@@ -83,6 +84,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
   const [memberResponsibilities, setMemberResponsibilities] = useState<Record<string, string>>({});
   const [defaultApprovalMode, setDefaultApprovalMode] = useState<ProjectApprovalMode>(FIXED_APPROVAL_MODE);
   const [requireClearClosureChecklist, setRequireClearClosureChecklist] = useState(false);
+  const [includedRevisions, setIncludedRevisions] = useState('');
+  const includedRevisionsId = React.useId();
   const [customServices, setCustomServices] = useState<string[]>([]);
   const [customInput, setCustomInput]       = useState('');
   const [customError, setCustomError]       = useState('');
@@ -165,6 +168,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       setMemberResponsibilities(project.memberResponsibilities || {});
       setDefaultApprovalMode(FIXED_APPROVAL_MODE);
       setRequireClearClosureChecklist(Boolean(project.requireClearClosureChecklist));
+      setIncludedRevisions(project.includedRevisions === undefined ? '' : String(project.includedRevisions));
     } else {
       setClientId(initialClientId || '');
       setProjectName('');
@@ -177,6 +181,8 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       setMemberResponsibilities({});
       setDefaultApprovalMode(FIXED_APPROVAL_MODE);
       setRequireClearClosureChecklist(false);
+    setIncludedRevisions('');
+      setIncludedRevisions('');
     }
   }, [clientOptions, currentUser, initialClientId, isOpen, project, users]);
 
@@ -395,6 +401,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
         memberResponsibilities,
         defaultApprovalMode,
         requireClearClosureChecklist,
+        ...(isBossKoo(currentUser) || currentUser?.role === 'Project Manager' ? { includedRevisions: normalizeIncludedRevisions(includedRevisions) } : {}),
       });
 
       if (!result.ok) {
@@ -423,6 +430,7 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
       memberResponsibilities,
       defaultApprovalMode,
       requireClearClosureChecklist,
+      includedRevisions: normalizeIncludedRevisions(includedRevisions),
     });
 
     if (!newProjectId) {
@@ -578,6 +586,22 @@ const CreateProjectModal: React.FC<Props> = ({ isOpen, onClose, project, initial
                 </div>
               </fieldset>
             )}
+
+            {(isBossKoo(currentUser) || currentUser?.role === 'Project Manager') && <fieldset className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
+              <legend className="px-1 text-sm font-semibold text-slate-700">{t('Delivery defaults')}</legend>
+              <div>
+                <label htmlFor={includedRevisionsId} className="block text-sm font-medium text-slate-700">{t('Revisions included')} {t('(Optional)')}</label>
+                <input
+                  id={includedRevisionsId}
+                  type="number" inputMode="numeric" min={0} max={MAX_INCLUDED_REVISIONS} step={1}
+                  value={includedRevisions}
+                  onChange={event => setIncludedRevisions(event.target.value)}
+                  aria-describedby={`${includedRevisionsId}-hint`}
+                  className="mt-1 w-32 rounded-lg border border-slate-300 bg-white p-2.5 text-sm shadow-sm outline-none focus:border-blue-500 focus:ring-blue-500"
+                />
+                <p id={`${includedRevisionsId}-hint`} className="mt-1 text-xs text-slate-500">{t('Tasks show how many revision rounds were used out of this number. Leave blank to not track it.')}</p>
+              </div>
+            </fieldset>}
 
             <fieldset className="space-y-3 rounded-lg border border-slate-200 bg-slate-50/70 p-3">
               <legend className="px-1 text-sm font-semibold text-slate-700">{t('Closure defaults')}</legend>
