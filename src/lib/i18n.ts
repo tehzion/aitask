@@ -169,6 +169,7 @@ const zhCopy: Record<string, string> = {
   'Menu': '菜单',
   'Dashboard': '仪表板',
   'Tasks': '任务',
+  'Work': '工作',
   'Independent task': '独立任务',
   'Calendar': '日历',
   'Clients': '客户',
