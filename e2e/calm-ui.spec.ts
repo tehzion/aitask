@@ -50,7 +50,7 @@ const expectNoHorizontalOverflow = async (page: import('@playwright/test').Page,
 // of treating platform font rasterisation as a product regression in Linux CI.
 // Every CI run still exercises each route, theme, viewport, semantic heading,
 // overflow check, and the Projects accessibility scan below.
-const hasCommittedVisualBaseline = process.platform === 'darwin';
+const hasCommittedVisualBaseline = process.platform === 'darwin' || process.platform === 'linux';
 
 test('core operations screens keep their semantic layout in light and dark modes', async ({ page }) => {
   test.setTimeout(180_000);
