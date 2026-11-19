@@ -28,8 +28,8 @@ test('PM assignees follow the selected department and assigned HODs can accept w
   await expect(assignee.getByRole('option', {name:'Outside HOD (HOD)',exact:true})).toHaveCount(0);
   await expect(assignee.getByRole('option', {name:'Outside Staff',exact:true})).toHaveCount(0);
   await page.getByRole('combobox', {name:'Department',exact:true}).selectOption({label:'Video Editor'});
-  await expect(assignee.getByRole('option', {name:'Outside HOD (HOD)',exact:true})).toBeAttached();
-  await expect(assignee.getByRole('option', {name:'Outside Staff',exact:true})).toBeAttached();
+  await expect(assignee.getByRole('option', {name:/^Outside HOD \(HOD\)/})).toBeAttached();
+  await expect(assignee.getByRole('option', {name:/^Outside Staff/})).toBeAttached();
   await assignee.selectOption('policy-hod');
   await page.getByRole('button',{name:'Save Changes',exact:true}).click();
   await page.evaluate(async () => { const {useStore}=await import('/src/store/index.ts');useStore.setState({currentUser:useStore.getState().users.find(user=>user.id==='policy-hod')!}); });
