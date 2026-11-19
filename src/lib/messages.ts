@@ -44,6 +44,10 @@ export const enMessages = {
   "feedback.notSavedPhoto": "Photo ready. Save profile to apply it.",
 
   'clientPortal.reviewCount': '{count} deliveries need your review',
+  'ui.openCount': '{count} open',
+  'ui.waitingOnClientCount': '{count} with client',
+  'ui.onTimePercent': '{percent}% on time',
+  'ui.finishedCount': '{count} finished',
   'ui.ratedCount': '{count} rated',
   'ui.removeInvalidLink': 'Remove the invalid delivery link from "{title}"? The task will remain and require an explicit new link.',
   'ui.pickBillingDate': 'Pick one of this plan’s billing dates, from {date}, up to 12 months ahead.',
@@ -461,6 +465,10 @@ export const zhMessages: Record<keyof typeof enMessages, string> = {
   "feedback.notSavedPhoto": "照片已准备好。请保存个人资料以应用。",
 
   'clientPortal.reviewCount': '{count} 项交付需要您审阅',
+  'ui.openCount': '{count} 项进行中',
+  'ui.waitingOnClientCount': '{count} 项待客户处理',
+  'ui.onTimePercent': '准时率 {percent}%',
+  'ui.finishedCount': '已完成 {count} 项',
   'ui.ratedCount': '{count} 条评分',
   'ui.removeInvalidLink': '要从“{title}”移除无效的交付链接吗？任务会保留，并需要明确添加新链接。',
   'ui.pickBillingDate': '请从该计划的账单日中选择一个，从 {date} 起，最多提前 12 个月。',
