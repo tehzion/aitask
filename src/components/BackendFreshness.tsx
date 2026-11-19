@@ -135,7 +135,7 @@ const BackendFreshness: React.FC<BackendFreshnessProps> = ({ compact = false, cl
           </span>
         )}
       </div>
-      {staleMinutes !== null && !needsResolution && <span className="whitespace-nowrap text-[11px] font-medium text-amber-700 dark:text-amber-300">{t('Last updated {minutes} min ago', { minutes: staleMinutes })}</span>}
+      {staleMinutes !== null && !needsResolution && <span className="whitespace-nowrap text-[11px] font-medium text-amber-700 dark:text-amber-300">{t('ui.updatedMinutesAgo', { minutes: staleMinutes })}</span>}
       {showRefresh && (
         <Button
           variant="secondary"

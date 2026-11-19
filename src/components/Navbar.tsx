@@ -288,7 +288,7 @@ const Navbar: React.FC<NavbarProps> = ({
           {showMobileSearch ? <X className="w-5 h-5" /> : <Search className="w-5 h-5" />}
         </IconButton>
         <div className="relative flex items-center" ref={appearanceRef}>
-          <IconButton onClick={onToggleTheme} label={t('Switch to {mode} mode', { mode: resolvedTheme === 'dark' ? t('day') : t('night') })} aria-pressed={resolvedTheme === 'dark'} aria-keyshortcuts="Shift+D" className="rounded-r-none">
+          <IconButton onClick={onToggleTheme} label={t('ui.switchMode', { mode: resolvedTheme === 'dark' ? t('day') : t('night') })} aria-pressed={resolvedTheme === 'dark'} aria-keyshortcuts="Shift+D" className="rounded-r-none">
             {resolvedTheme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
           </IconButton>
           <button ref={appearanceTriggerRef} type="button" onClick={() => setShowAppearance(value => !value)} onKeyDown={event => { if (event.key === 'Escape' && showAppearance) { event.preventDefault(); closeAppearance(true); } }} aria-label={t('Appearance settings')} aria-haspopup="menu" aria-expanded={showAppearance} aria-controls="appearance-menu" className="flex h-11 w-11 items-center justify-center rounded-r-control text-muted hover:bg-inset hover:text-ink"><ChevronDown className="h-4 w-4" /></button>
@@ -324,7 +324,7 @@ const Navbar: React.FC<NavbarProps> = ({
                 <div>
                   <h3 className="font-bold text-slate-900">{t('Notifications')}</h3>
                   <p className="text-xs text-slate-500">
-                    {unreadCount > 0 ? t('{count} unread', { count: unreadCount }) : t('All caught up')}
+                    {unreadCount > 0 ? t('ui.unreadCount', { count: unreadCount }) : t('All caught up')}
                   </p>
                 </div>
                 {unreadCount > 0 ? (

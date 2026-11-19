@@ -163,7 +163,7 @@ const Help: React.FC = () => {
             <h2 id="learning-checklist-title" className="mt-1 text-xl font-semibold tracking-[-0.03em] text-ink">{t('Your learning checklist')}</h2>
             <p className="mt-1 text-sm leading-6 text-muted">{t('Work through the guides that match your role. Nothing is required, and completed guides stay available to revisit.')}</p>
           </div>
-          <span className="text-sm font-semibold text-muted">{t('{completed} of {total} completed', { completed: completedLearningCount, total: learningTutorials.length })}</span>
+          <span className="text-sm font-semibold text-muted">{t('ui.completedOfTotal', { completed: completedLearningCount, total: learningTutorials.length })}</span>
         </div>
         <div className="mt-4 h-2 overflow-hidden rounded-full bg-inset" aria-label={t('Learning progress')}><div className="h-full rounded-full bg-accent transition-[width] duration-300 motion-reduce:transition-none" style={{ width: `${learningTutorials.length ? (completedLearningCount / learningTutorials.length) * 100 : 0}%` }} /></div>
         <ol className="mt-5 grid gap-2 md:grid-cols-2 xl:grid-cols-3">

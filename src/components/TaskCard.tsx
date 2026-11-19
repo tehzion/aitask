@@ -69,7 +69,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   const hiddenStepsOpen = unavailableDependencies > 0 && task.workflowDependenciesReady !== true;
   const waitingToStart = isTaskWaitingOnEarlierSteps(task, allTasks);
   const waitingOn = !waitingToStart ? '' : blockers > 0
-    ? (blockers > 1 ? t('{title} and {count} more', { title: blockerTasks[0].title, count: blockers - 1 }) : blockerTasks[0].title)
+    ? (blockers > 1 ? t('ui.titleAndMore', { title: blockerTasks[0].title, count: blockers - 1 }) : blockerTasks[0].title)
     : t('an earlier step you cannot see');
   const open = !task.isCompleted && !['Completed', 'Cancelled'].includes(task.status);
   // What to fix, without opening the task (role UX: revision reason on the card).
@@ -204,7 +204,7 @@ export const TaskWorkflowSteps: React.FC<{ task: Task; progress: number; label: 
       </ol>
       <p className="mt-2 flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-xs text-muted" aria-hidden="true">
         <span className="font-semibold text-ink sm:invisible">{currentLabel}</span>
-        <span>{t('Step {current} of {total}', { current: workflow.current + 1, total: workflow.steps.length })}</span>
+        <span>{t('ui.stepOf', { current: workflow.current + 1, total: workflow.steps.length })}</span>
       </p>
       <ol className="mt-1 hidden gap-1 text-[11px] leading-4 text-muted sm:flex" aria-hidden="true">
         {workflow.steps.map((step, index) => <li key={step} className={cn('flex-1 truncate', index === workflow.current && 'font-semibold text-ink')}>{stepLabel(step)}</li>)}

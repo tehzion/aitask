@@ -2141,7 +2141,7 @@ const Approvals: React.FC = () => {
             <div className="grid gap-3 sm:grid-cols-2">
               <button type="button" disabled={isActionSaving} aria-pressed={!memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(false)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', !memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
                 <span className="block text-sm font-semibold text-slate-900">{t('approval.useRoleDefaults')}</span>
-                <span className="mt-1 block text-xs leading-5 text-slate-500">{t('Follow {role} permissions and future role updates.', { role: getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions) })}</span>
+                <span className="mt-1 block text-xs leading-5 text-slate-500">{t('ui.followRolePermissions', { role: getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions) })}</span>
               </button>
               <button type="button" disabled={isActionSaving} aria-pressed={memberPermissionsCustom} onClick={() => setMemberPermissionsCustom(true)} className={cn('min-h-20 rounded-lg border p-4 text-left transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-400', memberPermissionsCustom ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white hover:bg-slate-50')}>
                 <span className="block text-sm font-semibold text-slate-900">{t('approval.customAccess')}</span>
@@ -2154,7 +2154,7 @@ const Approvals: React.FC = () => {
                 <div>
                   <h3 id="effective-access-preview" className="text-sm font-semibold text-slate-900">{t('approval.effectivePreview')}</h3>
                   <p className="mt-1 text-xs leading-5 text-slate-600">
-                    {t('Preview the permissions that will apply after this choice is saved. Baseline: {role}.', { role: getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions) })}
+                    {t('ui.previewPermissions', { role: getEffectiveRoleName({ ...memberPermissionsUser, permissions: undefined }, rolePermissions) })}
                   </p>
                 </div>
                 <Badge tone="indigo">{memberPermissionKeys.filter(key => memberPermissionsPreview[key]).length} {t('enabled')}</Badge>

@@ -420,7 +420,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
               <div className="min-w-0">
                 <h3 id="staff-dependency-confirm-title" className="font-semibold">{t('Earlier steps are unfinished')}</h3>
-                <p id="staff-dependency-confirm-description" className="mt-1 text-sm leading-6">{t('Unfinished earlier steps: {count}. Change this task to {status}?', { count: incompletePredecessors.length, status: getLocalizedTaskStatus(pendingStatus, locale) })}</p>
+                <p id="staff-dependency-confirm-description" className="mt-1 text-sm leading-6">{t('ui.earlierStepsConfirm', { count: incompletePredecessors.length, status: getLocalizedTaskStatus(pendingStatus, locale) })}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button type="button" variant="secondary" onClick={() => setPendingStatus(null)}>{t('common.cancel')}</Button>
                   <Button type="button" onClick={() => { const nextStatus = pendingStatus; setPendingStatus(null); void persistStatus(nextStatus, true); }}>{t('Continue')}</Button>
@@ -470,7 +470,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
 
         {workflowKind === 'internal_review' && <section className="border-b border-line pb-4 text-sm" aria-label={t('Internal review')}>
           <p className="font-semibold text-ink">{t('Internal review')}</p>
-          <p className="mt-1 text-muted">{liveTask.internalReview ? t('Reviewed by {name}', { name: users.find(user => user.id === liveTask.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
+          <p className="mt-1 text-muted">{liveTask.internalReview ? t('ui.reviewedBy', { name: users.find(user => user.id === liveTask.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
           {!liveTask.internalReview && !canApproveInternalReview(currentUser, liveTask, rolePermissions, { users, clients, projects }) && <p className="mt-2 text-muted">{t(transitionError('Approved') || INTERNAL_REVIEW_PERMISSION_MESSAGE)}</p>}
         </section>}
         <section aria-labelledby="staff-work-ownership" className="text-sm">

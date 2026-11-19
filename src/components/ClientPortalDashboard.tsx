@@ -144,7 +144,7 @@ const ClientPortalDashboard = ({ tasks }: ClientPortalDashboardProps) => {
             <ul className="mt-2 space-y-1.5 text-sm">
               {serviceProgress.map(item => <li key={item.serviceItemId} className="flex items-center justify-between gap-3">
                 <span data-i18n-skip className="min-w-0 truncate text-ink">{item.name}</span>
-                <span className="calm-number shrink-0 font-semibold text-ink"><span aria-hidden="true">{item.completed}/{item.included}</span><span className="sr-only">{t('{completed} of {included} completed', { completed: item.completed, included: item.included })}</span></span>
+                <span className="calm-number shrink-0 font-semibold text-ink"><span aria-hidden="true">{item.completed}/{item.included}</span><span className="sr-only">{t('ui.completedOfIncluded', { completed: item.completed, included: item.included })}</span></span>
               </li>)}
             </ul>
           </div>}

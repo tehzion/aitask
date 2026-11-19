@@ -255,7 +255,7 @@ const Layout: React.FC = () => {
   // Keep the bottom bar focused on the highest-frequency destinations while
   // keeping Delivery tracker visible for internal operators.
   const hodWaiting = useHodWaitingCounts();
-  const hodWaitingTitle = t('{assign} to assign · {review} to review', { assign: hodWaiting.toAssign, review: hodWaiting.toReview });
+  const hodWaitingTitle = t('ui.toAssignToReview', { assign: hodWaiting.toAssign, review: hodWaiting.toReview });
   const mobileNavItems = useMemo(() => getMobileNavigation(currentUser, rolePermissions), [currentUser, rolePermissions]);
   const canOpenSettings = Boolean(currentUser?.mustResetPassword)
     || canAccessPath(currentUser, '/settings', rolePermissions);

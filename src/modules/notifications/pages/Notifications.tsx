@@ -290,7 +290,7 @@ const Notifications: React.FC = () => {
         <p className="border-b border-line px-4 py-3 text-sm text-muted">{t('Read marks an update as seen. It does not complete the linked task.')}{openWorkOnly && <> {t('Showing open tasks from loaded updates. Load more to check older work.')}</>}</p>
 
         <div aria-live="polite" className="sr-only">
-          {isLoading ? t('Loading notifications.') : t('{count} notification groups loaded.', { count: groups.length })}
+          {isLoading ? t('Loading notifications.') : t('ui.notificationGroupsLoaded', { count: groups.length })}
         </div>
 
         {notificationReadActions.error && <p className="m-4 rounded-control bg-red-50 p-4 text-sm text-red-800" role="alert"><SystemMessage message={notificationReadActions.error} /></p>}
@@ -347,8 +347,8 @@ const Notifications: React.FC = () => {
                               <h3 className={cn('text-sm text-slate-950', allRead ? 'font-medium' : 'font-semibold')}>{presentNotification(group.latest, locale).title}</h3>
                               <Badge tone="slate">{notificationCategoryLabel(group.category, locale)}</Badge>
                               {group.latest.route.page === 'tasks' && <Badge tone="slate">{t(group.latest.route.entityId && taskMap.has(group.latest.route.entityId) ? isTaskOpen(taskMap.get(group.latest.route.entityId)!) ? 'Open work' : 'Closed work' : 'Work unavailable')}</Badge>}
-                              {group.notifications.length > 1 && <Badge tone="blue">{t('{count} updates', { count: group.notifications.length })}</Badge>}
-                              {group.unreadCount > 0 && <span className="text-xs font-semibold text-blue-700">{t('{count} unread', { count: group.unreadCount })}</span>}
+                              {group.notifications.length > 1 && <Badge tone="blue">{t('ui.updatesCount', { count: group.notifications.length })}</Badge>}
+                              {group.unreadCount > 0 && <span className="text-xs font-semibold text-blue-700">{t('ui.unreadCount', { count: group.unreadCount })}</span>}
                             </div>
                             <p className="mt-1 text-sm leading-6 text-slate-600">{presentNotification(group.latest, locale).message}</p>
                             <p className="mt-1.5 text-xs text-slate-400">{formatLocalizedDistanceToNow(new Date(group.latest.createdAt), locale)}</p>
