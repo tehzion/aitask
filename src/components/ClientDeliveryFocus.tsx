@@ -8,12 +8,13 @@ import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { useToastStore } from '../store/useToastStore';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
-import { CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, MessageSquareText, Send, UserRound, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, MessageSquareText, Send, Star, UserRound, XCircle } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 import { canCommentOnTask, canReviewTaskAsClient, canViewTask } from '../lib/access';
 import { getClientDeliveryStage, getClientDeliveryStageLabel, getClientDeliveryStageTone, getClientTaskTitle } from '../lib/clientPortal';
 import { formatLocalizedDate } from '../lib/i18n';
+import { getRevisionAllowance, revisionLabelKey } from '../lib/revisionAllowance';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { safeHttpsUrl } from '../lib/security';
 import { cn, parseOptionalDate } from '../lib/utils';
@@ -35,6 +36,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
   const {
     users,
     tasks,
+    projects,
     currentUser,
     rolePermissions,
     backend,
@@ -44,6 +46,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
   } = useStore(useShallow(state => ({
     users: state.users,
     tasks: state.tasks,
+    projects: state.projects,
     currentUser: state.currentUser,
     rolePermissions: state.rolePermissions,
     backend: state.backend,
@@ -64,6 +67,8 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
   const observedResolution = React.useRef(false);
   const taskId = React.useRef(task?.id); taskId.current = task?.id;
   React.useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const [stars, setStars] = React.useState(0);
+  const [ratingComment, setRatingComment] = React.useState('');
   const decisionNoteRef = React.useRef<HTMLTextAreaElement>(null);
   const decisionErrorId = React.useId();
 
@@ -138,6 +143,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
   const displayTask: Task = pendingSave?.command === 'approval.review'
     ? { ...task, clientApprovalStatus: 'Pending' } : task;
   const stage = getClientDeliveryStage(displayTask);
+  const revisionAllowance = getRevisionAllowance(task, projects);
   const isSaving = isSubmitting || backend.isSaving || isDiscarding;
   const mutationLocked = backend.upgradeRequired || pendingResolution || backend.isPulling;
 
@@ -179,7 +185,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
       return;
     }
     setDecisionError('');
-    const localResult = reviewClientApproval(task.id, status, decisionNote);
+    const localResult = reviewClientApproval(task.id, status, decisionNote, status === 'Approved' && stars > 0 ? { stars, comment: ratingComment } : undefined);
     if (!localResult.ok) { setError(localResult.error ? t(localResult.error) : 'Unable to review this task.'); return; }
     const history = useStore.getState().tasks.find(item => item.id === task.id)?.approvalHistory || [];
     await performSave({ taskId: task.id, command: 'approval.review', text: decisionNote, status, approvalId: history[history.length - 1]?.id });
@@ -238,6 +244,11 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
             <div><p className="text-xs font-medium text-muted">{t('Progress')}</p><p className="calm-number mt-1 text-sm font-semibold text-ink">{getTaskProgress(task, [], true)}%</p></div>
           </div>
           <ProgressBar className="mt-4" value={getTaskProgress(task, [], true)} max={100} label={t('Delivery progress')} />
+          {revisionAllowance.used > 0 && (
+            <p data-testid="client-revision-usage" className="mt-3 text-sm font-medium text-ink">
+              {t(revisionLabelKey(revisionAllowance), { used: revisionAllowance.used, included: revisionAllowance.included ?? 0 })}
+            </p>
+          )}
           {stage === 'timing_changed' && <div className="mt-4 rounded-control border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm leading-6 text-amber-900 dark:border-amber-800/70 dark:bg-amber-950/30 dark:text-amber-100"><p className="font-semibold">{t('Expected timing has changed')}</p><p className="mt-1">{t('The date above is the latest shared date. Contact the agency team through the conversation below if you need more context.')}</p></div>}
         </section>
 
@@ -267,6 +278,34 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
               aria-describedby={decisionError ? decisionErrorId : undefined}
             />
             {decisionError && <p id={decisionErrorId} role="alert" className="mt-2 text-sm font-medium text-red-700 dark:text-red-200"><SystemMessage message={decisionError} /></p>}
+            {!task.clientRating && <fieldset className="mt-4">
+              <legend className="text-sm font-medium text-ink">{t('How happy are you with this delivery? (optional, when approving)')}</legend>
+              <div role="radiogroup" aria-label={t('Client satisfaction')} className="mt-1 flex items-center gap-1">
+                {[1, 2, 3, 4, 5].map(value => (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={stars === value}
+                    aria-label={t(value === 1 ? 'rating.oneStar' : 'rating.stars', { count: value })}
+                    onClick={() => setStars(current => current === value ? 0 : value)}
+                    className="flex min-h-11 min-w-11 items-center justify-center rounded-md hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                  >
+                    <Star aria-hidden="true" className={cn('h-6 w-6', value <= stars ? 'fill-current text-amber-700' : 'text-muted')} />
+                  </button>
+                ))}
+              </div>
+              {stars > 0 && (
+                <input
+                  value={ratingComment}
+                  maxLength={500}
+                  onChange={event => setRatingComment(event.target.value)}
+                  aria-label={t('Comment')}
+                  placeholder={t('One line about the delivery (optional)')}
+                  className={cn(inputBase, 'mt-2 px-3 py-2')}
+                />
+              )}
+            </fieldset>}
           </section>
         )}
 

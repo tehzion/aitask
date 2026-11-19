@@ -409,7 +409,8 @@ export interface StoreState {
   setTaskReviewConfig: (taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string; requiresInternalApproval?: boolean; approvalMode?: Task['approvalMode'] }) => Promise<MutationActionResult>;
   updateTask: (taskId: string, data: TaskUpdateInput) => { ok: boolean; error?: string };
   deleteTask: (taskId: string) => { ok: boolean; error?: string };
-  reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string) => MutationActionResult;
+  /** `rating` is optional and only valid with an approval; the server stamps who rated and when. */
+  reviewClientApproval: (taskId: string, status: ClientApprovalStatus, note?: string, rating?: { stars: number; comment?: string }) => MutationActionResult;
   requestRevision: (taskId: string, note?: string) => MutationActionResult;
   addTask: (task: Omit<Task, 'id' | 'isCompleted' | 'completedAt' | 'revisionCount' | 'clientApprovalStatus' | 'dueReminderSent' | 'approvalHistory'>) => string;
   addProject: (project: Omit<Project, 'id'>) => string;
@@ -3669,7 +3670,7 @@ export const useStore = create<StoreState>()(
         return { ok: true };
       },
 
-      reviewClientApproval: (taskId, status, note) => {
+      reviewClientApproval: (taskId, status, note, rating) => {
         let result: MutationActionResult = { ok: false, error: 'Unable to review this task.' };
         set((state) => {
         if (isWorkspaceMutationLocked(state)) {
@@ -3688,6 +3689,13 @@ export const useStore = create<StoreState>()(
           return state;
         }
 
+        if (rating) {
+          const stars = Math.trunc(Number(rating.stars));
+          if (status !== 'Approved' || !(stars >= 1 && stars <= 5)) {
+            result = { ok: false, error: 'Choose a rating from 1 to 5 when approving.' };
+            return state;
+          }
+        }
         const reviewNote = note?.trim() || '';
         if ([...reviewNote].length > 2000 || (status === 'Rejected' && !reviewNote)) {
           result = { ok: false, error: reviewNote ? 'Decision notes must be 2,000 characters or less.' : 'Tell the team what needs to change before sending the request.' };
@@ -3727,6 +3735,14 @@ export const useStore = create<StoreState>()(
             ...transitioned,
             reviewDecision: status === 'Approved' ? t.reviewDecision : undefined,
             completionPercentage: preserveCompletion ? 100 : status === 'Approved' ? 80 : getTaskProgress(transitioned, state.users),
+            ...(rating && status === 'Approved' ? {
+              clientRating: {
+                stars: Math.trunc(Number(rating.stars)) as 1 | 2 | 3 | 4 | 5,
+                comment: rating.comment?.trim().slice(0, 500) || undefined,
+                ratedBy: currentUser.id,
+                ratedAt: now,
+              },
+            } : {}),
           };
         });
 
