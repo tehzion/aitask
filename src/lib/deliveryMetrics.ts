@@ -96,6 +96,22 @@ export const computePersonDeliveryMetrics = (tasks: readonly Task[], now = new D
     .sort((a, b) => b.completed - a.completed || a.userId.localeCompare(b.userId));
 };
 
+/**
+ * How many of the most recent finished tasks in a row met their due date.
+ * Tasks without a due date are skipped, not counted as misses or hits.
+ */
+export const onTimeStreak = (tasks: readonly Task[], now = new Date()): number => {
+  const finished = tasks
+    .filter(task => isTaskCompleted(task) && Number.isFinite(Date.parse(task.completedAt || '')) && Date.parse(task.completedAt!) <= now.getTime() && task.dueDate && endOfDueDate(task.dueDate) !== undefined)
+    .sort((a, b) => Date.parse(b.completedAt!) - Date.parse(a.completedAt!));
+  let streak = 0;
+  for (const task of finished) {
+    if (Date.parse(task.completedAt!) > endOfDueDate(task.dueDate)!) break;
+    streak += 1;
+  }
+  return streak;
+};
+
 export interface WeeklyDeliveryPoint {
   /** Monday of the week, local time. */
   weekStart: Date;

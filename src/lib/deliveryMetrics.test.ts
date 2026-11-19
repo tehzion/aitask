@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task } from '../types';
-import { computeDeliveryMetrics, computePersonDeliveryMetrics, onTimeRate } from './deliveryMetrics';
+import { computeDeliveryMetrics, computePersonDeliveryMetrics, onTimeRate, onTimeStreak } from './deliveryMetrics';
 
 const now = new Date('2026-11-19T12:00:00');
 const done = (id: string, values: Partial<Task>): Task => ({
@@ -77,5 +77,33 @@ describe('weekly trend and rating summary', () => {
     const rated = (stars: 1 | 2 | 3 | 4 | 5) => ({ clientRating: { stars, ratedBy: 'pm', ratedAt: '2026-11-11T00:00:00.000Z' } }) as Partial<Task>;
     expect(summarizeClientRatings([done('a', rated(5)), done('b', rated(4)), done('c', {})])).toEqual({ count: 2, average: 4.5 });
     expect(summarizeClientRatings([done('c', {})])).toEqual({ count: 0 });
+  });
+});
+
+describe('onTimeStreak', () => {
+  const at = new Date('2026-11-19T12:00:00Z');
+  const finishedTask = (id: string, completedAt: string, dueDate: string): Task => ({ id, isCompleted: true, status: 'Completed', completedAt, dueDate } as Task);
+
+  it('counts the latest finished tasks that met their date until the first miss', () => {
+    expect(onTimeStreak([
+      finishedTask('a', '2026-11-18T10:00:00', '2026-11-18'),
+      finishedTask('b', '2026-11-12T10:00:00', '2026-11-13'),
+      finishedTask('c', '2026-11-05T10:00:00', '2026-11-01'),
+      finishedTask('d', '2026-10-20T10:00:00', '2026-10-25'),
+    ], at)).toBe(2);
+  });
+
+  it('skips tasks without a due date and ignores open or future work', () => {
+    expect(onTimeStreak([
+      finishedTask('a', '2026-11-18T10:00:00', ''),
+      finishedTask('b', '2026-11-17T10:00:00', '2026-11-17'),
+      { id: 'c', isCompleted: false, status: 'In Progress', dueDate: '2026-11-30' } as Task,
+      finishedTask('f', '2026-12-30T10:00:00', '2026-12-31'),
+    ], at)).toBe(1);
+  });
+
+  it('is zero when the latest task was late or nothing is finished', () => {
+    expect(onTimeStreak([finishedTask('a', '2026-11-18T10:00:00', '2026-11-10')], at)).toBe(0);
+    expect(onTimeStreak([], at)).toBe(0);
   });
 });

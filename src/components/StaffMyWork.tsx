@@ -28,6 +28,7 @@ import { getStaffDashboardMetrics } from '../lib/staffDashboard';
 import { useQuickTaskAction } from '../hooks/useQuickTaskAction';
 import HodStaffWorkload from './HodStaffWorkload';
 import DepartmentDeliveryGlance from './DepartmentDeliveryGlance';
+import MyDeliveryRecord from './MyDeliveryRecord';
 
 /**
  * The focus card's main button is the next step when it takes one click, such
@@ -274,6 +275,7 @@ const StaffMyWork: React.FC = () => {
       </Surface>
 
       {isHod && isDepartmentLead && <DepartmentDeliveryGlance tasks={departmentTasks} />}
+      {!isDepartmentLead && currentUser && <MyDeliveryRecord tasks={visibleTasks} />}
 
       {persona === 'account' && !isDepartmentLead && renewalPlans.length > 0 && <section aria-labelledby="account-renewals-title">
         <h2 id="account-renewals-title" className="text-xl font-semibold tracking-[-0.025em] text-ink">{t('Upcoming renewals')}</h2>
