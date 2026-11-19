@@ -6,6 +6,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
 import { getManagementSnapshot, getSharedEmployeeWorkload } from '../lib/managementIntelligence';
+import { isTaskAtRisk } from '../lib/taskRisk';
 import { formatLocalizedDate } from '../lib/i18n';
 import { cn } from '../lib/utils';
 import { useI18n } from './I18nProvider';
@@ -44,7 +45,7 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
     if (!isBossKoo(currentUser)) return null;
     const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects });
     const visibleProjects = getVisibleProjects(currentUser, projects, tasks, rolePermissions, { clients, projects });
-    return getManagementSnapshot({
+    const base = getManagementSnapshot({
       projects: visibleProjects,
       tasks: visibleTasks,
       deliverables,
@@ -53,6 +54,8 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
       users,
       now,
     });
+    // Early warning before work turns overdue; the same rule Manage work uses.
+    return { ...base, atRiskTasks: visibleTasks.filter(task => isTaskAtRisk(task, now)).length };
   }, [clientPlans, clients, currentUser, deliverables, now, projects, rolePermissions, serviceCycles, tasks, users]);
 
   const workload = React.useMemo(() => {
@@ -154,6 +157,7 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
         { label: t('Active projects'), value: snapshot.activeProjects, to: '/projects' },
         { label: t('At-risk projects'), value: snapshot.atRiskProjects, to: '/projects?health=atRisk', tone: 'danger' },
         { label: t('Overdue tasks'), value: snapshot.overdueTasks, to: '/tasks?focus=overdue', tone: 'danger' },
+        { label: t('At-risk tasks'), value: snapshot.atRiskTasks, to: '/manage?tab=active&filter=risk', tone: 'warning' },
         { label: t('Pending approvals'), value: snapshot.pendingApprovals, to: '/tasks?focus=waiting', tone: 'warning' },
         { label: t('Approvals waiting 7+ days'), value: snapshot.staleApprovals, to: '/tasks?focus=waiting', tone: 'danger' },
         { label: t('Monthly renewals in 30 days'), value: snapshot.upcomingRenewals, to: '/clients', tone: 'warning' },

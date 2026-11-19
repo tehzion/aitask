@@ -5,6 +5,10 @@ import { registerUiTranslations } from './i18n';
 // loads with the first page instead of in the startup bundle (300 KiB gzip
 // cap). Shared, store and startup copy stays in i18n.ts.
 registerUiTranslations({
+  "Delivery health": "交付健康度",
+  "Used to spot where support helps, not to rank people.": "用于发现哪里需要支持，而不是给人排名。",
+  "At-risk tasks": "有风险的任务",
+  "See quality by person": "查看每个人的交付质量",
   "Running plans": "运行中的方案",
   "Starting this month lets the team begin work and makes its deliverables visible to the client.": "开始本月后，团队可以开始工作，客户也能看到本月的交付内容。",
   "This starts the plan. Its first month begins on {date}.": "这将启动方案。首月将于 {date} 开始。",

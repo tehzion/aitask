@@ -28,6 +28,7 @@ import TeamWorkload from '../components/TeamWorkload';
 import { projectStatus } from '../lib/projectManagement';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
 import StaffMyWork from '../components/StaffMyWork';
+import AgencyDeliveryHealth from '../components/AgencyDeliveryHealth';
 import ManagementOverview from '../components/ManagementOverview';
 
 const DeliveryReviewPanel = React.lazy(() => import('../components/DeliveryReviewPanel'));
@@ -604,6 +605,7 @@ const Dashboard: React.FC = () => {
                 )}
 
                 <ManagementOverview part="summary" />
+                <AgencyDeliveryHealth />
                 <ProjectsWithoutPmPanel />
                 <NeedsMyAttention />
                 <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
