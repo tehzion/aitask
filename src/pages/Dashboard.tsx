@@ -15,7 +15,7 @@ import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
 import ShortcutKey from '../components/ShortcutKey';
 import { cardBase, pageShell } from '../components/uiTokens';
-import { getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo, isPortfolioHomeUser, canCreateTasksFromAnywhere } from '../lib/access';
+import { getCompaniesDashboardAction, getDefaultAccessiblePath, getVisibleProjects, getVisibleTasks, isBossKoo, isPortfolioHomeUser, canCreateTasksFromAnywhere } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
@@ -337,9 +337,12 @@ const Dashboard: React.FC = () => {
 
   if (showStaffOperations) return <StaffMyWork />;
 
-  // The PM's home is the Portfolio list; this dashboard repeated the same tasks.
-  // Its overview panels now sit on top of Portfolio (StaffAllWork).
-  if (isPortfolioHomeUser(currentUser)) return <Navigate to="/tasks" replace />;
+  // The PM's home is Manage work; this dashboard repeated the same tasks. The
+  // Portfolio list (StaffAllWork) stays one click away.
+  if (isPortfolioHomeUser(currentUser)) {
+    const home = getDefaultAccessiblePath(currentUser, rolePermissions);
+    return <Navigate to={home === '/' ? '/tasks' : home} replace />;
+  }
 
   const analyticsSection = hasTaskData ? (
 <section className="space-y-6" aria-labelledby="workspace-analytics-title">

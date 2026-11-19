@@ -159,9 +159,13 @@ export const getNavigationSections = (
     primary: isBossKoo(user)
       ? [{ path: '/tasks', label: 'Tasks', icon: CheckSquare }, ...generalPrimary]
       : isPortfolioHomeUser(user)
-        // Portfolio replaces the PM dashboard (team feedback, 9 Nov 2026): the
-        // two pages listed the same tasks, so the PM keeps one home.
-        ? [{ path: '/tasks', label: 'Portfolio', icon: CheckSquare }, ...generalPrimary.filter(item => item.path !== '/')]
+        // Manage work is the PM home; it replaced the Portfolio landing page
+        // (owner decision, 19 Nov 2026) and the Portfolio list stays next to it.
+        ? [
+          { path: '/manage', label: 'Manage work', icon: KanbanSquare },
+          { path: '/tasks', label: 'Portfolio', icon: CheckSquare },
+          ...generalPrimary.filter(item => item.path !== '/' && item.path !== '/manage'),
+        ]
         : generalPrimary,
     secondary: [],
     footer: filterVisible(user, rolePermissions, [
@@ -180,7 +184,7 @@ export const getMobileNavigation = (
   const items = user?.role === 'Staff' || user?.role === 'HOD' || user?.role === 'Client'
     ? sections.mobilePrimary || sections.primary
     : filterVisible(user, rolePermissions, isPortfolioHomeUser(user)
-      ? generalMobilePrimary.map(item => item.path === '/' ? { path: '/tasks', label: 'Portfolio', icon: CheckSquare } : item)
+      ? generalMobilePrimary.map(item => item.path === '/' ? { path: '/manage', label: 'Manage work', icon: KanbanSquare } : item)
       : generalMobilePrimary);
   // The bottom bar has no room for "Delivery tracker" at 320px.
   return items.map(item => item.label === 'Delivery tracker' ? { ...item, label: 'Deliveries' } : item);

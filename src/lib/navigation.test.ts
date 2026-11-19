@@ -91,13 +91,15 @@ describe('delivery tracker navigation labels', () => {
 describe('one home per role (team feedback, 9 Nov 2026)', () => {
   const [boss, pm, hod, staff] = internalUsers;
 
-  it('lands a Project Manager on Portfolio and hides the duplicate dashboard', () => {
+  it('lands a Project Manager on Manage work, with Portfolio one click away', () => {
     const sections = getNavigationSections(pm);
-    expect(sections.primary[0]).toMatchObject({ path: '/tasks', label: 'Portfolio' });
+    expect(sections.primary[0]).toMatchObject({ path: '/manage', label: 'Manage work' });
+    expect(sections.primary[1]).toMatchObject({ path: '/tasks', label: 'Portfolio' });
+    expect(sections.primary.filter(entry => entry.path === '/manage')).toHaveLength(1);
     expect(sections.primary.some(entry => entry.path === '/')).toBe(false);
     expect(getMobileNavigation(pm).some(entry => entry.path === '/')).toBe(false);
-    expect(getMobileNavigation(pm)[0]).toMatchObject({ path: '/tasks', label: 'Portfolio' });
-    expect(getDefaultAccessiblePath(pm)).toBe('/tasks');
+    expect(getMobileNavigation(pm)[0]).toMatchObject({ path: '/manage', label: 'Manage work' });
+    expect(getDefaultAccessiblePath(pm)).toBe('/manage');
   });
 
   it('keeps the agency dashboard for Boss Koo', () => {
