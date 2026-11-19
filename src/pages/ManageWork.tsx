@@ -17,6 +17,7 @@ import StaffWorkItem from '../components/StaffWorkItem';
 import StaffTaskFocus from '../components/StaffTaskFocus';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import UnavailableWork from '../components/UnavailableWork';
+import BulkManageBar from '../components/BulkManageBar';
 
 const TAB_LABEL: Record<ManageTabId, string> = {
   active: 'Active',
@@ -53,6 +54,8 @@ const ManageWork: React.FC = () => {
   })));
   const [query, setQuery] = React.useState('');
   const [riskOnly, setRiskOnly] = React.useState(false);
+  const [selecting, setSelecting] = React.useState(false);
+  const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
 
   const scope = React.useMemo(() => ({ clients, projects, users }), [clients, projects, users]);
@@ -72,6 +75,9 @@ const ManageWork: React.FC = () => {
   }, [now, query, riskOnly, tab, users, work.byTab]);
   const clientRows = React.useMemo(() => summarizeManageClients(visible), [visible]);
   const teamRows = React.useMemo(() => summarizeManageTeam(visible, users, new Date(Math.max(Date.now(), today.getTime()))), [today, users, visible]);
+
+  // Finished and cancelled work has nothing left to reschedule or reassign.
+  const canBulk = tab === 'active' || tab === 'review' || tab === 'waiting' || tab === 'revision';
 
   const taskId = searchParams.get('taskId');
   const selectedTask = taskId ? visible.find(task => task.id === taskId) || null : null;
@@ -121,6 +127,19 @@ const ManageWork: React.FC = () => {
             />
           </label>
 
+          {canBulk && (
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                aria-pressed={selecting}
+                onClick={() => { setSelecting(value => !value); setSelected(new Set()); }}
+                className={`min-h-9 rounded-full border px-3 text-sm font-medium transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${selecting ? 'border-accent bg-accent/10 text-ink' : 'border-line text-muted hover:bg-inset'}`}
+              >
+                {t('Select tasks')}
+              </button>
+            </div>
+          )}
+          {canBulk && selecting && <BulkManageBar tasks={shown.slice(0, 50)} selected={selected} onSelectedChange={setSelected} onDone={() => { setSelecting(false); setSelected(new Set()); }} />}
           {(atRiskCount > 0 || riskOnly) && (
             <button
               type="button"
@@ -134,7 +153,24 @@ const ManageWork: React.FC = () => {
 
           {taskId && !selectedTask && <UnavailableWork onDismiss={() => setParam('taskId')} />}
           <Surface as="div" id="manage-work-panel" role="tabpanel" aria-labelledby={`manage-work-tab-${tab}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
-            {shown.slice(0, 50).map(task => <StaffWorkItem key={task.id} task={task} allTasks={visible} users={users} onOpen={item => setParam('taskId', item.id)} />)}
+            {shown.slice(0, 50).map(task => {
+              const card = <StaffWorkItem key={task.id} task={task} allTasks={visible} users={users} onOpen={item => setParam('taskId', item.id)} />;
+              if (!selecting) return card;
+              return (
+                <div key={task.id} className="flex items-stretch">
+                  <label className="flex min-w-11 shrink-0 items-center justify-center pl-2">
+                    <input
+                      type="checkbox"
+                      className="h-4 w-4"
+                      checked={selected.has(task.id)}
+                      aria-label={`${t('Select')}: ${task.title}`}
+                      onChange={() => setSelected(current => { const next = new Set(current); if (next.has(task.id)) next.delete(task.id); else next.add(task.id); return next; })}
+                    />
+                  </label>
+                  <div className="min-w-0 flex-1">{card}</div>
+                </div>
+              );
+            })}
             {shown.length === 0 && (
               <p className="px-5 py-14 text-center text-sm text-muted">{query.trim() ? t('No work matches your search.') : t(TAB_EMPTY[tab])}</p>
             )}

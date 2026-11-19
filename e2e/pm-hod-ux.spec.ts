@@ -130,3 +130,81 @@ test('Manage work with at-risk filter and team cards fits a 320px phone in Chine
   const axe = await new AxeBuilder({ page }).include('main').analyze();
   expect(axe.violations.map(item => item.id)).toEqual([]);
 });
+
+test('a PM updates the due date of several tasks at once and sees how many were saved', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page, 'pm');
+  await page.goto('/manage?tab=active');
+  await page.getByRole('button', { name: 'Select tasks' }).click();
+  const bar = page.getByRole('group', { name: 'Update several tasks' });
+  await expect(bar).toBeVisible();
+  await page.getByRole('checkbox', { name: 'Select: Start me' }).check();
+  await page.getByRole('checkbox', { name: 'Select: Gone quiet' }).check();
+  await expect(bar.getByRole('status')).toContainText('2 selected');
+
+  const target = await page.evaluate(() => new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10));
+  await bar.getByLabel('New due date').fill(target);
+  await bar.getByRole('button', { name: 'Change due date' }).click();
+  const confirm = page.getByRole('dialog');
+  await expect(confirm).toContainText(`Move 2 tasks to ${target}?`);
+  await confirm.getByRole('button', { name: 'Change due date' }).click();
+  await expect(bar.getByText('2 of 2 updated.')).toBeVisible();
+
+  const dates = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return Object.fromEntries(useStore.getState().tasks.map(task => [task.id, task.dueDate]));
+  });
+  expect(dates['u-start']).toBe(target);
+  expect(dates['u-quiet']).toBe(target);
+  expect(dates['u-fine']).not.toBe(target);
+  // They are no longer at risk, so the early warning clears.
+  await bar.getByRole('button', { name: 'Done selecting' }).click();
+  await expect(page.getByRole('button', { name: /Show only at-risk work/ })).toHaveCount(0);
+});
+
+test('a PM reassigns several tasks together', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page, 'pm');
+  await page.goto('/manage?tab=active');
+  await page.getByRole('button', { name: 'Select tasks' }).click();
+  const bar = page.getByRole('group', { name: 'Update several tasks' });
+  await page.getByRole('checkbox', { name: 'Select: Start me' }).check();
+  await page.getByRole('checkbox', { name: 'Select: Plenty of time' }).check();
+  const select = bar.getByRole('combobox', { name: 'Assign to…' });
+  const current = await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === 'u-quiet')!.assignedTo);
+  const values = (await select.locator('option').evaluateAll(nodes => nodes.map(node => (node as HTMLOptionElement).value))).filter(value => value && value !== current);
+  test.skip(values.length === 0, 'The demo data has no second Designer to hand work to.');
+  await select.selectOption(values[0]);
+  const chosenId = values[0];
+  await bar.getByRole('button', { name: 'Reassign' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Reassign' }).click();
+  await expect(bar.getByText('2 of 2 updated.')).toBeVisible();
+  const owners = await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    return Object.fromEntries(useStore.getState().tasks.map(task => [task.id, task.assignedTo]));
+  });
+  expect(owners['u-start']).toBe(chosenId);
+  expect(owners['u-fine']).toBe(chosenId);
+  expect(owners['u-quiet']).not.toBe(chosenId);
+});
+
+test('bulk selection is only offered where there is something left to change', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page, 'pm');
+  await page.goto('/manage?tab=completed');
+  await expect(page.getByRole('button', { name: 'Select tasks' })).toHaveCount(0);
+  await page.goto('/manage?tab=active');
+  await expect(page.getByRole('button', { name: 'Select tasks' })).toBeVisible();
+});
+
+test('Chinese bulk bar is translated', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page, 'pm', 'zh');
+  await page.goto('/manage?tab=active');
+  await page.getByRole('button', { name: '选择任务' }).click();
+  const bar = page.getByRole('group', { name: '批量更新任务' });
+  await expect(bar).toContainText('已选 0 项');
+  await expect(bar.getByRole('button', { name: '修改截止日期' })).toBeVisible();
+  const axe = await new AxeBuilder({ page }).include('main').analyze();
+  expect(axe.violations.map(item => item.id)).toEqual([]);
+});
