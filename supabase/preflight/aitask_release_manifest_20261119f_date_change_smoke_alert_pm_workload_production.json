@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-19T12:30:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "CANDIDATE 2026-11-19: migration 20261119190000 is NOT yet applied to production.",
+  "status": "APPLIED 2026-11-19: production records 20261119150059 (owner instructed; applied via the Supabase connector). Repository and production migration versions match (173/173).",
   "validatedMigrationTail": [
     "20261023063344_task_workflow_action_guards",
     "20261023154255_bind_service_command_entity_types",
@@ -57,9 +57,16 @@
     "20261119010631_client_payment_status",
     "20261119034949_weekly_role_flow_smoke",
     "20261119070305_client_rating_and_revision_usage",
-    "20261119190000_date_change_smoke_alert_pm_workload"
+    "20261119150059_date_change_smoke_alert_pm_workload"
   ],
-  "pendingProductionMigrations": [
-    "20261119190000_date_change_smoke_alert_pm_workload"
-  ]
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261119150059_date_change_smoke_alert_pm_workload",
+    "latestAppliedMigration": "20261119150059_date_change_smoke_alert_pm_workload",
+    "historyCount": 173,
+    "beforeHistoryCount": 172,
+    "productionOnlyMigrations": [],
+    "checks": "Live verification: the client task projection returns dateChange (from, reason, changedAt) and drops changedBy; aitask_hod_staff_workload now allows Project Manager and returns totals only (id, name, departments, open, overdue, dueThisWeek); the weekly role-flow smoke ran PASS on production with no leftover smoke rows; a rolled-back run as a Project Manager returned the workload list."
+  }
 }
