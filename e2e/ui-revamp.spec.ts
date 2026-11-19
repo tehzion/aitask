@@ -80,7 +80,7 @@ test.describe('completed tasks leave active lists but stay in history', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await seed(page, 'boss');
     await page.goto('/tasks');
-    await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'All tasks', exact: true })).toBeVisible();
     const filters = page.getByRole('group', { name: 'Task stages' });
     await expect(filters.getByRole('button', { name: /^Active work \d+$/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(visibleText(page, 'RV open brief')).toBeVisible();
@@ -232,7 +232,7 @@ test('Client pages stay free of internal review and management sections', async 
 test('every role lands on pages whose headings match their navigation', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const expected: Array<[Actor, string, string]> = [
-    ['boss', '/tasks', 'Tasks'],
+    ['boss', '/tasks', 'All tasks'],
     ['pm', '/', 'Manage work'],
     ['pm', '/manage', 'Manage work'],
     ['pm', '/tasks', 'Portfolio'],

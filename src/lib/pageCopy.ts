@@ -5,6 +5,12 @@ import { registerUiTranslations } from './i18n';
 // loads with the first page instead of in the startup bundle (300 KiB gzip
 // cap). Shared, store and startup copy stays in i18n.ts.
 registerUiTranslations({
+  "Waiting on the client": "等待客户",
+  "As of": "截至",
+  "Counts cover every project, task, plan and delivery.": "统计涵盖所有项目、任务、方案和交付。",
+  "Open their work": "查看其工作",
+  "Showing the work of": "正在查看以下人员的工作：",
+  "Show everyone": "显示所有人",
   "Delivery health": "交付健康度",
   "Used to spot where support helps, not to rank people.": "用于发现哪里需要支持，而不是给人排名。",
   "At-risk tasks": "有风险的任务",

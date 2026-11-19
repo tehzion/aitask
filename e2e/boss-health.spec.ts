@@ -76,3 +76,58 @@ test('Boss delivery health shows a friendly empty state and Chinese labels', asy
   await expect(health).not.toContainText(/Delivery health|Last 90/);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 });
+
+test('Boss overview leads with decisions and keeps setup to one slim line', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await seed(page);
+  await page.goto('/');
+  const setup = page.getByTestId('onboarding-checklist');
+  if (await setup.count()) {
+    await expect(setup).not.toHaveAttribute('open', '');
+    expect((await setup.boundingBox())!.height).toBeLessThan(90);
+  }
+  const attention = page.getByRole('heading', { name: 'Needs my attention' });
+  const glance = page.getByRole('heading', { name: 'Company at a glance' });
+  await expect(attention).toBeVisible();
+  const [attentionY, glanceY] = [(await attention.boundingBox())!.y, (await glance.boundingBox())!.y];
+  expect(attentionY).toBeLessThan(glanceY);
+  await expect(page.locator('dl[aria-label="Company at a glance"]').getByRole('link', { name: /^Waiting on the client:/ })).toHaveAttribute('href', '/manage?tab=client');
+  await expect(page.getByText('permission-visible')).toHaveCount(0);
+});
+
+test('Boss opens one Project Manager\'s work from the dashboard and can clear it', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page);
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Portfolio' }).click();
+  const pmRow = page.getByRole('link', { name: /Open their work/ }).first();
+  await expect(pmRow).toBeVisible();
+  await pmRow.click();
+  await expect(page).toHaveURL(/\/manage\?tab=active&owner=/);
+  const chip = page.getByTestId('manage-owner-filter');
+  await expect(chip).toContainText('Showing the work of');
+  await chip.getByRole('button', { name: 'Show everyone' }).click();
+  await expect(page).not.toHaveURL(/owner=/);
+  await expect(page.getByTestId('manage-owner-filter')).toHaveCount(0);
+});
+
+test('Boss team workload is one list without Boss Koo, and the menu leads with the dashboard', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page);
+  await page.goto('/');
+  await page.getByRole('tab', { name: 'Team workload' }).click();
+  await expect(page.getByText('Shared employee capacity')).toHaveCount(0);
+  await expect(page.getByRole('heading', { name: 'Team workload' }).first()).toBeVisible();
+  const nav = page.getByRole('navigation', { name: /main|primary|workspace/i }).first();
+  const links = await nav.getByRole('link').allInnerTexts();
+  expect(links.slice(0, 3).map(text => text.trim())).toEqual(['Dashboard', 'Manage work', 'All tasks']);
+});
+
+test('Boss phone bar offers Manage work and nothing overflows', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 700 });
+  await seed(page);
+  await page.goto('/');
+  const bar = page.getByRole('navigation', { name: 'Mobile navigation' });
+  await expect(bar.getByRole('link', { name: 'Manage work' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
+});

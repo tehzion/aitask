@@ -10,7 +10,7 @@ import {
 import { isSameDay } from 'date-fns/isSameDay';
 import { isWithinInterval } from 'date-fns/isWithinInterval';
 import { isBefore } from 'date-fns/isBefore';
-import { ArrowRight, Plus, FolderKanban } from 'lucide-react';
+import { ArrowRight, ChevronDown, Plus, FolderKanban } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
 import ShortcutKey from '../components/ShortcutKey';
@@ -113,6 +113,11 @@ const Dashboard: React.FC = () => {
   const companiesDashboardAction = getCompaniesDashboardAction(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
   const showBossOperations = isBossKoo(currentUser);
+  // Boss Koo manages the team rather than being part of it, so they only appear when they hold open work.
+  const teamMembers = useMemo(
+    () => users.filter(member => !member.isSuperAdmin || activeWorkloadTasks.some(task => task.assignedTo === member.id)),
+    [activeWorkloadTasks, users],
+  );
 
   const portfolioOwners = useMemo(() => {
     if (!showBossOperations) return [];
@@ -560,8 +565,11 @@ const Dashboard: React.FC = () => {
       ) : (
       <div className="flex flex-col gap-6">
         {showBossOperations && onboardingSteps.length > 0 && (
-          <section className={cn(cardBase, 'p-5')} aria-labelledby="onboarding-checklist-title">
-            <h2 id="onboarding-checklist-title" className="text-base font-semibold text-ink">{t('Finish setup')}</h2>
+          <details className={cn(cardBase, 'group px-5 py-3')} data-testid="onboarding-checklist">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 [&::-webkit-details-marker]:hidden">
+              <span id="onboarding-checklist-title" className="text-sm font-semibold text-ink">{t('Finish setup')} <span className="font-normal text-muted">· {t('setup.stepsLeft', { count: onboardingSteps.length })}</span></span>
+              <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
             <p className="mt-1 text-sm text-muted">{t('A few steps to get the workspace moving.')}</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {onboardingSteps.map(step => (
@@ -571,7 +579,7 @@ const Dashboard: React.FC = () => {
                 </Link>
               ))}
             </div>
-          </section>
+          </details>
         )}
 
         {showBossOperations ? (
@@ -604,10 +612,10 @@ const Dashboard: React.FC = () => {
                   </Link>
                 )}
 
+                <NeedsMyAttention />
+                <ProjectsWithoutPmPanel />
                 <ManagementOverview part="summary" />
                 <AgencyDeliveryHealth />
-                <ProjectsWithoutPmPanel />
-                <NeedsMyAttention />
                 <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
                 {recentActivitySection}
               </div>
@@ -737,8 +745,7 @@ const Dashboard: React.FC = () => {
 
             {bossTab === 'workload' && (
               <div id="boss-panel-workload" role="tabpanel" aria-labelledby="boss-tab-workload" tabIndex={0} className="space-y-6">
-                <ManagementOverview part="capacity" />
-                <TeamWorkload tasks={activeWorkloadTasks} users={users} onCreateTaskFor={openCreateTaskFor} />
+                <TeamWorkload tasks={activeWorkloadTasks} users={teamMembers} onCreateTaskFor={openCreateTaskFor} />
               </div>
             )}
           </>

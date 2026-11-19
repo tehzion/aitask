@@ -451,7 +451,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'All tasks', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Workflow' })).toHaveCount(0);
   await expect(page.getByText(/^Client: (Pending|Approved|Rejected)$/)).toHaveCount(0);
   const newTaskButton = page.getByRole('button', { name: 'New task' });

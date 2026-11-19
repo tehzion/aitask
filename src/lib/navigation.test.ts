@@ -102,6 +102,14 @@ describe('one home per role (team feedback, 9 Nov 2026)', () => {
     expect(getDefaultAccessiblePath(pm)).toBe('/manage');
   });
 
+  it('orders Boss Koo\'s menu as dashboard, Manage work, then the full task list', () => {
+    const labels = getNavigationSections(boss).primary.map(entry => entry.label);
+    expect(labels.slice(0, 3)).toEqual(['Dashboard', 'Manage work', 'All tasks']);
+    expect(labels.filter(label => label === 'Manage work')).toHaveLength(1);
+    const mobile = getMobileNavigation(boss).map(entry => entry.label);
+    expect(mobile).toEqual(['Dashboard', 'Manage work', 'Deliveries', 'Inbox']);
+  });
+
   it('keeps the agency dashboard for Boss Koo', () => {
     expect(getNavigationSections(boss).primary.some(entry => entry.path === '/')).toBe(true);
     expect(getDefaultAccessiblePath(boss)).not.toBe('/tasks');

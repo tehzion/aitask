@@ -157,7 +157,12 @@ export const getNavigationSections = (
     // The management workspace is Boss Koo's; a Project Manager gets the same
     // page as their portfolio list instead of the workspace-wide management view.
     primary: isBossKoo(user)
-      ? [{ path: '/tasks', label: 'Tasks', icon: CheckSquare }, ...generalPrimary]
+      // Boss Koo's day starts at the dashboard, then Manage work; the plain list is "All tasks".
+      ? [
+        ...generalPrimary.filter(item => item.path === '/' || item.path === '/manage'),
+        { path: '/tasks', label: 'All tasks', icon: CheckSquare },
+        ...generalPrimary.filter(item => item.path !== '/' && item.path !== '/manage'),
+      ]
       : isPortfolioHomeUser(user)
         // Manage work is the PM home; it replaced the Portfolio landing page
         // (owner decision, 19 Nov 2026) and the Portfolio list stays next to it.
@@ -185,7 +190,10 @@ export const getMobileNavigation = (
     ? sections.mobilePrimary || sections.primary
     : filterVisible(user, rolePermissions, isPortfolioHomeUser(user)
       ? generalMobilePrimary.map(item => item.path === '/' ? { path: '/manage', label: 'Manage work', icon: KanbanSquare } : item)
-      : generalMobilePrimary);
+      // Boss Koo keeps the dashboard and swaps Calendar (still under More) for Manage work.
+      : isBossKoo(user)
+        ? [generalMobilePrimary[0], { path: '/manage', label: 'Manage work', icon: KanbanSquare }, generalMobilePrimary[1], generalMobilePrimary[3]]
+        : generalMobilePrimary);
   // The bottom bar has no room for "Delivery tracker" at 320px.
   return items.map(item => item.label === 'Delivery tracker' ? { ...item, label: 'Deliveries' } : item);
 };
