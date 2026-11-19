@@ -31,7 +31,7 @@ const seedPM = async (page: Page) => {
     });
     stopBackendAutoSync();
   });
-  await page.goto('/');
+  await page.goto('/tasks');
   await expect(page.getByRole('heading', { name: 'My day', exact: true })).toBeVisible();
 };
 const queue = (page: Page, title: string) => page.getByRole('heading', { name: title, exact: true }).locator('../..');
@@ -65,7 +65,7 @@ test('PM can follow signed portfolio work through final completion', async ({ pa
     const task = useStore.getState().tasks.find(task => task.id === 'pm-final');
     return { status: task?.status, progress: task?.completionPercentage };
   })).toEqual({ status: 'Completed', progress: 100 });
-  await page.goto('/');
+  await page.goto('/tasks');
   await expect(queue(page, 'Ready to finalize').getByRole('link', { name: 'Signed portfolio work' })).toHaveCount(0);
   await expect(queue(page, 'Client review (optional)').getByRole('link', { name: 'Signed portfolio work' })).toBeVisible();
 });
@@ -164,7 +164,7 @@ test('PM delegates assigned work to the department HOD through the full editor',
     const { useStore } = await import('/src/store/index.ts');
     return useStore.getState().tasks.find(task => task.id === 'pm-direct')?.assignedTo;
   })).toBe(hodId);
-  await page.goto('/');
+  await page.goto('/tasks');
   await expect(page.getByText('Directly assigned PM work', { exact: true })).toHaveCount(0);
 });
 
