@@ -337,6 +337,8 @@ export interface ServiceCycle {
   periodStart: string;
   periodEnd: string;
   status: ServiceCycleStatus;
+  /** Added by the server for Client accounts only: whether the month is paid, never the amounts. */
+  paymentStatus?: 'unpaid' | 'partial' | 'paid';
   currency: 'MYR';
   serviceItems: ServiceItem[];
   discountType: 'none' | 'percent' | 'fixed';

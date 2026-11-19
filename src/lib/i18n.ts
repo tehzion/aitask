@@ -352,6 +352,8 @@ const zhCopy: Record<string, string> = {
   'Link a task...': '关联任务…',
   'No tasks due today.': '今天没有到期任务。',
   'Not assigned yet': '尚未分配',
+  'Awaiting payment': '待付款',
+  'Paid': '已付款',
   'Client brief': '客户需求简报',
   'What the client asked for, so the team does not have to guess.': '写下客户的要求，团队就不用猜了。',
   'Has brief': '有需求简报',
