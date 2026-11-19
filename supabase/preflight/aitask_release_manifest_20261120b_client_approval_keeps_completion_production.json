@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-20T02:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "CANDIDATE 2026-11-20: migration 20261120020000 is NOT yet applied to production.",
+  "status": "APPLIED 2026-11-20: production records 20261119172555 (owner instructed; applied via the Supabase connector). Repository and production migration versions match (175/175).",
   "validatedMigrationTail": [
     "20261023063344_task_workflow_action_guards",
     "20261023154255_bind_service_command_entity_types",
@@ -59,9 +59,16 @@
     "20261119070305_client_rating_and_revision_usage",
     "20261119150059_date_change_smoke_alert_pm_workload",
     "20261119160546_role_based_notifications",
-    "20261120020000_client_approval_keeps_completion"
+    "20261119172555_client_approval_keeps_completion"
   ],
-  "pendingProductionMigrations": [
-    "20261120020000_client_approval_keeps_completion"
-  ]
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261119172555_client_approval_keeps_completion",
+    "latestAppliedMigration": "20261119172555_client_approval_keeps_completion",
+    "historyCount": 175,
+    "beforeHistoryCount": 174,
+    "productionOnlyMigrations": [],
+    "checks": "Live verification in a rolled-back run with a temporary client: accepting completed work stayed Completed at 100% with its date; accepting work that was only ready stayed Approved at 80% and saved the 2-star rating stamped with the client as rater; a change request reopened work (In Progress, 50%, revision count +1, no completion date); the team received Client Approved Task, Client Requested Revision and Low Client Rating notices. No test rows were kept."
+  }
 }
