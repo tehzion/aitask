@@ -1,3 +1,4 @@
+import { nextDateChange } from '../lib/dateChange';
 import { normalizeIncludedRevisions } from '../lib/revisionAllowance';
 import { recordClientEvent } from '../lib/clientTelemetry';
 import { changedTaskIds, clearTaskSaveMarks, markTaskSavesFailed, markTasksChanged } from '../lib/taskSaveMarks';
@@ -203,7 +204,7 @@ interface BackendRuntimeState {
   message: string;
 }
 
-type TaskUpdateInput = Partial<Pick<
+type TaskUpdateInput = { dateChangeReason?: string } & Partial<Pick<
   Task,
   | 'projectId'
   | 'serviceCycleId'
@@ -403,7 +404,8 @@ export interface StoreState {
   updateTaskBrief: (taskId: string, brief: { references: string[]; mustHave?: string; avoid?: string }) => MutationActionResult;
   updateTaskAssignee: (taskId: string, assignedTo: string) => MutationActionResult;
   overrideTaskAssignee: (taskId: string, assignedTo: string, reason: string) => MutationActionResult;
-  updateTaskDueDate: (taskId: string, newDueDate: string) => MutationActionResult;
+  /** `reason` is optional and shown to the client when an existing date moves. */
+  updateTaskDueDate: (taskId: string, newDueDate: string, reason?: string) => MutationActionResult;
   updateTaskAttachment: (taskId: string, attachmentLink: string, attachmentName?: string) => MutationActionResult;
   attachTaskOutput: (taskId: string, attachment: AttachmentRef) => Promise<MutationActionResult>;
   setTaskReviewConfig: (taskId: string, config: { cover?: Task['reviewCover'] | null; accountableLeadId?: string; requiresInternalApproval?: boolean; approvalMode?: Task['approvalMode'] }) => Promise<MutationActionResult>;
@@ -3227,7 +3229,7 @@ export const useStore = create<StoreState>()(
         return result;
       },
 
-      updateTaskDueDate: (taskId, newDueDate) => {
+      updateTaskDueDate: (taskId, newDueDate, reason) => {
         let result: MutationActionResult = { ok: false, error: 'Unable to update the due date.' };
         set((state) => {
         if (isWorkspaceMutationLocked(state)) {
@@ -3259,7 +3261,7 @@ export const useStore = create<StoreState>()(
         result = { ok: true };
         return {
           tasks: state.tasks.map(t =>
-            t.id === taskId ? recordTaskWorkTransition(t, { ...t, dueDate: nextDueDate, dueReminderSent: false, updatedAt: new Date().toISOString() }, state.currentUser!.id) : t
+            t.id === taskId ? recordTaskWorkTransition(t, { ...t, dueDate: nextDueDate, dateChange: nextDateChange(t, nextDueDate, reason, state.currentUser!.id, new Date().toISOString()), dueReminderSent: false, updatedAt: new Date().toISOString() }, state.currentUser!.id) : t
           ),
         };
         });
@@ -3504,6 +3506,7 @@ export const useStore = create<StoreState>()(
           assignedAt: assignmentChanged && !isHodUser(currentUser, state.rolePermissions) ? now : task.assignedAt,
           startDate,
           dueDate,
+          dateChange: nextDateChange(task, dueDate, data.dateChangeReason, currentUser.id, now),
           postingDate,
           status,
           isCompleted,

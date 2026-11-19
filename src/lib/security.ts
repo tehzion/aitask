@@ -20,7 +20,7 @@ import type {
   Task,
   TaskApprovalEvent,
   TaskBrief,
-  TaskClientRating,
+  TaskClientRating, TaskDateChange,
   TaskComment,
   User,
 } from '../types';
@@ -259,6 +259,14 @@ const parseClientRating = (value: unknown): TaskClientRating | undefined => {
   return { stars: stars as TaskClientRating['stars'], comment: optionalText(value.comment, 500), ratedBy, ratedAt };
 };
 
+const parseDateChange = (value: unknown): TaskDateChange | undefined => {
+  if (!isRecord(value)) return undefined;
+  const from = cleanText(value.from, 10) ? safeIsoDate(value.from, '') : '';
+  const changedAt = safeIsoTimestamp(value.changedAt);
+  if (!from || !changedAt) return undefined;
+  return { from, reason: optionalText(value.reason, 200), changedBy: optionalText(value.changedBy, 160), changedAt };
+};
+
 const parseUser = (value: unknown): User | null => {
   if (!isRecord(value)) return null;
   const id = cleanText(value.id, 160);
@@ -490,6 +498,7 @@ export const parseTask = (value: unknown): Task | null => {
     completedAt: safeIsoTimestamp(value.completedAt),
     revisionCount: Math.max(0, Number(value.revisionCount) || 0),
     clientRating: parseClientRating(value.clientRating),
+    dateChange: parseDateChange(value.dateChange),
     brief: parseTaskBrief(value.brief),
     clientApprovalStatus: approvalStatuses.has(clientApprovalStatus) ? clientApprovalStatus : 'Pending',
     isRecurring: value.isRecurring === true,

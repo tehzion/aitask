@@ -6,6 +6,8 @@ import type { Task } from '../types';
 import { REJECTION_CODES } from '../hooks/useQuickTaskAction';
 import { commonAssignees, runBulkSave, type BulkOutcome } from '../lib/bulkManage';
 import { canEditTask } from '../lib/access';
+import { assigneeLabelWithLoad } from '../lib/staffWorkload';
+import { useAssigneeWorkload } from '../hooks/useAssigneeWorkload';
 import { Button } from './ui';
 import { inputBase } from './uiTokens';
 import ConfirmDialog from './ConfirmDialog';
@@ -19,7 +21,7 @@ interface BulkManageBarProps {
   onDone: () => void;
 }
 
-type Pending = { kind: 'due'; value: string } | { kind: 'assign'; memberId: string; name: string };
+type Pending = { kind: 'due'; value: string; reason: string } | { kind: 'assign'; memberId: string; name: string };
 
 /**
  * Bulk change of due date or assignee for several tasks at once. Each task is
@@ -33,10 +35,12 @@ const BulkManageBar: React.FC<BulkManageBarProps> = ({ tasks, selected, onSelect
   })));
   const [dueDate, setDueDate] = React.useState('');
   const [memberId, setMemberId] = React.useState('');
+  const [reason, setReason] = React.useState('');
   const [pending, setPending] = React.useState<Pending | null>(null);
   const [busy, setBusy] = React.useState(false);
   const [outcome, setOutcome] = React.useState<BulkOutcome | null>(null);
   const titleId = React.useId();
+  const workload = useAssigneeWorkload();
 
   const chosen = tasks.filter(task => selected.has(task.id));
   const editable = chosen.filter(task => canEditTask(state.currentUser, task, state.roles, { users: state.users, clients: state.clients, projects: state.projects }));
@@ -53,7 +57,7 @@ const BulkManageBar: React.FC<BulkManageBarProps> = ({ tasks, selected, onSelect
       const store = useStore.getState;
       const result = await runBulkSave(
         targets,
-        id => (pending.kind === 'due' ? store().updateTaskDueDate(id, pending.value) : store().updateTaskAssignee(id, pending.memberId)),
+        id => (pending.kind === 'due' ? store().updateTaskDueDate(id, pending.value, pending.reason) : store().updateTaskAssignee(id, pending.memberId)),
         async () => {
           const committed = await store().commitPendingMutation('task.update');
           return committed.ok ? { ok: true } : { ok: false, error: committed.error, code: committed.code || store().backend.errorCode || '' };
@@ -67,6 +71,7 @@ const BulkManageBar: React.FC<BulkManageBarProps> = ({ tasks, selected, onSelect
       setPending(null);
       onSelectedChange(new Set());
       setDueDate('');
+      setReason('');
       setMemberId('');
     }
   };
@@ -90,18 +95,23 @@ const BulkManageBar: React.FC<BulkManageBarProps> = ({ tasks, selected, onSelect
           <label className="min-w-0 flex-1 text-xs font-medium text-muted">{t('New due date')}
             <input type="date" value={dueDate} onChange={event => setDueDate(event.target.value)} disabled={busy} className={`${inputBase} mt-1 w-full`} />
           </label>
-          <Button className="min-h-11" disabled={busy || locked || editable.length === 0 || !dueDate} onClick={() => setPending({ kind: 'due', value: dueDate })}>{t('Change due date')}</Button>
+          <Button className="min-h-11" disabled={busy || locked || editable.length === 0 || !dueDate} onClick={() => setPending({ kind: 'due', value: dueDate, reason })}>{t('Change due date')}</Button>
         </div>
         <div className="flex items-end gap-2">
           <label className="min-w-0 flex-1 text-xs font-medium text-muted">{t('Assign to…')}
             <select value={memberId} onChange={event => setMemberId(event.target.value)} disabled={busy || assignees.length === 0} className={`${inputBase} mt-1 w-full`}>
               <option value="">{t('Choose a person')}</option>
-              {assignees.map(user => <option key={user.id} value={user.id} data-i18n-skip>{user.name}</option>)}
+              {assignees.map(user => <option key={user.id} value={user.id} data-i18n-skip>{assigneeLabelWithLoad(user.name, workload?.get(user.id), count => t('ui.openCount', { count }), count => t('ui.overdueCount', { count }))}</option>)}
             </select>
           </label>
           <Button className="min-h-11" disabled={busy || locked || editable.length === 0 || !memberId} onClick={() => setPending({ kind: 'assign', memberId, name: assignees.find(user => user.id === memberId)?.name || '' })}>{t('Reassign')}</Button>
         </div>
       </div>
+      {dueDate && (
+        <label className="block text-xs font-medium text-muted">{t('Reason for the new date (the client will see it)')}
+          <input value={reason} maxLength={200} onChange={event => setReason(event.target.value)} disabled={busy} placeholder={t('Optional, for example: waiting for the client’s files')} className={`${inputBase} mt-1 w-full`} />
+        </label>
+      )}
       {chosen.length > 0 && assignees.length === 0 && <p className="text-xs text-muted">{t('No one can take all the selected tasks. Select tasks from one department to reassign them together.')}</p>}
       {chosen.length > editable.length && <p className="text-xs text-muted">{t('ui.cannotEditCount', { count: chosen.length - editable.length })}</p>}
       {outcome && (

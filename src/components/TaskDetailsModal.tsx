@@ -50,6 +50,8 @@ import UserAvatar from './UserAvatar';
 import TaskRatingControl from './TaskRatingControl';
 import TaskTimeline from './TaskTimeline';
 import ReviewReplyChips from './ReviewReplyChips';
+import { assigneeLabelWithLoad } from '../lib/staffWorkload';
+import { useAssigneeWorkload } from '../hooks/useAssigneeWorkload';
 import { getRevisionAllowance } from '../lib/revisionAllowance';
 
 interface Props {
@@ -186,6 +188,9 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     notes: '',
   });
 
+  const assigneeWorkload = useAssigneeWorkload(Boolean(requestedTask) && isOpen);
+  const [dateReason, setDateReason] = useState('');
+  useEffect(() => { setDateReason(''); }, [requestedTask?.id]);
   const editBaseline = React.useRef(editForm);
   const attachmentBaseline = React.useRef({ link: '', name: '' });
   const editFormRef = React.useRef(editForm);
@@ -345,6 +350,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   };
 
   const acknowledgeDetails = () => {
+    setDateReason('');
     const submitted = pendingDetails.current;
     if (!submitted || submitted.taskId !== requestedTaskRef.current?.id) return;
     const latest = useStore.getState().tasks.find(item => item.id === submitted.taskId);
@@ -551,7 +557,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     if (pendingDetails.current) { await resolvePendingMutation('retry'); return; }
     setEditError('');
     const submitted = { ...editForm };
-    const result = updateTask(task.id, submitted);
+    const result = updateTask(task.id, { ...submitted, dateChangeReason: dateReason });
     if (!result.ok) { setEditError(result.error || 'Unable to update this task.'); return; }
     const persisted = useStore.getState().tasks.find(item => item.id === task.id);
     if (!persisted) return;
@@ -860,7 +866,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                           className={cn(inputBase, 'appearance-none px-2.5 py-2.5 pr-10')}
                         >
                           {canAssignOthers && <option value="">{t('Unassigned')}</option>}
-                          {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{formatTaskAssigneeName(user, rolePermissions)}</option>)}
+                          {assigneeOptions.map(user => <option key={user.id} data-i18n-skip value={user.id}>{assigneeLabelWithLoad(formatTaskAssigneeName(user, rolePermissions), assigneeWorkload?.get(user.id), count => t('ui.openCount', { count }), count => t('ui.overdueCount', { count }))}</option>)}
                         </select>
                         <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 opacity-60 text-muted" />
                       </span>
@@ -897,6 +903,18 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         className={cn(inputBase, 'px-2.5 py-2.5')}
                       />
                     </label>
+                    {Boolean(task.dueDate && editForm.dueDate && editForm.dueDate !== task.dueDate) && (
+                      <label className="block sm:col-span-2">
+                        <span className={fieldLabel}>{t('Reason for the new date (the client will see it)')}</span>
+                        <input
+                          value={dateReason}
+                          maxLength={200}
+                          onChange={(e) => setDateReason(e.target.value)}
+                          placeholder={t('Optional, for example: waiting for the client’s files')}
+                          className={cn(inputBase, 'px-2.5 py-2.5')}
+                        />
+                      </label>
+                    )}
                     <label className="block">
                       <span className={fieldLabel}>{t('Posting Date')}</span>
                       <input

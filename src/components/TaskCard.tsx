@@ -8,6 +8,8 @@ import { getLatestRevisionNote, getTaskBlockers, getUnavailableTaskDependencyCou
 import { getTaskWorkflowSteps, type TaskWorkflowStep } from '../lib/taskStage';
 import { isTaskOverdue } from '../lib/taskReporting';
 import { getTaskRisk } from '../lib/taskRisk';
+import { assigneeLabelWithLoad } from '../lib/staffWorkload';
+import { useAssigneeWorkload } from '../hooks/useAssigneeWorkload';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useLocalToday } from '../hooks/useLocalToday';
@@ -56,6 +58,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   const nextStep = useTaskNextStep(task);
   const quickAction = useQuickTaskAction(task);
   const quickAssign = useQuickAssign(task);
+  const assigneeWorkload = useAssigneeWorkload(Boolean(quickAssign));
   const revision = useRevisionAllowance(task);
   const currentUserId = useStore(state => state.currentUser?.id);
   // An HOD's task waiting to be handed out: assigning is the next step; with no
@@ -149,7 +152,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
           className="min-h-9 min-w-0 flex-1 rounded-control border border-line bg-surface px-2.5 text-sm font-medium text-ink focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 disabled:opacity-60"
         >
           <option value="">{quickAssign.busy ? t('Saving…') : t('Assign to…')}</option>
-          {quickAssign.options.map(member => <option key={member.id} value={member.id} data-i18n-skip>{member.name}</option>)}
+          {quickAssign.options.map(member => <option key={member.id} value={member.id} data-i18n-skip>{assigneeLabelWithLoad(member.name, assigneeWorkload?.get(member.id), count => t('ui.openCount', { count }), count => t('ui.overdueCount', { count }))}</option>)}
         </select>
       </div>}
       {waitingToStart && <p className="mt-1 border-t border-line/60 pt-2.5 text-sm text-muted">

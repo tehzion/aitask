@@ -248,6 +248,12 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
             <div><p className="text-xs font-medium text-muted">{t('Progress')}</p><p className="calm-number mt-1 text-sm font-semibold text-ink">{getTaskProgress(task, [], true)}%</p></div>
           </div>
           <ProgressBar className="mt-4" value={getTaskProgress(task, [], true)} max={100} label={t('Delivery progress')} />
+          {task.dateChange && task.dueDate && task.dateChange.from !== task.dueDate && (
+            <div data-testid="client-date-change" className="mt-3 rounded-control bg-surface px-3 py-2.5 text-sm leading-6 text-ink ring-1 ring-line">
+              <p className="font-semibold">{t('ui.dateMoved', { from: formatLocalizedDate(parseOptionalDate(task.dateChange.from) ?? new Date(), locale), to: dueDate ? formatLocalizedDate(dueDate, locale) : '' })}</p>
+              {task.dateChange.reason && <p data-i18n-skip className="mt-1 text-muted">{task.dateChange.reason}</p>}
+            </div>
+          )}
           {revisionAllowance.used > 0 && (
             <p data-testid="client-revision-usage" className="mt-3 text-sm font-medium text-ink">
               {t(revisionLabelKey(revisionAllowance), { used: revisionAllowance.used, included: revisionAllowance.included ?? 0 })}

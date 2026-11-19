@@ -688,6 +688,8 @@ registerUiTranslations({
   'Team': '团队',
   'No team work yet.': '团队暂时还没有工作。',
   'Show work for': '查看工作：',
+  'Reason for the new date (the client will see it)': '新日期的原因（客户会看到）',
+  'Optional, for example: waiting for the client’s files': '选填，例如：等待客户提供文件',
   'Update several tasks': '批量更新任务',
   'Select tasks': '选择任务',
   'Done selecting': '完成选择',

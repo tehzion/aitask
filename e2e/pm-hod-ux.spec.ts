@@ -208,3 +208,45 @@ test('Chinese bulk bar is translated', async ({ page }) => {
   const axe = await new AxeBuilder({ page }).include('main').analyze();
   expect(axe.violations.map(item => item.id)).toEqual([]);
 });
+
+test('a PM gives a reason when moving a due date, and the bulk bar can do the same', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page, 'pm');
+  await page.goto('/manage?taskId=u-fine');
+  await page.getByRole('button', { name: 'Edit task' }).click();
+  const editor = page.getByRole('dialog');
+  await editor.getByRole('button', { name: 'Edit', exact: true }).click();
+  const due = editor.getByLabel('Due Date');
+  const original = await due.inputValue();
+  const moved = await page.evaluate(value => new Date(new Date(value).getTime() + 5 * 86_400_000).toISOString().slice(0, 10), original);
+  await expect(editor.getByLabel('Reason for the new date (the client will see it)')).toHaveCount(0);
+  await due.fill(moved);
+  await editor.getByLabel('Reason for the new date (the client will see it)').fill('Client sent the files late');
+  await editor.getByRole('button', { name: 'Save Changes' }).click();
+  await expect.poll(() => page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === 'u-fine')?.dateChange?.reason)).toBe('Client sent the files late');
+  const change = await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === 'u-fine')?.dateChange);
+  expect(change).toMatchObject({ from: original, reason: 'Client sent the files late' });
+
+  await page.goto('/manage?tab=active');
+  await page.getByRole('button', { name: 'Select tasks' }).click();
+  const bar = page.getByRole('group', { name: 'Update several tasks' });
+  await page.getByRole('checkbox', { name: 'Select: Start me' }).check();
+  const target = await page.evaluate(() => new Date(Date.now() + 15 * 86_400_000).toISOString().slice(0, 10));
+  await bar.getByLabel('New due date').fill(target);
+  await bar.getByLabel('Reason for the new date (the client will see it)').fill('Waiting for approval');
+  await bar.getByRole('button', { name: 'Change due date' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Change due date' }).click();
+  await expect(bar.getByText('1 of 1 updated.')).toBeVisible();
+  const bulk = await page.evaluate(async () => (await import('/src/store/index.ts')).useStore.getState().tasks.find(task => task.id === 'u-start')?.dateChange);
+  expect(bulk).toMatchObject({ reason: 'Waiting for approval' });
+});
+
+test('the assignee list shows each person\'s current load', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page, 'pm');
+  await page.goto('/manage?tab=active');
+  await page.getByRole('button', { name: 'Select tasks' }).click();
+  await page.getByRole('checkbox', { name: 'Select: Start me' }).check();
+  const options = await page.getByRole('group', { name: 'Update several tasks' }).getByRole('combobox', { name: 'Assign to…' }).locator('option').allTextContents();
+  expect(options.some(label => /· \d+ open/.test(label))).toBe(true);
+});
