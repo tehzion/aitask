@@ -7,8 +7,8 @@ import { Plus, Search } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { canCreateTasksFromAnywhere, canEditTask, getVisibleTasks, isBossKoo, isDepartmentScopedUser } from '../lib/access';
-import { buildManageWork, defaultManageTab, filterManageTasks, MANAGE_TAB_ORDER, summarizeManageClients, type ManageTabId } from '../lib/manageWork';
-import { computePersonDeliveryMetrics, onTimeRate } from '../lib/deliveryMetrics';
+import { buildManageWork, defaultManageTab, filterManageTasks, MANAGE_TAB_ORDER, summarizeManageClients, summarizeManageTeam, type ManageTabId } from '../lib/manageWork';
+import { isTaskAtRisk } from '../lib/taskRisk';
 import { Button, PageHeader, SegmentedTabs, Surface } from '../components/ui';
 import { pageShell, inputBase } from '../components/uiTokens';
 import { useI18n } from '../components/I18nProvider';
@@ -52,6 +52,7 @@ const ManageWork: React.FC = () => {
     clients: state.clients, projects: state.projects, setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
   const [query, setQuery] = React.useState('');
+  const [riskOnly, setRiskOnly] = React.useState(false);
   const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
 
   const scope = React.useMemo(() => ({ clients, projects, users }), [clients, projects, users]);
@@ -63,12 +64,14 @@ const ManageWork: React.FC = () => {
 
   const requestedTab = searchParams.get('tab') as ManageTabId | null;
   const tab: ManageTabId = requestedTab && MANAGE_TAB_ORDER.includes(requestedTab) ? requestedTab : defaultManageTab(work.counts);
-  const shown = React.useMemo(() => filterManageTasks(work.byTab[tab], query, users), [query, tab, users, work.byTab]);
+  const now = React.useMemo(() => new Date(Math.max(Date.now(), today.getTime())), [today]);
+  const atRiskCount = React.useMemo(() => work.byTab[tab].filter(task => isTaskAtRisk(task, now)).length, [now, tab, work.byTab]);
+  const shown = React.useMemo(() => {
+    const matching = filterManageTasks(work.byTab[tab], query, users);
+    return riskOnly ? matching.filter(task => isTaskAtRisk(task, now)) : matching;
+  }, [now, query, riskOnly, tab, users, work.byTab]);
   const clientRows = React.useMemo(() => summarizeManageClients(visible), [visible]);
-  const teamRows = React.useMemo(
-    () => computePersonDeliveryMetrics(visible, new Date(Math.max(Date.now(), today.getTime())), 30).slice(0, 6),
-    [today, visible],
-  );
+  const teamRows = React.useMemo(() => summarizeManageTeam(visible, users, new Date(Math.max(Date.now(), today.getTime()))), [today, users, visible]);
 
   const taskId = searchParams.get('taskId');
   const selectedTask = taskId ? visible.find(task => task.id === taskId) || null : null;
@@ -118,6 +121,17 @@ const ManageWork: React.FC = () => {
             />
           </label>
 
+          {(atRiskCount > 0 || riskOnly) && (
+            <button
+              type="button"
+              aria-pressed={riskOnly}
+              onClick={() => setRiskOnly(value => !value)}
+              className={`min-h-9 rounded-full border px-3 text-sm font-medium transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${riskOnly ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-line text-muted hover:bg-inset'}`}
+            >
+              {t('Show only at-risk work')} ({atRiskCount})
+            </button>
+          )}
+
           {taskId && !selectedTask && <UnavailableWork onDismiss={() => setParam('taskId')} />}
           <Surface as="div" id="manage-work-panel" role="tabpanel" aria-labelledby={`manage-work-tab-${tab}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
             {shown.slice(0, 50).map(task => <StaffWorkItem key={task.id} task={task} allTasks={visible} users={users} onOpen={item => setParam('taskId', item.id)} />)}
@@ -146,19 +160,33 @@ const ManageWork: React.FC = () => {
             )}
           </Surface>
           <Surface className="p-4">
-            <h2 className="text-sm font-semibold text-ink">{t('Team, last 30 days')}</h2>
-            {teamRows.length === 0 ? <p className="mt-2 text-sm text-muted">{t('No finished work in this period yet.')}</p> : (
+            <h2 className="text-sm font-semibold text-ink">{t('Team')}</h2>
+            {teamRows.length === 0 ? <p className="mt-2 text-sm text-muted">{t('No team work yet.')}</p> : (
               <ul className="mt-2 divide-y divide-line/60">
-                {teamRows.map(row => {
-                  const person = users.find(user => user.id === row.userId);
-                  const rate = onTimeRate(row);
-                  return (
-                    <li key={row.userId} className="py-2 text-sm">
-                      <span data-i18n-skip className="block truncate font-medium text-ink">{person?.name || t('Unavailable member')}</span>
-                      <span className="text-xs text-muted">{rate === undefined ? t('No due dates') : t('ui.onTimePercent', { percent: rate })} · {t('ui.finishedCount', { count: row.completed })}</span>
-                    </li>
-                  );
-                })}
+                {teamRows.map(row => (
+                  <li key={row.userId} className="py-2 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => { setQuery(row.name); setParam('tab', 'active'); }}
+                      aria-label={`${t('Show work for')} ${row.name}`}
+                      className="flex w-full items-start justify-between gap-3 rounded-control text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35"
+                    >
+                      <span className="min-w-0">
+                        <span data-i18n-skip className="block truncate font-medium text-ink">{row.name}</span>
+                        <span className="block text-xs text-muted">
+                          {t('ui.openCount', { count: row.open })}
+                          {row.overdue > 0 && <> · <span className="font-medium text-red-700">{t('ui.overdueCount', { count: row.overdue })}</span></>}
+                          {row.atRisk > 0 && <> · <span className="font-medium text-amber-700">{t('ui.atRiskCount', { count: row.atRisk })}</span></>}
+                        </span>
+                        <span className="block text-xs text-muted">
+                          {row.onTimePercent === undefined ? t('No due dates') : t('ui.onTimePercent', { percent: row.onTimePercent })} · {t('ui.finishedCount', { count: row.finished })}
+                          {row.acceptanceHours !== undefined && <> · {t('ui.acceptsInHours', { hours: row.acceptanceHours })}</>}
+                        </span>
+                      </span>
+                      {row.ratingAverage !== undefined && <span className="shrink-0 text-xs font-medium text-amber-700"><span aria-hidden="true">★</span> {row.ratingAverage.toFixed(1)}</span>}
+                    </button>
+                  </li>
+                ))}
               </ul>
             )}
           </Surface>

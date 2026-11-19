@@ -87,7 +87,8 @@ test('the side panels show clients with their rating and the team pulse', async 
   await page.goto('/manage');
   const side = page.getByRole('complementary', { name: 'Clients and team' });
   await expect(side.getByText('Manage Co')).toBeVisible();
-  await expect(side.getByText('5.0')).toBeVisible();
+  // The client row and the team card both show the 5.0 average now.
+  await expect(side.getByText('5.0')).toHaveCount(2);
   await expect(side.getByText(/1 with client/)).toBeVisible();
   await expect(side.getByText(/finished/).first()).toBeVisible();
 });
@@ -137,6 +138,6 @@ test('Manage work is fully translated in Chinese', async ({ page }) => {
   await expect(main).toContainText('审核中');
   await expect(main).toContainText('修订中');
   await expect(main).toContainText('客户处理中');
-  await expect(main).toContainText('团队，最近 30 天');
+  await expect(main).toContainText('团队');
   await expect(main).not.toContainText(/\{[a-z]+\}|Needs my review|With reviewer|In revision|Manage work|Team, last/);
 });

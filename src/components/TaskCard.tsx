@@ -7,6 +7,7 @@ import { getLocalizedPriority, getLocalizedTaskStatus } from '../lib/localeLabel
 import { getLatestRevisionNote, getTaskBlockers, getUnavailableTaskDependencyCount, isTaskWaitingOnEarlierSteps } from '../lib/staffWorkspace';
 import { getTaskWorkflowSteps, type TaskWorkflowStep } from '../lib/taskStage';
 import { isTaskOverdue } from '../lib/taskReporting';
+import { getTaskRisk } from '../lib/taskRisk';
 import { cn, getRelativeDueDateString, parseOptionalDate } from '../lib/utils';
 import { formatLocalizedDate } from '../lib/i18n';
 import { useLocalToday } from '../hooks/useLocalToday';
@@ -74,7 +75,9 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   const open = !task.isCompleted && !['Completed', 'Cancelled'].includes(task.status);
   // What to fix, without opening the task (role UX: revision reason on the card).
   const revisionNote = open && task.status !== 'Waiting Approval' ? getLatestRevisionNote(task) : undefined;
+  const risk = getTaskRisk(task, today);
   const flags = [
+    risk && t(risk === 'not_started' ? 'At risk: not started yet' : 'At risk: no update for 2 days'),
     task.revisionCount > 0 && open && revision.label,
     open && task.brief && t('Has brief'),
     open && task.workState?.blocker && t('Help requested'),

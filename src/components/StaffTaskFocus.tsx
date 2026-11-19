@@ -28,6 +28,7 @@ import { useI18n } from './I18nProvider';
 import TaskRatingControl from './TaskRatingControl';
 import TaskBriefPanel from './TaskBriefPanel';
 import TaskTimeline from './TaskTimeline';
+import ReviewReplyChips from './ReviewReplyChips';
 import { buildTaskTimeline } from '../lib/taskTimeline';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { getVisibleTasks, getTaskAccess } from '../lib/access';
@@ -353,6 +354,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
         <label className="block text-xs font-medium text-muted">{t('Revision note (optional)')}
           <textarea value={revisionNote} onChange={event => setRevisionNote(event.target.value)} rows={2} maxLength={2000} className={`${inputBase} mt-1.5 resize-none px-3 py-2`} />
         </label>
+        {currentUser && <ReviewReplyChips userId={currentUser.id} value={revisionNote} onChange={setRevisionNote} />}
       </form>}
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-wrap items-center gap-2">

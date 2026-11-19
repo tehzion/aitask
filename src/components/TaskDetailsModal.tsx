@@ -49,6 +49,7 @@ import ActionAvailabilityNotice from './ActionAvailabilityNotice';
 import UserAvatar from './UserAvatar';
 import TaskRatingControl from './TaskRatingControl';
 import TaskTimeline from './TaskTimeline';
+import ReviewReplyChips from './ReviewReplyChips';
 import { getRevisionAllowance } from '../lib/revisionAllowance';
 
 interface Props {
@@ -1189,6 +1190,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                         className={cn(inputBase, 'resize-none px-3 py-2')}
                       />
                     </label>
+                    {currentUser && <ReviewReplyChips userId={currentUser.id} value={revisionNote} onChange={setRevisionNote} />}
                   </details>
                   <Button type="submit" variant="secondary" disabled={isSubmitting}>
                     <RotateCcw className="h-4 w-4" /> {isSubmitting ? t('Requesting...') : t('Request revision')}
