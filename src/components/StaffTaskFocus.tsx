@@ -27,6 +27,8 @@ import SessionRecoveryButton from './SessionRecoveryButton';
 import { useI18n } from './I18nProvider';
 import TaskRatingControl from './TaskRatingControl';
 import TaskBriefPanel from './TaskBriefPanel';
+import TaskTimeline from './TaskTimeline';
+import { buildTaskTimeline } from '../lib/taskTimeline';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
 import { getVisibleTasks, getTaskAccess } from '../lib/access';
 import { canRequestTaskRevision, getDepartmentReviewers, getInternalReviewLane } from '../lib/taskWorkflowAccess';
@@ -157,6 +159,7 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
   if (!liveTask) return null;
 
   const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { users, clients, projects });
+  const hasTimeline = buildTaskTimeline(liveTask, users, 'team').length > 0;
   const incompletePredecessors = getTaskBlockers(liveTask, visibleTasks);
   const unavailablePredecessorCount = getUnavailableTaskDependencyCount(liveTask, visibleTasks);
   const guidedAction = getStaffGuidedAction(liveTask, taskStatuses, currentUser, rolePermissions, { users, clients, projects });
@@ -523,6 +526,12 @@ const StaffTaskFocusContent: React.FC<StaffTaskFocusProps> = ({ isOpen, task, on
           <TaskOutputFiles task={liveTask} onUploadStateChange={setOutputUpload} showReviewSettings={false} />
         </section>
 
+        {hasTimeline && (
+          <section aria-labelledby="staff-task-timeline" className="border-t border-line/70 pt-5">
+            <h3 id="staff-task-timeline" className="text-sm font-semibold text-ink">{t('Delivery timeline')}</h3>
+            <TaskTimeline task={liveTask} users={users} audience="team" className="mt-3" />
+          </section>
+        )}
         <section aria-labelledby="staff-task-updates" className="border-t border-line/70 pt-5">
           <h3 id="staff-task-updates" className="text-sm font-semibold text-ink">{t('Updates')}</h3>
           <div className="mt-2 divide-y divide-line/60">

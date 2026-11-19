@@ -8,7 +8,7 @@ import { useRecoverableForm } from '../hooks/useRecoverableForm';
 import { captureWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
 import { useToastStore } from '../store/useToastStore';
 import DraftRecoveryNotice from './DraftRecoveryNotice';
-import { CalendarDays, CheckCircle2, Clock3, ExternalLink, FileText, History, MessageSquareText, Send, Star, UserRound, XCircle } from 'lucide-react';
+import { CalendarDays, CheckCircle2, ExternalLink, FileText, History, MessageSquareText, Send, Star, UserRound, XCircle } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import type { Task } from '../types';
 import { canCommentOnTask, canReviewTaskAsClient, canViewTask } from '../lib/access';
@@ -22,9 +22,13 @@ import { isPendingMutationResolution, useStore } from '../store';
 import { Button, ProgressBar, StatusChip } from './ui';
 import { inputBase } from './uiTokens';
 import SideSheet from './SideSheet';
+import TaskTimeline from './TaskTimeline';
 import BackendFreshness from './BackendFreshness';
 import SessionRecoveryButton from './SessionRecoveryButton';
 import { useI18n } from './I18nProvider';
+
+/** Fiverr-style revision reasons: a tap starts the note so the team gets specific feedback. */
+const CHANGE_REASONS = ['Colours', 'Text or wording', 'Layout', 'Size or format', 'Brand match', 'Something else'] as const;
 
 interface ClientDeliveryFocusProps {
   task: Task | null;
@@ -266,6 +270,33 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
           <section aria-labelledby="delivery-decision-title">
             <h3 id="delivery-decision-title" className="font-semibold text-ink">{t('Your decision')}</h3>
             <p className="mt-1 text-sm leading-6 text-muted">{t('A note is optional when approving. A clear reason is required when requesting changes.')}</p>
+            {canReview && (
+              <div role="group" aria-label={t('What needs to change?')} className="mt-3">
+                <p className="text-xs font-medium text-muted">{t('What needs to change? Tap to start your note.')}</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {CHANGE_REASONS.map(reason => {
+                    const label = t(reason);
+                    const active = decisionNote.includes(`${label}:`);
+                    return (
+                      <button
+                        key={reason}
+                        type="button"
+                        aria-pressed={active}
+                        disabled={isSaving || Boolean(pendingSave)}
+                        onClick={() => {
+                          if (!active) setDecisionNote(current => `${current.trim() ? (current.endsWith('\n') ? current : `${current}\n`) : ''}${label}: `);
+                          setDecisionError('');
+                          window.setTimeout(() => decisionNoteRef.current?.focus(), 0);
+                        }}
+                        className={cn('min-h-9 rounded-full border px-3 text-sm font-medium transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 disabled:opacity-50', active ? 'border-accent bg-accent/10 text-ink' : 'border-line text-muted hover:bg-inset')}
+                      >
+                        {label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
             <textarea
               ref={decisionNoteRef}
               value={decisionNote}
@@ -333,9 +364,7 @@ const ClientDeliveryFocusForm = ({ task, onClose }: ClientDeliveryFocusProps) =>
         {(task.approvalHistory || []).length > 0 && (
           <section aria-labelledby="delivery-history-title">
             <div className="flex items-center gap-2"><History className="h-4 w-4 text-accent" /><h3 id="delivery-history-title" className="font-semibold text-ink">{t('Decision history')}</h3></div>
-            <ol className="mt-4 space-y-3 border-l border-line pl-4">
-              {[...(task.approvalHistory || [])].reverse().map(event => { const eventUser = users.find(user => user.id === event.userId && user.role === 'Client'); return <li key={event.id} className="relative"><span className="absolute -left-[1.32rem] top-1.5 h-2 w-2 rounded-full bg-accent" /><p className="text-sm text-ink">{eventUser?.name ? <span data-i18n-skip className="font-semibold">{eventUser.name}</span> : <span className="font-semibold">{t('Client')}</span>} {event.status === 'Approved' ? t('approved the delivery') : t('requested changes')}.</p><p className="mt-1 inline-flex items-center gap-1 text-xs text-muted"><Clock3 className="h-3.5 w-3.5" />{formatLocalizedDistanceToNow(new Date(event.createdAt), locale)}</p>{event.note && <p data-i18n-skip className="mt-2 rounded-control bg-inset px-3 py-2 text-sm text-muted">{event.note}</p>}</li>; })}
-            </ol>
+            <TaskTimeline task={task} users={users} audience="client" className="mt-4" />
           </section>
         )}
       </div>

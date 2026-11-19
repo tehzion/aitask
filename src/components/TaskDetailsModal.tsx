@@ -48,6 +48,7 @@ import ContextualTutorialLink from './ContextualTutorialLink';
 import ActionAvailabilityNotice from './ActionAvailabilityNotice';
 import UserAvatar from './UserAvatar';
 import TaskRatingControl from './TaskRatingControl';
+import TaskTimeline from './TaskTimeline';
 import { getRevisionAllowance } from '../lib/revisionAllowance';
 
 interface Props {
@@ -1228,19 +1229,16 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
               <h3 className="font-semibold text-slate-800">{t(isClientTaskViewer ? 'Feedback & Updates' : 'Comments & Updates')}</h3>
             </div>
 
-            {task.approvalHistory && task.approvalHistory.length > 0 && (
-              <div className="px-4 py-3 bg-white border-b border-slate-200 space-y-2">
+            {(task.approvalHistory?.length || task.assignedAt || task.internalReview || task.clientRating || task.isCompleted) ? (
+              <div className="px-4 py-3 bg-white border-b border-slate-200 space-y-3">
                 <div className="flex items-center gap-2 text-xs font-semibold text-slate-500 tracking-wide">
-                  <History className="w-3.5 h-3.5" /> {t('Approval History')}
+                  <History className="w-3.5 h-3.5" /> {t('Delivery timeline')}
                 </div>
-                {task.approvalHistory.slice().reverse().map(event => (
-                  <div key={event.id} className="text-xs text-slate-600">
-                    <span className="font-semibold text-slate-800">{getUserName(event.userId)}</span> {t('marked')} {t(event.status)} {formatLocalizedDistanceToNow(new Date(event.createdAt), locale)}
-                    {event.note && <div data-i18n-skip className="mt-1 bg-slate-50 border border-slate-100 rounded-md p-2 text-slate-700">{event.note}</div>}
-                  </div>
-                ))}
+                <div className="max-h-56 overflow-y-auto pr-1 custom-scrollbar">
+                  <TaskTimeline task={task} users={users} audience={isClientTaskViewer ? 'client' : 'team'} />
+                </div>
               </div>
-            )}
+            ) : null}
 
             <div className="flex-none space-y-4 overflow-visible p-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:custom-scrollbar">
               {(!task.comments || task.comments.length === 0) ? (
