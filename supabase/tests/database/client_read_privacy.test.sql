@@ -35,11 +35,13 @@ select ok(
   'client task projection drops workflow step ordering'
 );
 
+-- Clients now see how many revision rounds were used (and their own rating);
+-- everything else internal about reviews stays out of the projection.
 select ok(
-  position(
-    'revisionCount' in pg_get_functiondef('private.aitask_client_task_projection(jsonb)'::regprocedure)
-  ) = 0,
-  'client task projection drops internal revision counters'
+  position('revisionCount' in pg_get_functiondef('private.aitask_client_task_projection(jsonb)'::regprocedure)) > 0
+  and position('approvalHistory' in pg_get_functiondef('private.aitask_client_task_projection(jsonb)'::regprocedure)) = 0
+  and position('internalReview' in pg_get_functiondef('private.aitask_client_task_projection(jsonb)'::regprocedure)) = 0,
+  'client task projection shows only the revision count, not internal review history'
 );
 
 select ok(
