@@ -270,6 +270,181 @@ try {
   console.log('[staff-saves] Department HOD delegation outside project Staff membership persisted through authenticated REST.');
 
 
+  // Manage work, date reasons, client ratings and role notifications use the same real
+  // Auth/REST save path. Exercise them as the people who use them, including the
+  // failure paths (lost confirmation and a stale record) that must never lose a change.
+  const featureTask = (id, extra = {}) => ({ ...baseTask, id, projectId: 'curated', serviceCycleId: undefined, deliverableId: undefined, ...extra });
+  const taskOf = id => useStore.getState().tasks.find(task => task.id === id);
+  const feedTitles = async () => (await secure.loadSecureNotificationPage({})).items.map(item => `${item.title}|${item.route?.entityId || ''}`);
+  insert('task', featureTask('reason-pm', { dueDate: '2026-10-30' }));
+  insert('task', featureTask('reason-hod', { dueDate: '2026-10-30', assignedTo: 'staff', responsibleHodId: 'hod', assignmentState: 'assigned_staff' }));
+  await login('pm');
+  await save('PM moves a date with a reason', useStore.getState().updateTaskDueDate('reason-pm', '2026-11-06', 'Client sent new copy'), 'task.update');
+  await login('pm');
+  assert.equal(taskOf('reason-pm').dueDate, '2026-11-06');
+  assert.equal(taskOf('reason-pm').dateChange?.reason, 'Client sent new copy', 'the reason persists after reload');
+  assert.equal(taskOf('reason-pm').dateChange?.from, '2026-10-30');
+  await login('hod');
+  await save('HOD moves a department date with a reason', useStore.getState().updateTaskDueDate('reason-hod', '2026-11-04', 'Waiting on assets'), 'task.update');
+  await login('boss');
+  await save('Boss moves a date with a reason', useStore.getState().updateTaskDueDate('reason-pm', '2026-11-09', 'Boss re-planned'), 'task.update');
+  await login('boss');
+  assert.equal(taskOf('reason-pm').dateChange?.from, '2026-11-06', 'the previous date is kept as the "from" date');
+  console.log('[feature-saves] PM, HOD and Boss date changes with a reason persisted through authenticated REST and reload.');
+
+  // Manage work bulk save: several tasks, one at a time, then a reassignment.
+  insert('task', featureTask('bulk-a', { dueDate: '2026-10-30' }));
+  insert('task', featureTask('bulk-b', { dueDate: '2026-10-30' }));
+  await login('pm');
+  for (const id of ['bulk-a', 'bulk-b']) {
+    await save(`PM bulk due date for ${id}`, useStore.getState().updateTask(id, { dueDate: '2026-11-12', dateChangeReason: 'Shifted together' }), 'task.update');
+  }
+  await login('pm');
+  assert.deepEqual(['bulk-a', 'bulk-b'].map(id => taskOf(id).dueDate), ['2026-11-12', '2026-11-12']);
+  await save('PM reassigns bulk work', useStore.getState().updateTaskAssignee('bulk-a', 'other'), 'task.update');
+  await login('other');
+  assert.equal(taskOf('bulk-a')?.assignedTo, 'other', 'the new assignee sees the work after reload');
+  console.log('[feature-saves] Manage work bulk due date and reassignment persisted through authenticated REST.');
+
+  // A lost confirmation on a reasoned date change: retry must apply it exactly once.
+  await login('pm');
+  assert.equal(useStore.getState().updateTaskDueDate('bulk-b', '2026-11-20', 'Lost acknowledgement').ok, true);
+  loseConfirmation = true;
+  const uncertainDate = await secure.saveSecureWorkspace(snapshot(), 'task.update', undefined, { actorMemberId: 'pm', excludeSuperAdminEntities: true });
+  assert.equal(uncertainDate.ok, false, 'a lost acknowledgement keeps the change as uncertain');
+  const retriedDate = await secure.retrySecureWorkspaceCommand();
+  assert.equal(retriedDate.ok, true, `retry failed: ${retriedDate.error}`);
+  await login('pm');
+  assert.equal(taskOf('bulk-b').dueDate, '2026-11-20');
+  assert.equal(taskOf('bulk-b').dateChange?.from, '2026-11-12', 'the retry did not apply the change twice');
+  assert.equal(taskOf('bulk-b').dateChange?.reason, 'Lost acknowledgement');
+
+  // A stale record: someone else changed it first. The save reports a conflict instead of
+  // overwriting, and re-applying on fresh data succeeds.
+  await login('pm');
+  assert.equal(useStore.getState().updateTaskDueDate('bulk-a', '2026-11-25', 'Second thoughts').ok, true);
+  sql("update public.aitask_entities set data = data || '{\"notes\":\"changed elsewhere\"}'::jsonb where workspace_id='aitask-main' and entity_type='task' and entity_id='bulk-a';");
+  const stale = await secure.saveSecureWorkspace(snapshot(), 'task.update', undefined, { actorMemberId: 'pm', excludeSuperAdminEntities: true });
+  assert.equal(stale.ok, false, 'a stale record must not be overwritten');
+  assert.equal(stale.code, 'CONFLICT', `expected a conflict, got ${stale.code}: ${stale.error}`);
+  secure.discardSecureWorkspaceCommand();
+  await login('pm');
+  assert.equal(taskOf('bulk-a').notes, 'changed elsewhere', 'the other change is kept');
+  await save('PM re-applies after the conflict', useStore.getState().updateTaskDueDate('bulk-a', '2026-11-25', 'Second thoughts'), 'task.update');
+  await login('pm');
+  assert.equal(taskOf('bulk-a').notes, 'changed elsewhere');
+  assert.equal(taskOf('bulk-a').dueDate, '2026-11-25');
+  console.log('[feature-saves] Lost-confirmation retry applied once, and a stale record conflicted cleanly then saved after refresh.');
+
+  // Client ratings and the notices each role gets.
+  for (const id of ['rate-low', 'rate-good', 'rate-change']) {
+    insert('task', featureTask(id, { visibility: 'client-visible', status: 'Approved', isCompleted: false, completionPercentage: 80, clientApprovalStatus: 'Pending', assignedTo: 'staff', responsibleHodId: 'hod', assignmentState: 'assigned_staff' }));
+  }
+  await login('customer');
+  await save('Client rates low', useStore.getState().reviewClientApproval('rate-low', 'Approved', '', { stars: 2, comment: 'Not what we asked' }), 'approval.review');
+  await login('customer');
+  await save('Client rates high', useStore.getState().reviewClientApproval('rate-good', 'Approved', '', { stars: 5 }), 'approval.review');
+  await login('customer');
+  await save('Client asks for changes', useStore.getState().reviewClientApproval('rate-change', 'Rejected', 'Please redo the colours'), 'approval.review');
+  const customerFeed = await feedTitles();
+  assert.equal(customerFeed.some(item => item.startsWith('Low Client Rating')), false, 'clients never see internal rating alerts');
+  await login('pm');
+  assert.equal(taskOf('rate-low').clientRating?.stars, 2);
+  assert.equal(taskOf('rate-low').clientRating?.ratedBy, 'customer', 'the server stamps who rated');
+  const pmFeed = await feedTitles();
+  for (const expected of ['Low Client Rating|rate-low', 'Client Approved Task|rate-good', 'Client Requested Revision|rate-change']) assert.equal(pmFeed.includes(expected), true, `PM is told: ${expected}`);
+  assert.equal(pmFeed.includes('Low Client Rating|rate-good'), false, 'a good rating is not a low-rating alert');
+  await login('hod');
+  const hodFeed = await feedTitles();
+  for (const expected of ['Low Client Rating|rate-low', 'Client Requested Revision|rate-change']) assert.equal(hodFeed.includes(expected), true, `HOD is told: ${expected}`);
+  await login('staff');
+  const staffFeed = await feedTitles();
+  assert.equal(staffFeed.includes('Low Client Rating|rate-low'), true, 'the assignee is told about a low rating');
+  assert.equal(staffFeed.filter(item => item === 'Client Approved Task|rate-good').length, 1, 'the assignee gets one approval notice, not two');
+  await login('boss');
+  const bossFeed = await feedTitles();
+  assert.equal(bossFeed.includes('Low Client Rating|rate-low'), true, 'Boss Koo is told about a low rating');
+  assert.equal(bossFeed.filter(item => item === 'Client Approved Task|rate-good').length <= 1, true, 'Boss Koo is not told twice about a plain approval');
+  console.log('[feature-saves] Client ratings persisted with a server-stamped rater, and each role received the right notices.');
+
+  // Overdue notices: once per task, to the people who run it, never to Boss Koo.
+  insert('task', featureTask('overdue-task', { status: 'In Progress', assignedTo: 'staff', responsibleHodId: 'hod', assignmentState: 'assigned_staff', dueDate: '2026-10-30' }));
+  sql("update public.aitask_entities set data = data || jsonb_build_object('dueDate', to_char((now() at time zone 'Asia/Kuala_Lumpur')::date - 3, 'YYYY-MM-DD')) where workspace_id='aitask-main' and entity_type='task' and entity_id='overdue-task';");
+  sql("select private.aitask_generate_overdue_task_notices('aitask-main', now());");
+  sql("select private.aitask_generate_overdue_task_notices('aitask-main', now());");
+  for (const [who, expected] of [['staff', 1], ['hod', 1], ['pm', 1], ['boss', 0]]) {
+    await login(who);
+    assert.equal((await feedTitles()).filter(item => item === 'Task Overdue|overdue-task').length, expected, `${who} overdue notices`);
+  }
+  console.log('[feature-saves] Overdue work was announced once to the assignee, HOD and PM, and not to Boss Koo.');
+
+  // New companies, then the assignment chain and acceptance, as each role really does them.
+  const clientNamed = name => useStore.getState().clients.find(client => client.clientName === name);
+  await login('pm');
+  const pmCompany = useStore.getState().createClientProfile({ clientName: 'PM Created Co', email: 'hello@pm-created.example', phone: '+60123456789' });
+  await save('PM adds a company', pmCompany, 'client.upsert');
+  assert.equal(useStore.getState().createClientProfile({ clientName: 'pm created co' }).ok, false, 'a duplicate company name is refused, whatever its case');
+  await login('pm');
+  assert.equal(clientNamed('PM Created Co')?.createdBy, 'pm', 'the PM owns the company they added');
+  await login('boss');
+  assert.equal(Boolean(clientNamed('PM Created Co')), true, 'Boss Koo sees a company a PM added');
+  const bossCompany = useStore.getState().createClientProfile({ clientName: 'Boss Created Co' });
+  await save('Boss adds a company', bossCompany, 'client.upsert');
+  await save('Boss hands the company to a PM', useStore.getState().assignClientOwner(bossCompany.id, 'pm'), 'client.upsert');
+  await login('pm');
+  assert.equal(clientNamed('Boss Created Co')?.createdBy, 'pm', 'the PM now owns the company Boss Koo handed over');
+  await login('hod');
+  const hodCompany = useStore.getState().createClientProfile({ clientName: 'HOD Created Co' });
+  await save('HOD adds a company', hodCompany, 'client.upsert');
+  await login('hod');
+  assert.equal(Boolean(clientNamed('HOD Created Co')), true, 'the HOD sees the company they added');
+  await login('staff');
+  assert.equal(useStore.getState().createClientProfile({ clientName: 'Staff Created Co' }).ok, false, 'Staff cannot add companies');
+  await login('boss');
+  const planned = useStore.getState().createClientWithPlan({ clientName: 'Planned Co', planName: 'Monthly', origin: 'custom', startDate: '2026-11-01', billingDay: 1,
+    serviceItems: [{ id: 'planned-item', name: 'Design', platforms: [], unit: 'output', quantity: 1, unitPriceMinor: 100000 }], discountType: 'none', discountValue: 0, taxRateBps: 0 });
+  await save('Boss adds a company with a plan', planned, 'client_plan.manage');
+  await login('boss');
+  assert.equal(useStore.getState().clientPlans.some(plan => plan.clientId === planned.clientId), true, 'the plan persists with the company');
+  console.log('[assign-saves] Companies added by PM, Boss and HOD (and Boss with a plan) persisted; duplicates and Staff were refused.');
+
+  const chainTask = (extra = {}) => ({ clientId: 'client', clientName: 'Save QA', projectId: 'curated', projectName: 'Curated', title: 'Chain work', description: 'Created by the PM', serviceType: 'Design', department: 'Designer',
+    assignedTo: 'hod', createdBy: 'pm', assignedBy: 'pm', startDate: '2026-10-01', dueDate: '2026-11-30', status: 'Pending', priority: 'Medium', completionPercentage: 0, isRecurring: false, recurrenceFrequency: 'None', visibility: 'internal', ...extra });
+  await login('pm');
+  const chainId = useStore.getState().addTask(chainTask());
+  assert.equal(Boolean(chainId), true, 'the PM can create work for a department HOD');
+  await save('PM creates work for the HOD', { ok: Boolean(chainId) }, 'task.create');
+  await login('hod');
+  assert.equal(taskOf(chainId)?.assignedTo, 'hod', 'the HOD sees the work assigned to them');
+  assert.equal((await feedTitles()).some(item => /^(New Task Assigned|Task Assigned To You)\|/.test(item) && item.endsWith(`|${chainId}`)), true, 'the HOD is told about the new assignment');
+  await save('HOD accepts the assignment', useStore.getState().updateTaskWork(chainId, { kind: 'accept' }), 'task.update');
+  await login('hod');
+  assert.equal(taskOf(chainId).workState?.acceptedBy, 'hod', 'the HOD acceptance persists');
+  await save('HOD hands the work to Staff', useStore.getState().updateTaskAssignee(chainId, 'staff'), 'task.update');
+  await login('staff');
+  assert.equal(taskOf(chainId)?.assignedTo, 'staff', 'Staff sees work handed to them');
+  assert.equal((await feedTitles()).some(item => /^(New Task Assigned|Task Assigned To You)\|/.test(item) && item.endsWith(`|${chainId}`)), true, 'Staff is told about the assignment');
+  await save('Staff accepts the assignment', useStore.getState().updateTaskWork(chainId, { kind: 'accept' }), 'task.update');
+  await save('Staff starts the work', useStore.getState().updateTaskStatus(chainId, 'In Progress'), 'task.update');
+  await login('pm');
+  assert.equal(taskOf(chainId).workState?.acceptedBy, 'staff', 'the PM sees who accepted');
+  assert.equal(taskOf(chainId).status, 'In Progress');
+  await login('hod');
+  assert.equal(taskOf(chainId).status, 'In Progress', 'the HOD sees the work moving');
+  // Work created without an owner, then assigned later.
+  await login('pm');
+  const laterId = useStore.getState().addTask(chainTask({ title: 'Assigned later', assignedTo: '' }));
+  assert.equal(Boolean(laterId), true, 'work can be created before anyone owns it');
+  await save('PM creates unassigned work', { ok: Boolean(laterId) }, 'task.create');
+  await save('PM assigns it later', useStore.getState().updateTaskAssignee(laterId, 'hod'), 'task.update');
+  await login('hod');
+  assert.equal(taskOf(laterId)?.assignedTo, 'hod', 'the HOD sees work assigned after creation');
+  await save('HOD accepts the later assignment', useStore.getState().updateTaskWork(laterId, { kind: 'accept' }), 'task.update');
+  // Staff who is not the assignee cannot accept someone else's work.
+  await login('other');
+  assert.equal(taskOf(chainId), undefined, 'other Staff cannot even see the work');
+  console.log('[assign-saves] PM -> HOD -> Staff assignment, acceptance by each, later assignment and the notices persisted through authenticated REST.');
+
   console.log('[staff-saves] Actual frontend actions persisted through authenticated REST: creation rejection/legacy deletion, edits, status, priority, dates, comments, derived delivery/reopening, HOD delegation, reload and lost-confirmation retry.');
 } finally {
   globalThis.fetch = originalFetch;
