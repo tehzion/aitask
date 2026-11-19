@@ -6,7 +6,7 @@ import { Navigate, useSearchParams } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
-import { canCreateTasksFromAnywhere, canEditTask, getVisibleTasks, isBossKoo, isDepartmentScopedUser } from '../lib/access';
+import { canCreateTasksFromAnywhere, canEditTask, getClientKey, getOwnedPortfolioClientKeys, getVisibleTasks, isBossKoo, isDepartmentScopedUser } from '../lib/access';
 import { buildManageWork, defaultManageTab, filterManageTasks, MANAGE_TAB_ORDER, summarizeManageClients, summarizeManageTeam, type ManageTabId } from '../lib/manageWork';
 import { isTaskAtRisk } from '../lib/taskRisk';
 import { isTaskOverdue } from '../lib/taskReporting';
@@ -55,13 +55,21 @@ const ManageWork: React.FC = () => {
     tasks: state.tasks, currentUser: state.currentUser, users: state.users, rolePermissions: state.rolePermissions,
     clients: state.clients, projects: state.projects, setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
-  const [query, setQuery] = React.useState('');
+  const [query, setQuery] = React.useState(() => searchParams.get('q') || '');
   const [selecting, setSelecting] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
 
   const scope = React.useMemo(() => ({ clients, projects, users }), [clients, projects, users]);
-  const visible = React.useMemo(() => getVisibleTasks(currentUser, tasks, rolePermissions, scope), [currentUser, rolePermissions, scope, tasks]);
+  // Boss Koo can open one Project Manager's portfolio from the dashboard (?owner=).
+  const ownerId = isBossKoo(currentUser) ? searchParams.get('owner') : null;
+  const owner = ownerId ? users.find(member => member.id === ownerId) : undefined;
+  const visible = React.useMemo(() => {
+    const all = getVisibleTasks(currentUser, tasks, rolePermissions, scope);
+    if (!owner) return all;
+    const keys = getOwnedPortfolioClientKeys(owner, scope);
+    return all.filter(task => task.createdBy === owner.id || keys.has(getClientKey(task.clientName)));
+  }, [currentUser, owner, rolePermissions, scope, tasks]);
   const work = React.useMemo(
     () => buildManageWork(visible, { user: currentUser, users, roles: rolePermissions, scope, now: new Date(Math.max(Date.now(), today.getTime())) }),
     [currentUser, rolePermissions, scope, today, users, visible],
@@ -125,6 +133,12 @@ const ManageWork: React.FC = () => {
             panelId="manage-work-panel"
             variant="underline"
           />
+          {owner && (
+            <p className="flex flex-wrap items-center gap-2 text-sm text-muted" data-testid="manage-owner-filter">
+              <span>{t('Showing the work of')} <strong className="font-semibold text-ink" data-i18n-skip>{owner.name}</strong></span>
+              <button type="button" onClick={() => setParam('owner')} className="min-h-9 rounded-full border border-line px-3 text-sm font-medium text-ink transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">{t('Show everyone')}</button>
+            </p>
+          )}
           <label className="relative block">
             <span className="sr-only">{t('Search task, company or person')}</span>
             <Search aria-hidden="true" className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />

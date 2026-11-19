@@ -10,12 +10,12 @@ import {
 import { isSameDay } from 'date-fns/isSameDay';
 import { isWithinInterval } from 'date-fns/isWithinInterval';
 import { isBefore } from 'date-fns/isBefore';
-import { ArrowRight, Plus, FolderKanban } from 'lucide-react';
+import { ArrowRight, ChevronDown, Plus, FolderKanban } from 'lucide-react';
 import { Link, Navigate, useSearchParams } from 'react-router-dom';
 import { Button, ChartCard, ChartEmptyState, PageHeader, SegmentedTabs } from '../components/ui';
 import ShortcutKey from '../components/ShortcutKey';
 import { cardBase, pageShell } from '../components/uiTokens';
-import { getCompaniesDashboardAction, getVisibleProjects, getVisibleTasks, isBossKoo, isPortfolioHomeUser, canCreateTasksFromAnywhere } from '../lib/access';
+import { getCompaniesDashboardAction, getDefaultAccessiblePath, getVisibleProjects, getVisibleTasks, isBossKoo, isPortfolioHomeUser, canCreateTasksFromAnywhere } from '../lib/access';
 import BackendFreshness from '../components/BackendFreshness';
 import { cn, getRelativeDueDateString, parseOptionalDate, themeTokenColor } from '../lib/utils';
 import { useColorTheme } from '../hooks/useColorTheme';
@@ -28,6 +28,7 @@ import TeamWorkload from '../components/TeamWorkload';
 import { projectStatus } from '../lib/projectManagement';
 import ServiceRoleDashboard from '../components/ServiceRoleDashboard';
 import StaffMyWork from '../components/StaffMyWork';
+import AgencyDeliveryHealth from '../components/AgencyDeliveryHealth';
 import ManagementOverview from '../components/ManagementOverview';
 
 const DeliveryReviewPanel = React.lazy(() => import('../components/DeliveryReviewPanel'));
@@ -112,6 +113,11 @@ const Dashboard: React.FC = () => {
   const companiesDashboardAction = getCompaniesDashboardAction(currentUser, rolePermissions);
   const hasTaskData = tasks.length > 0;
   const showBossOperations = isBossKoo(currentUser);
+  // Boss Koo manages the team rather than being part of it, so they only appear when they hold open work.
+  const teamMembers = useMemo(
+    () => users.filter(member => !member.isSuperAdmin || activeWorkloadTasks.some(task => task.assignedTo === member.id)),
+    [activeWorkloadTasks, users],
+  );
 
   const portfolioOwners = useMemo(() => {
     if (!showBossOperations) return [];
@@ -337,9 +343,12 @@ const Dashboard: React.FC = () => {
 
   if (showStaffOperations) return <StaffMyWork />;
 
-  // The PM's home is the Portfolio list; this dashboard repeated the same tasks.
-  // Its overview panels now sit on top of Portfolio (StaffAllWork).
-  if (isPortfolioHomeUser(currentUser)) return <Navigate to="/tasks" replace />;
+  // The PM's home is Manage work; this dashboard repeated the same tasks. The
+  // Portfolio list (StaffAllWork) stays one click away.
+  if (isPortfolioHomeUser(currentUser)) {
+    const home = getDefaultAccessiblePath(currentUser, rolePermissions);
+    return <Navigate to={home === '/' ? '/tasks' : home} replace />;
+  }
 
   const analyticsSection = hasTaskData ? (
 <section className="space-y-6" aria-labelledby="workspace-analytics-title">
@@ -556,8 +565,11 @@ const Dashboard: React.FC = () => {
       ) : (
       <div className="flex flex-col gap-6">
         {showBossOperations && onboardingSteps.length > 0 && (
-          <section className={cn(cardBase, 'p-5')} aria-labelledby="onboarding-checklist-title">
-            <h2 id="onboarding-checklist-title" className="text-base font-semibold text-ink">{t('Finish setup')}</h2>
+          <details className={cn(cardBase, 'group px-5 py-3')} data-testid="onboarding-checklist">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-3 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 [&::-webkit-details-marker]:hidden">
+              <span id="onboarding-checklist-title" className="text-sm font-semibold text-ink">{t('Finish setup')} <span className="font-normal text-muted">· {t('setup.stepsLeft', { count: onboardingSteps.length })}</span></span>
+              <ChevronDown aria-hidden="true" className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
+            </summary>
             <p className="mt-1 text-sm text-muted">{t('A few steps to get the workspace moving.')}</p>
             <div className="mt-3 grid gap-2 sm:grid-cols-2">
               {onboardingSteps.map(step => (
@@ -567,7 +579,7 @@ const Dashboard: React.FC = () => {
                 </Link>
               ))}
             </div>
-          </section>
+          </details>
         )}
 
         {showBossOperations ? (
@@ -600,9 +612,10 @@ const Dashboard: React.FC = () => {
                   </Link>
                 )}
 
-                <ManagementOverview part="summary" />
-                <ProjectsWithoutPmPanel />
                 <NeedsMyAttention />
+                <ProjectsWithoutPmPanel />
+                <ManagementOverview part="summary" />
+                <AgencyDeliveryHealth />
                 <React.Suspense fallback={null}><DeliveryReviewPanel /></React.Suspense>
                 {recentActivitySection}
               </div>
@@ -732,8 +745,7 @@ const Dashboard: React.FC = () => {
 
             {bossTab === 'workload' && (
               <div id="boss-panel-workload" role="tabpanel" aria-labelledby="boss-tab-workload" tabIndex={0} className="space-y-6">
-                <ManagementOverview part="capacity" />
-                <TeamWorkload tasks={activeWorkloadTasks} users={users} onCreateTaskFor={openCreateTaskFor} />
+                <TeamWorkload tasks={activeWorkloadTasks} users={teamMembers} onCreateTaskFor={openCreateTaskFor} />
               </div>
             )}
           </>

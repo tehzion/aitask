@@ -134,6 +134,9 @@ test('first login reaches the app and critical responsive routes remain usable',
   await page.setViewportSize({ width: 1280, height: 800 });
   await switchDemoAccount(page, 'Project Manager Demo');
   await expect(page.getByRole('region', { name: 'Agency pulse' })).toHaveCount(0);
+  // Project Managers land on Manage work; the Portfolio list is one click away.
+  await expect(page.getByRole('heading', { name: 'Manage work', level: 1 })).toBeVisible();
+  await page.getByRole('link', { name: 'Portfolio', exact: true }).first().click();
   await expect(page.getByRole('region', { name: 'Portfolio delivery' })).toBeVisible();
   await switchDemoAccount(page, 'Staff Demo');
   await expect(page.getByRole('heading', { name: 'My work' })).toBeVisible();
@@ -448,7 +451,7 @@ test('first login reaches the app and critical responsive routes remain usable',
   await expect(headerNotificationButton.locator('span')).toHaveText('1');
 
   await page.goto('/tasks');
-  await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'All tasks', exact: true })).toBeVisible();
   await expect(page.getByRole('columnheader', { name: 'Workflow' })).toHaveCount(0);
   await expect(page.getByText(/^Client: (Pending|Approved|Rejected)$/)).toHaveCount(0);
   const newTaskButton = page.getByRole('button', { name: 'New task' });

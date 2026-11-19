@@ -474,7 +474,7 @@ const TasksWorkspace: React.FC<{ viewsSlot?: React.ReactNode }> = ({ viewsSlot }
   return (
     <div className={pageShell}>
       <PageHeader
-        title={isClientUser ? t('Company Tasks') : t('Tasks')}
+        title={isClientUser ? t('Company Tasks') : isBossKoo(currentUser) ? t('All tasks') : t('Tasks')}
         description={isClientUser
           ? t('Track your company work, review deliverables, and share feedback.')
           : t('Active assignments, reviews, and deadlines across the agency.')}

@@ -52,7 +52,7 @@ test('user-authored task content stays exactly as typed in Chinese mode', async 
   await page.getByRole('button', { name: 'Use Project Manager Demo' }).click();
   await page.getByLabel('Password').fill('password123');
   await page.getByRole('button', { name: 'Sign in', exact: true }).click();
-  await page.waitForURL(/\/(?:settings|tasks)?$/);
+  await page.waitForURL(/\/(?:settings|manage|tasks)?$/);
   const continueButton = page.getByRole('button', { name: 'Continue for now' });
   if (/\/settings$/.test(page.url())) {
     await expect(continueButton).toBeVisible();

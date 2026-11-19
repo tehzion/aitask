@@ -80,7 +80,7 @@ test.describe('completed tasks leave active lists but stay in history', () => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await seed(page, 'boss');
     await page.goto('/tasks');
-    await expect(page.getByRole('heading', { name: 'Tasks', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'All tasks', exact: true })).toBeVisible();
     const filters = page.getByRole('group', { name: 'Task stages' });
     await expect(filters.getByRole('button', { name: /^Active work \d+$/ })).toHaveAttribute('aria-pressed', 'true');
     await expect(visibleText(page, 'RV open brief')).toBeVisible();
@@ -133,8 +133,8 @@ test.describe('review queues show only decisions the user can take', () => {
   test('PM sees PM-lane reviews as their own and follows HOD-lane reviews separately', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1200 });
     await seed(page, 'pm');
-    await page.goto('/');
-    // Project Managers land on Portfolio, which carries their review queues.
+    // Portfolio carries the Project Manager's review queues; Manage work is their landing page.
+    await page.goto('/tasks');
     await expect(page.getByRole('heading', { name: 'Portfolio', level: 1 })).toBeVisible();
     await expect(queue(page, 'Awaiting your review').getByRole('link', { name: 'RV PM-approval submission' })).toBeVisible();
     await expect(queue(page, 'Awaiting your review').getByRole('link', { name: 'RV department submission' })).toHaveCount(0);
@@ -151,7 +151,7 @@ test.describe('review queues show only decisions the user can take', () => {
       const { useStore } = await import('/src/store/index.ts');
       return useStore.getState().tasks.find(task => task.id === 'rv-approved')?.status;
     })).toBe('Completed');
-    await page.goto('/');
+    await page.goto('/tasks');
     await expect(queue(page, 'Ready to finalize').getByRole('link', { name: 'RV approved poster' })).toHaveCount(0);
     await expect(metric(page, 'Ready to finalize')).toHaveText('0');
     await expect(page.getByRole('heading', { name: 'Your projects' }).locator('../../..').getByText('2/6 tasks complete')).toBeVisible();
@@ -232,8 +232,9 @@ test('Client pages stay free of internal review and management sections', async 
 test('every role lands on pages whose headings match their navigation', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   const expected: Array<[Actor, string, string]> = [
-    ['boss', '/tasks', 'Tasks'],
-    ['pm', '/', 'Portfolio'],
+    ['boss', '/tasks', 'All tasks'],
+    ['pm', '/', 'Manage work'],
+    ['pm', '/manage', 'Manage work'],
     ['pm', '/tasks', 'Portfolio'],
     ['hod', '/', 'Department work'],
     ['hod', '/tasks', 'Department tasks'],
@@ -275,7 +276,7 @@ test('task scope and dashboard labels are translated into Simplified Chinese', a
   await expect(filters.getByRole('button', { name: '进行中的工作' })).toBeVisible();
   await expect(filters.getByRole('button', { name: '全部任务' })).toBeVisible();
   await seed(page, 'pm', 'zh');
-  await page.goto('/');
+  await page.goto('/tasks');
   await expect(page.getByRole('heading', { name: '我的一天' })).toBeVisible();
   await expect(page.getByRole('heading', { name: '部门审核中' })).toBeVisible();
 });

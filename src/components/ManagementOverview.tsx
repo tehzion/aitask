@@ -5,7 +5,9 @@ import { Link } from 'react-router-dom';
 import { useShallow } from 'zustand/react/shallow';
 import { useStore } from '../store';
 import { getVisibleProjects, getVisibleTasks, isBossKoo } from '../lib/access';
-import { getManagementSnapshot, getSharedEmployeeWorkload } from '../lib/managementIntelligence';
+import { getManagementSnapshot } from '../lib/managementIntelligence';
+import { isTaskAtRisk } from '../lib/taskRisk';
+import { buildManageWork } from '../lib/manageWork';
 import { formatLocalizedDate } from '../lib/i18n';
 import { cn } from '../lib/utils';
 import { useI18n } from './I18nProvider';
@@ -13,7 +15,7 @@ import { useLocalToday } from '../hooks/useLocalToday';
 import { cardBase } from './uiTokens';
 import { MetricStrip } from './ui';
 
-export type ManagementOverviewPart = 'summary' | 'portfolio' | 'capacity';
+export type ManagementOverviewPart = 'summary' | 'portfolio';
 
 const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }) => {
   const { t, locale } = useI18n();
@@ -44,7 +46,7 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
     if (!isBossKoo(currentUser)) return null;
     const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects });
     const visibleProjects = getVisibleProjects(currentUser, projects, tasks, rolePermissions, { clients, projects });
-    return getManagementSnapshot({
+    const base = getManagementSnapshot({
       projects: visibleProjects,
       tasks: visibleTasks,
       deliverables,
@@ -53,13 +55,10 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
       users,
       now,
     });
+    // Early warning before work turns overdue; the same rule Manage work uses.
+    const withClient = buildManageWork(visibleTasks, { user: currentUser, users, roles: rolePermissions, scope: { clients, projects, users }, now: new Date(Math.max(Date.now(), now.getTime())) }).counts.client;
+    return { ...base, atRiskTasks: visibleTasks.filter(task => isTaskAtRisk(task, now)).length, withClient };
   }, [clientPlans, clients, currentUser, deliverables, now, projects, rolePermissions, serviceCycles, tasks, users]);
-
-  const workload = React.useMemo(() => {
-    if (!isBossKoo(currentUser)) return [];
-    const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, { clients, projects });
-    return getSharedEmployeeWorkload(visibleTasks, users, now).sort((left, right) => right.open - left.open || right.dueSoon - left.dueSoon).slice(0, 8);
-  }, [clients, currentUser, now, projects, rolePermissions, tasks, users]);
 
   if (!snapshot) return null;
 
@@ -68,24 +67,6 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
     .sort((left, right) => right.health.overdueCount - left.health.overdueCount)
     .slice(0, 6);
 
-  if (part === 'capacity') return (
-      <section className={cn(cardBase, 'overflow-hidden')} aria-labelledby="management-capacity-title">
-        <div className="flex flex-col gap-1 border-b border-line/70 px-5 py-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <h3 id="management-capacity-title" className="font-semibold text-ink">{t('Shared employee capacity')}</h3>
-            <p className="mt-1 text-sm text-muted">{t('Availability signals are workload indicators, not performance scores.')}</p>
-          </div>
-        </div>
-        <div className="grid gap-3 p-5 sm:grid-cols-2 lg:grid-cols-4">
-          {workload.map(row => {
-            const tone = row.signal === 'attention' ? 'text-red-700 bg-red-50' : row.signal === 'busy' ? 'text-amber-700 bg-amber-50' : row.signal === 'balanced' ? 'text-blue-700 bg-blue-50' : 'text-emerald-700 bg-emerald-50';
-            const label = row.signal === 'attention' ? 'Attention' : row.signal === 'busy' ? 'Busy' : row.signal === 'balanced' ? 'Balanced' : 'Available';
-            return <div key={row.member.id} className="rounded-control border border-line/70 bg-inset/30 p-3"><div className="flex items-start justify-between gap-3"><p className="truncate text-sm font-semibold text-ink" data-i18n-skip>{row.member.name}</p><span className={cn('shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold', tone)}>{t(label)}</span></div><p className="mt-2 text-xs text-muted">{row.open} {t('open')} · {row.dueSoon} {t('due this week')} · {row.projects} {t('projects')}</p></div>;
-          })}
-          {workload.length === 0 && <p className="text-sm text-muted">{t('No internal capacity data yet.')}</p>}
-        </div>
-      </section>
-  );
   if (part === 'portfolio') return (
     <section className="space-y-4" aria-labelledby="management-portfolio-title">
       <div>
@@ -127,12 +108,12 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
           </div>
           <div className="divide-y divide-line/60">
             {snapshot.projectManagers.slice(0, 6).map(row => (
-              <div key={row.member.id} className="grid grid-cols-[minmax(0,1fr)_repeat(3,auto)] items-center gap-3 px-5 py-3">
+              <Link key={row.member.id} to={`/manage?tab=active&owner=${encodeURIComponent(row.member.id)}`} aria-label={`${row.member.name}: ${t('Open their work')}`} className="grid grid-cols-[minmax(0,1fr)_repeat(3,auto)] items-center gap-3 px-5 py-3 transition hover:bg-inset/60 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent/35">
                 <div className="min-w-0"><p data-i18n-skip className="truncate text-sm font-semibold text-ink">{row.member.name}</p><p className="mt-1 text-xs text-muted">{row.projects} {t('projects')} · {row.openTasks} {t('open')}{row.openTasks > 0 && <> · <span className={row.overdueTasks / row.openTasks >= 0.5 ? 'font-semibold text-red-700' : ''}>{Math.round((row.overdueTasks / row.openTasks) * 100)}% {t('overdue')}</span></>}</p></div>
                 <div className="text-right"><p className={cn('calm-number text-sm font-semibold', row.overdueTasks > 0 ? 'text-red-700' : 'text-ink')}>{row.overdueTasks}</p><p className="text-[11px] text-muted">{t('overdue')}</p></div>
                 <div className="text-right"><p className={cn('calm-number text-sm font-semibold', row.pendingReviews > 0 ? 'text-amber-700' : 'text-ink')}>{row.pendingReviews}</p><p className="text-[11px] text-muted">{t('reviews')}</p></div>
                 <div className="text-right"><p className={cn('calm-number text-sm font-semibold', row.atRiskProjects > 0 ? 'text-red-700' : 'text-ink')}>{row.atRiskProjects}</p><p className="text-[11px] text-muted">{t('at risk')}</p></div>
-              </div>
+              </Link>
             ))}
             {snapshot.projectManagers.length === 0 && <p className="px-5 py-10 text-center text-sm text-muted">{t('No Project Managers available.')}</p>}
           </div>
@@ -154,12 +135,14 @@ const ManagementOverview: React.FC<{ part: ManagementOverviewPart }> = ({ part }
         { label: t('Active projects'), value: snapshot.activeProjects, to: '/projects' },
         { label: t('At-risk projects'), value: snapshot.atRiskProjects, to: '/projects?health=atRisk', tone: 'danger' },
         { label: t('Overdue tasks'), value: snapshot.overdueTasks, to: '/tasks?focus=overdue', tone: 'danger' },
+        { label: t('At-risk tasks'), value: snapshot.atRiskTasks, to: '/manage?tab=active&filter=risk', tone: 'warning' },
+        { label: t('Waiting on the client'), value: snapshot.withClient, to: '/manage?tab=client' },
         { label: t('Pending approvals'), value: snapshot.pendingApprovals, to: '/tasks?focus=waiting', tone: 'warning' },
         { label: t('Approvals waiting 7+ days'), value: snapshot.staleApprovals, to: '/tasks?focus=waiting', tone: 'danger' },
         { label: t('Monthly renewals in 30 days'), value: snapshot.upcomingRenewals, to: '/clients', tone: 'warning' },
         { label: t('Overdue deliverables'), value: snapshot.overdueDeliverables, to: '/clients', tone: 'danger' },
       ]} />
-      <p className="text-xs leading-5 text-muted">{t('Metrics are calculated from permission-visible projects, tasks, plans, months, and deliverables as of')} {formatLocalizedDate(now, locale)}.</p>
+      <p className="text-xs leading-5 text-muted">{t('As of')} {formatLocalizedDate(now, locale)}. {t('Counts cover every project, task, plan and delivery.')}</p>
     </section>
   );
 };

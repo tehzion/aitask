@@ -5,6 +5,19 @@ import { registerUiTranslations } from './i18n';
 // loads with the first page instead of in the startup bundle (300 KiB gzip
 // cap). Shared, store and startup copy stays in i18n.ts.
 registerUiTranslations({
+  "Unread": "未读",
+  "Nothing needs your action": "没有需要您处理的事项",
+  "Reviews, deadlines and requests that need a decision from you will appear here.": "需要您决定的审核、截止日期和请求会显示在这里。",
+  "Waiting on the client": "等待客户",
+  "As of": "截至",
+  "Counts cover every project, task, plan and delivery.": "统计涵盖所有项目、任务、方案和交付。",
+  "Open their work": "查看其工作",
+  "Showing the work of": "正在查看以下人员的工作：",
+  "Show everyone": "显示所有人",
+  "Delivery health": "交付健康度",
+  "Used to spot where support helps, not to rank people.": "用于发现哪里需要支持，而不是给人排名。",
+  "At-risk tasks": "有风险的任务",
+  "See quality by person": "查看每个人的交付质量",
   "Running plans": "运行中的方案",
   "Starting this month lets the team begin work and makes its deliverables visible to the client.": "开始本月后，团队可以开始工作，客户也能看到本月的交付内容。",
   "This starts the plan. Its first month begins on {date}.": "这将启动方案。首月将于 {date} 开始。",

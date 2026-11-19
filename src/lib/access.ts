@@ -870,9 +870,10 @@ export const getVisibleNavigation = (user: User | null | undefined, customRoles:
 // it — instead of '/' — prevents a zero-permission role from being bounced
 // between AccessDenied and a RoleRoute-denied dashboard indefinitely.
 /**
- * A Project Manager's home is the Portfolio list (`/tasks`); the separate PM
- * dashboard is hidden because it repeated the same tasks. Boss Koo keeps the
- * agency operations dashboard.
+ * A Project Manager's home is Manage work (`/manage`); the separate PM
+ * dashboard is hidden because it repeated the same tasks, and the Portfolio
+ * list (`/tasks`) stays one click away. Boss Koo keeps the agency operations
+ * dashboard.
  */
 export const isPortfolioHomeUser = (user: User | null | undefined) => (
   user?.role === 'Project Manager' && !isBossKoo(user)
@@ -882,7 +883,10 @@ export const getDefaultAccessiblePath = (
   user: User | null | undefined,
   customRoles: CustomRole[] = []
 ): AppPath | '/notifications' => {
-  if (isPortfolioHomeUser(user) && canAccessPath(user, '/tasks', customRoles)) return '/tasks';
+  if (isPortfolioHomeUser(user)) {
+    if (canAccessPath(user, '/manage', customRoles)) return '/manage';
+    if (canAccessPath(user, '/tasks', customRoles)) return '/tasks';
+  }
   const firstPage = getVisibleNavigation(user, customRoles)[0];
   if (firstPage) return firstPage.path;
   return canAccessPath(user, '/settings', customRoles) ? '/settings' : '/notifications';

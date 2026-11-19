@@ -48,7 +48,7 @@ test('PM re-dates long-overdue work and assigns unowned work from the dashboard'
       ],
     });
   }, { pmId, overdueDue });
-  await page.goto('/');
+  await page.goto('/tasks');
 
   const day = page.getByRole('region', { name: 'My day' });
   // Queues with work show as sections; empty ones collapse into one line.
@@ -234,7 +234,7 @@ test('unlinked work matches the existing filter for a large account', async ({ p
       && canLinkTaskDelivery(updated.currentUser, task, updated.rolePermissions, { clients: updated.clients, projects: updated.projects })).length;
   }, { pmId, today });
   expect(expected).toBe(250);
-  await page.goto('/');
+  await page.goto('/tasks');
   const panel = page.getByRole('heading', { name: 'Unlinked work this month' }).locator('../..');
   await expect(panel.locator('li')).toHaveCount(expected);
   await page.getByRole('tab', { name: 'Portfolio', exact: true }).click().catch(() => {});

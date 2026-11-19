@@ -1,4 +1,5 @@
 import { nextDateChange } from '../lib/dateChange';
+import { dateChangeNoticeMessage, isLowClientRating, withoutRoutineBossNotice } from '../lib/notificationRules';
 import { normalizeIncludedRevisions } from '../lib/revisionAllowance';
 import { recordClientEvent } from '../lib/clientTelemetry';
 import { changedTaskIds, clearTaskSaveMarks, markTaskSavesFailed, markTasksChanged } from '../lib/taskSaveMarks';
@@ -2841,8 +2842,12 @@ export const useStore = create<StoreState>()(
           ).map(reviewer => reviewer.id),
         );
         const newNotifs: AppNotification[] = taskUpdateNotifications(
-          resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions)
-            .filter(id => !(submittedForReview && reviewerIds.has(id))),
+          // Boss Koo hears about milestones (approved, completed, cancelled, sent back), not every everyday move.
+          withoutRoutineBossNotice(
+            resolveTaskUpdateRecipientIds(state.users, task, state.clients, state.projects, state.rolePermissions)
+              .filter(id => !(submittedForReview && reviewerIds.has(id))),
+            state.users, task.status, nextStatus,
+          ),
           {
             title: 'Task Status Updated',
             message: `"${task.title}" was moved to ${nextStatus} by ${currentUser?.name}.`,
@@ -3571,7 +3576,7 @@ export const useStore = create<StoreState>()(
           ].filter((id): id is string => Boolean(id)))];
           if (datesChanged) notifications.push(...taskUpdateNotifications(accountableRecipients, {
             title: 'Task Dates Updated',
-            message: `The start date or due date for "${updatedTask.title}" was updated by ${currentUser.name}.`,
+            message: dateChangeNoticeMessage(updatedTask.title, currentUser.name, updatedTask.dateChange?.reason),
             route: { page: 'tasks', entityId: taskId },
             iconType: 'status',
             category: 'deadline',
@@ -3765,6 +3770,22 @@ export const useStore = create<StoreState>()(
             },
             currentUser.id,
           ));
+          // A one or two star rating needs a person to follow up, like the hosted workspace does.
+          const ratedStars = rating ? Math.trunc(Number(rating.stars)) : undefined;
+          if (status === 'Approved' && isLowClientRating(ratedStars)) {
+            notifications.push(...taskUpdateNotifications(
+              [...recipients].filter((id): id is string => Boolean(id)),
+              {
+                title: 'Low Client Rating',
+                message: `"${task.title}" was approved by ${task.clientName || currentUser.name} and rated ${ratedStars}/5.`,
+                route: { page: 'tasks', entityId: taskId },
+                iconType: 'alert',
+                category: 'feedback',
+                importance: 'action',
+              },
+              currentUser.id,
+            ));
+          }
         }
 
 

@@ -50,14 +50,15 @@ describe('task update notification recipients', () => {
     useStore.setState(initialState, true);
   });
 
-  it('notifies Boss and the owning PM, not every Project Manager', () => {
+  it('tells the owning PM about an everyday move, not Boss Koo or every Project Manager', () => {
     useStore.getState().updateTaskStatus(task.id, 'In Progress');
 
     const statusNotices = useStore.getState().notifications.filter(notification => notification.title === 'Task Status Updated');
     const recipients = statusNotices.map(notification => notification.targetUserId).sort();
 
-    expect(recipients).toEqual([boss.id, pmA.id].sort());
+    expect(recipients).toEqual([pmA.id]);
     expect(recipients).not.toContain(pmB.id);
+    expect(recipients).not.toContain(boss.id);
     expect(statusNotices.every(notification => !notification.targetRole)).toBe(true);
   });
 
@@ -76,7 +77,17 @@ describe('task update notification recipients', () => {
     const recipients = useStore.getState().notifications
       .filter(notification => notification.title === 'Task Status Updated')
       .map(notification => notification.targetUserId).sort();
-    expect(recipients).toEqual([boss.id, pmB.id].sort());
+    expect(recipients).toEqual([pmB.id]);
+  });
+
+  it('tells Boss Koo about milestones such as sending finished work back', () => {
+    useStore.setState({ currentUser: pmA, tasks: [{ ...task, status: 'Completed', isCompleted: true, completedAt: '2026-09-02T00:00:00.000Z' }] });
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress').ok).toBe(true);
+    const recipients = useStore.getState().notifications
+      .filter(notification => notification.title === 'Task Status Updated')
+      .map(notification => notification.targetUserId);
+    expect(recipients).toContain(boss.id);
+    expect(recipients).not.toContain(pmA.id);
   });
 
   it.each(['HOD', 'Staff'] as const)('notifies an assigning %s HOD contact and retains PM oversight', role => {
