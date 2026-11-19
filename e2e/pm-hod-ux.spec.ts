@@ -250,3 +250,46 @@ test('the assignee list shows each person\'s current load', async ({ page }) => 
   const options = await page.getByRole('group', { name: 'Update several tasks' }).getByRole('combobox', { name: 'Assign to…' }).locator('option').allTextContents();
   expect(options.some(label => /· \d+ open/.test(label))).toBe(true);
 });
+
+test('the Today summary counts what needs attention, links to it, and can be hidden for the day', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page, 'pm');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    const ymd = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    useStore.setState(state => ({ tasks: [...state.tasks, { ...state.tasks[0], id: 'u-late', title: 'Already late', status: 'In Progress', dueDate: ymd(-4), updatedAt: new Date().toISOString() }] }));
+  });
+  await page.goto('/manage?tab=active');
+  const digest = page.getByRole('region', { name: 'Today' });
+  await expect(digest).toBeVisible();
+  await expect(digest.getByRole('link', { name: '1 overdue' })).toBeVisible();
+  await expect(digest.getByRole('link', { name: '2 at risk' })).toBeVisible();
+  await expect(digest.getByRole('list', { name: 'Most urgent' }).getByRole('button').first()).toContainText('Already late');
+  const axe = await new AxeBuilder({ page }).include('main').analyze();
+  expect(axe.violations.map(item => item.id)).toEqual([]);
+
+  await digest.getByRole('link', { name: '1 overdue' }).click();
+  await expect(page).toHaveURL(/filter=overdue/);
+  const panel = page.getByRole('tabpanel');
+  await expect(panel).toContainText('Already late');
+  await expect(panel).not.toContainText('Start me');
+  await expect(page.getByRole('button', { name: /Show only overdue work/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('button', { name: /Show only overdue work/ }).click();
+  await expect(page).not.toHaveURL(/filter=/);
+
+  await page.getByRole('region', { name: 'Today' }).getByRole('button', { name: 'Hide today’s summary' }).click();
+  await expect(page.getByRole('region', { name: 'Today' })).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('region', { name: 'Today' })).toHaveCount(0);
+});
+
+test('the Today summary is calm when nothing needs attention, and translated', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await seed(page, 'pm', 'zh');
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ tasks: state.tasks.filter(task => task.id === 'u-fine') }));
+  });
+  await page.goto('/manage?tab=active');
+  await expect(page.getByRole('region', { name: '今天' })).toContainText('今天没有需要你关注的事项。');
+});

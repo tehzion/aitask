@@ -9,6 +9,8 @@ import { useStore } from '../store';
 import { canCreateTasksFromAnywhere, canEditTask, getVisibleTasks, isBossKoo, isDepartmentScopedUser } from '../lib/access';
 import { buildManageWork, defaultManageTab, filterManageTasks, MANAGE_TAB_ORDER, summarizeManageClients, summarizeManageTeam, type ManageTabId } from '../lib/manageWork';
 import { isTaskAtRisk } from '../lib/taskRisk';
+import { isTaskOverdue } from '../lib/taskReporting';
+import { buildAttentionDigest } from '../lib/attentionDigest';
 import { Button, PageHeader, SegmentedTabs, Surface } from '../components/ui';
 import { pageShell, inputBase } from '../components/uiTokens';
 import { useI18n } from '../components/I18nProvider';
@@ -18,6 +20,7 @@ import StaffTaskFocus from '../components/StaffTaskFocus';
 import TaskDetailsModal from '../components/TaskDetailsModal';
 import UnavailableWork from '../components/UnavailableWork';
 import BulkManageBar from '../components/BulkManageBar';
+import AttentionDigest from '../components/AttentionDigest';
 
 const TAB_LABEL: Record<ManageTabId, string> = {
   active: 'Active',
@@ -53,7 +56,6 @@ const ManageWork: React.FC = () => {
     clients: state.clients, projects: state.projects, setCreateTaskModalOpen: state.setCreateTaskModalOpen,
   })));
   const [query, setQuery] = React.useState('');
-  const [riskOnly, setRiskOnly] = React.useState(false);
   const [selecting, setSelecting] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
   const [fullEditorOpen, setFullEditorOpen] = React.useState(false);
@@ -68,11 +70,18 @@ const ManageWork: React.FC = () => {
   const requestedTab = searchParams.get('tab') as ManageTabId | null;
   const tab: ManageTabId = requestedTab && MANAGE_TAB_ORDER.includes(requestedTab) ? requestedTab : defaultManageTab(work.counts);
   const now = React.useMemo(() => new Date(Math.max(Date.now(), today.getTime())), [today]);
+  const filter = searchParams.get('filter');
+  const riskOnly = filter === 'risk';
+  const overdueOnly = filter === 'overdue';
   const atRiskCount = React.useMemo(() => work.byTab[tab].filter(task => isTaskAtRisk(task, now)).length, [now, tab, work.byTab]);
+  const overdueCount = React.useMemo(() => work.byTab[tab].filter(task => isTaskOverdue(task, now)).length, [now, tab, work.byTab]);
+  const digest = React.useMemo(() => buildAttentionDigest(work, now), [now, work]);
   const shown = React.useMemo(() => {
     const matching = filterManageTasks(work.byTab[tab], query, users);
-    return riskOnly ? matching.filter(task => isTaskAtRisk(task, now)) : matching;
-  }, [now, query, riskOnly, tab, users, work.byTab]);
+    if (riskOnly) return matching.filter(task => isTaskAtRisk(task, now));
+    if (overdueOnly) return matching.filter(task => isTaskOverdue(task, now));
+    return matching;
+  }, [now, overdueOnly, query, riskOnly, tab, users, work.byTab]);
   const clientRows = React.useMemo(() => summarizeManageClients(visible), [visible]);
   const teamRows = React.useMemo(() => summarizeManageTeam(visible, users, new Date(Math.max(Date.now(), today.getTime()))), [today, users, visible]);
 
@@ -106,6 +115,7 @@ const ManageWork: React.FC = () => {
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_18rem]">
         <section aria-labelledby="manage-work-list" className="min-w-0 space-y-4">
           <h2 id="manage-work-list" className="sr-only">{t('Work list')}</h2>
+          <AttentionDigest digest={digest} userId={currentUser.id} now={now} onOpen={id => setParam('taskId', id)} />
           <SegmentedTabs<ManageTabId>
             items={MANAGE_TAB_ORDER.map(id => ({ id, label: t(TAB_LABEL[id]), count: work.counts[id] }))}
             value={tab}
@@ -140,15 +150,29 @@ const ManageWork: React.FC = () => {
             </div>
           )}
           {canBulk && selecting && <BulkManageBar tasks={shown.slice(0, 50)} selected={selected} onSelectedChange={setSelected} onDone={() => { setSelecting(false); setSelected(new Set()); }} />}
-          {(atRiskCount > 0 || riskOnly) && (
-            <button
-              type="button"
-              aria-pressed={riskOnly}
-              onClick={() => setRiskOnly(value => !value)}
-              className={`min-h-9 rounded-full border px-3 text-sm font-medium transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${riskOnly ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-line text-muted hover:bg-inset'}`}
-            >
-              {t('Show only at-risk work')} ({atRiskCount})
-            </button>
+          {(atRiskCount > 0 || riskOnly || overdueCount > 0 || overdueOnly) && (
+            <div className="flex flex-wrap gap-2">
+              {(overdueCount > 0 || overdueOnly) && (
+                <button
+                  type="button"
+                  aria-pressed={overdueOnly}
+                  onClick={() => setParam('filter', overdueOnly ? undefined : 'overdue')}
+                  className={`min-h-9 rounded-full border px-3 text-sm font-medium transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${overdueOnly ? 'border-red-500 bg-red-50 text-red-900' : 'border-line text-muted hover:bg-inset'}`}
+                >
+                  {t('Show only overdue work')} ({overdueCount})
+                </button>
+              )}
+              {(atRiskCount > 0 || riskOnly) && (
+                <button
+                  type="button"
+                  aria-pressed={riskOnly}
+                  onClick={() => setParam('filter', riskOnly ? undefined : 'risk')}
+                  className={`min-h-9 rounded-full border px-3 text-sm font-medium transition-colors duration-160 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 ${riskOnly ? 'border-amber-500 bg-amber-50 text-amber-900' : 'border-line text-muted hover:bg-inset'}`}
+                >
+                  {t('Show only at-risk work')} ({atRiskCount})
+                </button>
+              )}
+            </div>
           )}
 
           {taskId && !selectedTask && <UnavailableWork onDismiss={() => setParam('taskId')} />}
