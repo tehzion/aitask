@@ -12,6 +12,7 @@ const Layout = React.lazy(() => import('../components/Layout'));
 const Dashboard = React.lazy(() => import('../pages/Dashboard'));
 const Login = React.lazy(() => import('../pages/Login'));
 const Calendar = React.lazy(() => import('../pages/Calendar'));
+const ManageWork = React.lazy(() => import('../pages/ManageWork'));
 const DeliveryTracker = React.lazy(() => import('../pages/DeliveryTracker'));
 const ClientWorkspace = React.lazy(() => import('../pages/ClientWorkspace'));
 const Companies = React.lazy(() => import('../pages/Clients'));
@@ -47,6 +48,7 @@ function AppContent() {
           }>
             <Route index element={<RoleRoute path="/"><Dashboard /></RoleRoute>} />
             <Route path="tasks" element={<RoleRoute path="/tasks"><Tasks /></RoleRoute>} />
+            <Route path="manage" element={<RoleRoute path="/manage"><ManageWork /></RoleRoute>} />
             <Route path="calendar" element={<RoleRoute path="/calendar"><Calendar /></RoleRoute>} />
             <Route path="clients" element={<RoleRoute path="/clients"><DeliveryTracker /></RoleRoute>} />
             {/* ClientWorkspace performs client ownership and assigned-staff checks itself. */}

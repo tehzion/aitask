@@ -66,6 +66,11 @@ describe('role capability matrix', () => {
     expectOnly(user => canViewTask(user, task, [], scope), who('boss', 'pm', 'hod', 'staff'));
     expectOnly(user => canEditTask(user, task, [], scope), who('boss', 'pm', 'hod', 'staff'));
   });
+  it('offers the Manage work hub only to people who manage others\' work', () => {
+    expectOnly(user => canAccessPath(user, '/manage'), who('boss', 'pm', 'hod'));
+    const inMenu = (actor: Actor) => getNavigationSections(actors[actor]).primary.some(item => item.path === '/manage');
+    expect(['boss', 'pm', 'hod', 'staff', 'client'].map(actor => inMenu(actor as Actor))).toEqual([true, true, true, false, false]);
+  });
   it('restricts the approvals page to the PM and Boss', () => {
     expectOnly(user => canAccessPath(user, '/approvals'), who('boss', 'pm'));
     for (const path of ['/', '/tasks', '/calendar', '/clients', '/projects', '/reports', '/settings']) {

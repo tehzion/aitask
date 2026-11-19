@@ -116,10 +116,11 @@ export const getOwnedPortfolioClientKeys = (user: User, scope: VisibilityScope =
   return keys;
 };
 
-export type AppPath = '/' | '/tasks' | '/calendar' | '/clients' | '/projects' | '/reports' | '/approvals' | '/settings';
+export type AppPath = '/' | '/tasks' | '/manage' | '/calendar' | '/clients' | '/projects' | '/reports' | '/approvals' | '/settings';
 
 export const appNavigation: { label: string; path: AppPath }[] = [
   { label: 'Dashboard', path: '/' },
+  { label: 'Manage work', path: '/manage' },
   { label: 'Calendar', path: '/calendar' },
   { label: 'Delivery tracker', path: '/clients' },
   { label: 'Companies', path: '/projects' },
@@ -322,6 +323,7 @@ export const defaultRolePermissions: Record<Role, RolePermissions> = {
 const routePermission: Record<AppPath, RolePermissionKey> = {
   '/': 'viewDashboard',
   '/tasks': 'viewTasks',
+  '/manage': 'viewTasks',
   '/calendar': 'viewCalendar',
   '/clients': 'viewDeliveryTracker',
   '/projects': 'viewProjects',
@@ -833,6 +835,8 @@ export const canAccessPath = (user: User | null | undefined, path: string, custo
   const route = (firstSegment ? `/${firstSegment}` : '/') as AppPath;
 
   if (route === '/approvals' && user.role === 'Project Manager') return true;
+  // Manage work is for people who manage others' work: Boss, Project Managers and department leads.
+  if (route === '/manage' && !(isBossKoo(user) || user.role === 'Project Manager' || isDepartmentScopedUser(user, customRoles))) return false;
 
   // Clients is the merged task workspace. Preserve access for custom roles
   // that were granted the former Tasks page but not the tracker page.

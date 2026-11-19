@@ -5,6 +5,7 @@ import {
   CheckSquare,
   FolderKanban,
   HelpCircle,
+  KanbanSquare,
   LayoutDashboard,
   ListChecks,
   PackageCheck,
@@ -87,6 +88,7 @@ const generalMobilePrimary: NavigationItem[] = [
 
 const navIcons = {
   Dashboard: LayoutDashboard,
+  'Manage work': KanbanSquare,
   Calendar: CalendarDays,
   'Delivery tracker': ListChecks,
   Companies: FolderKanban,
@@ -120,8 +122,9 @@ export const getNavigationSections = (
     // in the main menu instead of the collapsed "More" group.
     const departmentLead = isDepartmentScopedUser(user, rolePermissions);
     const tasksItem = staffSecondary.find(item => item.path === '/tasks');
+    const manageItem: NavigationItem = { path: '/manage', label: 'Manage work', icon: KanbanSquare };
     const primaryItems = tasksItem
-      ? [staffPrimary[0], tasksItem, ...staffPrimary.slice(1)]
+      ? [staffPrimary[0], tasksItem, ...(departmentLead ? [manageItem] : []), ...staffPrimary.slice(1)]
       : staffPrimary;
     const secondaryItems = staffSecondary.filter(item => item.path !== '/tasks');
     return {
