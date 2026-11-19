@@ -2,6 +2,7 @@ import React from 'react';
 import { useStore } from '../store';
 import type { Task } from '../types';
 import { useI18n } from './I18nProvider';
+import BriefTemplateButton from './BriefTemplateButton';
 
 /**
  * What the client asked for, in one place: reference links, must-haves and
@@ -58,6 +59,7 @@ const TaskBriefPanel: React.FC<{ task: Task; canEdit: boolean }> = ({ task, canE
           <label htmlFor={ids.refs} className="block text-xs font-medium text-muted">{t('Reference links (one per line)')}
             <textarea id={ids.refs} rows={3} value={references} onChange={event => setReferences(event.target.value)} className={field} />
           </label>
+          <BriefTemplateButton serviceType={task.serviceType} value={mustHave} onChange={setMustHave} />
           <label htmlFor={ids.must} className="block text-xs font-medium text-muted">{t('Must include')}
             <textarea id={ids.must} rows={3} maxLength={1000} value={mustHave} onChange={event => setMustHave(event.target.value)} className={field} />
           </label>

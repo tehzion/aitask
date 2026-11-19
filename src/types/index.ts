@@ -449,6 +449,16 @@ export interface TaskBrief {
   updatedAt: string;
 }
 
+/** Set when an existing due date moves, so the client can see why. */
+export interface TaskDateChange {
+  /** The date it moved from (YYYY-MM-DD). */
+  from: string;
+  /** Optional reason the team chose to share with the client. */
+  reason?: string;
+  changedBy?: string;
+  changedAt: string;
+}
+
 export interface TaskClientRating {
   stars: 1 | 2 | 3 | 4 | 5;
   comment?: string;
@@ -576,6 +586,8 @@ export interface Task {
   revisionCount: number;
   /** Satisfaction rating recorded when the delivery is accepted. */
   clientRating?: TaskClientRating;
+  /** The latest move of an existing due date, with an optional reason for the client. */
+  dateChange?: TaskDateChange;
   /** What the client asked for, written once so the team does not guess. */
   brief?: TaskBrief;
   clientApprovalStatus: ClientApprovalStatus;

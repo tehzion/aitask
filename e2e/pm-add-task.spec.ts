@@ -66,5 +66,5 @@ test('a PM opens a task, can edit it and sees the project HOD as an assignee', a
   await edit.click();
   await sheet.getByRole('button', { name: 'Edit', exact: true }).click().catch(() => undefined);
   const assignee = sheet.getByRole('combobox', { name: 'Assignee', exact: true });
-  await expect(assignee.getByRole('option', { name: 'Flow HOD (HOD)', exact: true })).toBeAttached();
+  await expect(assignee.getByRole('option', { name: /^Flow HOD \(HOD\)/ })).toBeAttached();
 });

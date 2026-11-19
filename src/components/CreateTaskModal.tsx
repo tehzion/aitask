@@ -19,6 +19,7 @@ import { getTodayInputDate } from '../lib/utils';
 import { getCurrentPublishedCycle, getLinkableDeliverables, suggestDeliverableForTask } from '../lib/deliveryLinks';
 import { assignableDepartments, getMemberDepartments } from '../lib/departments';
 import { formatTaskAssigneeName, assignableTaskAssignees } from '../lib/taskWorkflowAccess';
+import BriefTemplateButton from './BriefTemplateButton';
 import ModalShell from './ModalShell';
 import BackendFreshness from './BackendFreshness';
 import { modalFooter } from './uiTokens';
@@ -844,6 +845,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                     <label htmlFor={briefIds.links} className="block text-xs font-medium text-muted">{t('Reference links (one per line)')}
                       <textarea id={briefIds.links} rows={2} value={briefLinks} onChange={e => setBriefLinks(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" />
                     </label>
+                    <BriefTemplateButton serviceType={serviceType} value={briefMust} onChange={setBriefMust} />
                     <label htmlFor={briefIds.must} className="block text-xs font-medium text-muted">{t('Must include')}
                       <textarea id={briefIds.must} rows={2} maxLength={1000} value={briefMust} onChange={e => setBriefMust(e.target.value)} className="mt-1 w-full rounded-lg border border-line bg-surface p-2.5 text-sm text-ink" />
                     </label>

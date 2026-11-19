@@ -7,23 +7,11 @@ import { getTeamWorkloadSummaries } from '../lib/taskReporting';
 import { getTodayInputDate } from '../lib/utils';
 import { supabase } from '../lib/supabaseClient';
 import { SECURE_WORKSPACE_ID } from '../lib/secureWorkspace';
+import { parseWorkloadRows, type WorkloadRow } from '../lib/staffWorkload';
 import { Surface } from './ui';
 import { useI18n } from './I18nProvider';
 
-type Row = { id: string; name: string; departments: string[]; open: number; overdue: number; dueThisWeek: number };
-type Remote = { key: string; rows: Row[] | null };
-
-const parseRows = (value: unknown): Row[] | null => {
-  if (!value || typeof value !== 'object' || !('ok' in value) || value.ok !== true || !('members' in value) || !Array.isArray(value.members)) return null;
-  const rows: Row[] = [];
-  for (const item of value.members) {
-    if (!item || typeof item !== 'object' || typeof item.id !== 'string' || typeof item.name !== 'string'
-      || !Array.isArray(item.departments) || !item.departments.every((department: unknown) => typeof department === 'string')
-      || ![item.open, item.overdue, item.dueThisWeek].every(count => Number.isSafeInteger(count) && count >= 0)) return null;
-    rows.push({ id: item.id, name: item.name, departments: item.departments, open: item.open, overdue: item.overdue, dueThisWeek: item.dueThisWeek });
-  }
-  return rows;
-};
+type Remote = { key: string; rows: WorkloadRow[] | null };
 
 /** The server returns totals only; task access remains governed by normal visibility rules. */
 const HodStaffWorkload = ({ userId, mode, tasks, users, roles, today }: { userId: string; mode: 'local' | 'supabase'; tasks: Task[]; users: User[]; roles: CustomRole[]; today: Date }) => {
@@ -46,7 +34,7 @@ const HodStaffWorkload = ({ userId, mode, tasks, users, roles, today }: { userId
       controller = new AbortController();
       try {
         const { data, error } = await supabase.rpc('aitask_hod_staff_workload', { p_workspace_id: SECURE_WORKSPACE_ID, p_today: todayKey }).abortSignal(controller.signal);
-        if (active && isWorkspaceSessionCurrent(session) && attempt === sequence) setRemote({ key: requestKey, rows: error ? null : parseRows(data) });
+        if (active && isWorkspaceSessionCurrent(session) && attempt === sequence) setRemote({ key: requestKey, rows: error ? null : parseWorkloadRows(data) });
       } catch {
         if (active && isWorkspaceSessionCurrent(session) && attempt === sequence) setRemote({ key: requestKey, rows: null });
       }

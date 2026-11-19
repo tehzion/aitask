@@ -68,3 +68,19 @@ test('Chinese client sees the rating prompt translated', async ({ page }) => {
   await expect(dialog.getByText('您对本次交付满意吗？（可选，通过验收时填写）')).toBeVisible();
   await expect(dialog.getByTestId('client-revision-usage')).toHaveText('修订 1/3');
 });
+
+test('Client sees where the expected date moved from and why', async ({ page }) => {
+  await seed(page);
+  await page.evaluate(async () => {
+    const { useStore } = await import('/src/store/index.ts');
+    useStore.setState(state => ({ tasks: state.tasks.map(task => ({ ...task, dueDate: '2026-10-15', dateChange: { from: '2026-10-08', reason: 'Waiting for your logo files', changedAt: '2026-10-05T09:00:00.000Z' } })) }));
+  });
+  await page.goto('/tasks?taskId=rate-task');
+  const notice = page.getByRole('dialog', { name: 'Delivery details' }).getByTestId('client-date-change');
+  await expect(notice).toContainText('The expected date moved from');
+  await expect(notice).toContainText('Waiting for your logo files');
+  await expect(notice).not.toContainText('Contact');
+  await page.evaluate(() => localStorage.setItem('aitask:locale', 'zh'));
+  await page.reload();
+  await expect(page.getByTestId('client-date-change')).toContainText('预计日期已从');
+});

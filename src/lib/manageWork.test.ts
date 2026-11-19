@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Task, User } from '../types';
-import { buildManageWork, defaultManageTab, filterManageTasks, summarizeManageClients } from './manageWork';
+import { buildManageWork, defaultManageTab, filterManageTasks, summarizeManageClients, summarizeManageTeam } from './manageWork';
 
 const pm = { id: 'pm', name: 'PM', role: 'Project Manager', departments: ['Management'], department: 'Management' } as unknown as User;
 const staff = { id: 'staff', name: 'Gan Khuan', role: 'Staff', departments: ['Designer'], department: 'Designer' } as unknown as User;
@@ -71,5 +71,37 @@ describe('manage work', () => {
     expect(rows.map(row => row.clientName)).toEqual(['Jean Yip', 'Acme']);
     expect(rows[0]).toMatchObject({ waitingOnClient: 1, ratingAverage: 5, ratingCount: 1 });
     expect(rows[1]).toMatchObject({ open: 2, waitingOnClient: 0 });
+  });
+});
+
+describe('summarizeManageTeam', () => {
+  const teamNow = new Date(2026, 10, 19, 10, 0, 0);
+  const people = [
+    { id: 'a', name: 'Ana', role: 'Staff' },
+    { id: 'b', name: 'Ben', role: 'Staff' },
+    { id: 'c', name: 'Cat', role: 'Client' },
+  ] as User[];
+  const teamTask = (overrides: Partial<Task>) => ({ id: overrides.id || 'x', title: 't', clientName: 'Co', status: 'In Progress', isCompleted: false, revisionCount: 0, completionPercentage: 0, dueDate: '2026-12-30', updatedAt: '2026-11-19T08:00:00', ...overrides }) as Task;
+
+  it('shows load, risk and record per person and puts attention first', () => {
+    const cards = summarizeManageTeam([
+      teamTask({ id: '1', assignedTo: 'a' }),
+      teamTask({ id: '2', assignedTo: 'a' }),
+      teamTask({ id: '3', assignedTo: 'b', status: 'Pending', dueDate: '2026-11-20' }),
+      teamTask({ id: '4', assignedTo: 'b', dueDate: '2026-11-10' }),
+      teamTask({ id: '5', assignedTo: 'a', status: 'Completed', isCompleted: true, completedAt: '2026-11-15T00:00:00Z', dueDate: '2026-11-16', clientRating: { stars: 4, ratedBy: 'c', ratedAt: '2026-11-16T00:00:00Z' } }),
+    ], people, teamNow);
+    expect(cards.map(card => card.name)).toEqual(['Ben', 'Ana']);
+    expect(cards[0]).toMatchObject({ open: 2, atRisk: 1, overdue: 1 });
+    expect(cards[1]).toMatchObject({ open: 2, atRisk: 0, finished: 1, onTimePercent: 100, ratingAverage: 4, ratingCount: 1 });
+  });
+
+  it('skips clients, unknown people and anyone with nothing open or finished', () => {
+    const cards = summarizeManageTeam([
+      teamTask({ id: '1', assignedTo: 'c' }),
+      teamTask({ id: '2', assignedTo: 'ghost' }),
+      teamTask({ id: '3', assignedTo: 'a', status: 'Cancelled' }),
+    ], people, teamNow);
+    expect(cards).toEqual([]);
   });
 });

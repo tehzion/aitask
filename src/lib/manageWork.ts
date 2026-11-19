@@ -4,6 +4,8 @@ import { isAwaitingClientReview } from './clientPortal';
 import { getPersonalReviewQueues } from './pmDashboard';
 import { isTaskCompleted } from './taskCompletion';
 import { isTaskOverdue, isTaskOpen } from './taskReporting';
+import { computeDeliveryMetrics, onTimeRate } from './deliveryMetrics';
+import { isTaskAtRisk } from './taskRisk';
 import { parseOptionalDate } from './utils';
 
 /**
@@ -106,5 +108,62 @@ export const summarizeManageClients = (tasks: readonly Task[], limit = 6): Manag
     .map(({ ratingTotal, ...row }) => ({ ...row, ratingAverage: row.ratingCount ? Math.round((ratingTotal / row.ratingCount) * 10) / 10 : undefined }))
     .filter(row => row.open > 0 || row.waitingOnClient > 0 || row.ratingCount > 0)
     .sort((a, b) => b.waitingOnClient - a.waitingOnClient || b.open - a.open || a.clientName.localeCompare(b.clientName))
+    .slice(0, limit);
+};
+
+export interface ManageTeamCard {
+  userId: string;
+  name: string;
+  open: number;
+  atRisk: number;
+  overdue: number;
+  /** Finished in the last 90 days. */
+  finished: number;
+  onTimePercent?: number;
+  ratingAverage?: number;
+  ratingCount: number;
+  /** Median hours from being assigned to accepting work. */
+  acceptanceHours?: number;
+}
+
+/**
+ * Fiverr-style seller cards for the people behind the work: current load and
+ * what needs attention now, with delivery record from the last 90 days. Anyone
+ * with open work, or finished work in the period, is listed; those who need
+ * attention first, then the busiest.
+ */
+export const summarizeManageTeam = (
+  tasks: readonly Task[],
+  users: readonly Pick<User, 'id' | 'name' | 'role'>[],
+  now = new Date(),
+  limit = 8,
+): ManageTeamCard[] => {
+  const byPerson = new Map<string, Task[]>();
+  for (const task of tasks) {
+    if (!task.assignedTo) continue;
+    byPerson.set(task.assignedTo, [...(byPerson.get(task.assignedTo) || []), task]);
+  }
+  const cards: ManageTeamCard[] = [];
+  for (const [userId, list] of byPerson) {
+    const person = users.find(user => user.id === userId);
+    if (!person || person.role === 'Client') continue;
+    const metrics = computeDeliveryMetrics(list, now, 90);
+    const open = list.filter(isTaskOpen);
+    if (open.length === 0 && metrics.completed === 0) continue;
+    cards.push({
+      userId,
+      name: person.name,
+      open: open.length,
+      atRisk: open.filter(task => isTaskAtRisk(task, now)).length,
+      overdue: open.filter(task => isTaskOverdue(task, now)).length,
+      finished: metrics.completed,
+      onTimePercent: onTimeRate(metrics),
+      ratingAverage: metrics.averageRating,
+      ratingCount: metrics.ratedCount,
+      acceptanceHours: metrics.medianAcceptanceHours,
+    });
+  }
+  return cards
+    .sort((a, b) => (b.overdue + b.atRisk) - (a.overdue + a.atRisk) || b.open - a.open || b.finished - a.finished || a.name.localeCompare(b.name))
     .slice(0, limit);
 };
