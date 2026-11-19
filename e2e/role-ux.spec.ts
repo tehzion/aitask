@@ -62,7 +62,7 @@ test('a PM approves several submitted tasks at once', async ({ page }) => {
       backend: { ...state.backend, mode: 'local', status: 'local', hasLocalChanges: false, pendingMutations: 0 },
     });
   });
-  await page.goto('/');
+  await page.goto('/tasks');
   await page.getByRole('dialog', { name: 'Welcome to AiTask' }).getByRole('button', { name: 'Explore on my own' }).click({ timeout: 5000 }).catch(() => undefined);
   // Seed after the page load, which reloads the workspace data.
   const titles = await page.evaluate(async () => {
