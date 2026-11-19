@@ -45,11 +45,14 @@ const expectNoHorizontalOverflow = async (page: import('@playwright/test').Page,
   ).toBe(true);
 };
 
-// The committed visual references were captured with the locally-installed
-// Chrome renderer on macOS. Keep pixel comparisons on that renderer instead
-// of treating platform font rasterisation as a product regression in Linux CI.
-// Every CI run still exercises each route, theme, viewport, semantic heading,
-// overflow check, and the Projects accessibility scan below.
+// Visual references are committed per platform: macOS ones from the locally
+// installed Chrome, and Linux ones captured on the CI runner image (Playwright's
+// bundled Chromium). Other platforms skip the pixel comparison, since their font
+// rasterisation would differ. Every run still exercises each route, theme,
+// viewport, semantic heading, overflow check and the Projects accessibility scan.
+// To refresh the Linux references after an intentional UI change, run the
+// two visual specs with --update-snapshots on the CI runner (see the PR that
+// introduced them) and commit the *-linux.png files.
 const hasCommittedVisualBaseline = process.platform === 'darwin' || process.platform === 'linux';
 
 test('core operations screens keep their semantic layout in light and dark modes', async ({ page }) => {
