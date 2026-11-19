@@ -4,7 +4,7 @@ import AxeBuilder from '@axe-core/playwright';
 // Visual references capture the settled layout, independent of entry motion.
 test.use({ reducedMotion: 'reduce' });
 
-const hasCommittedVisualBaseline = process.platform === 'darwin';
+const hasCommittedVisualBaseline = process.platform === 'darwin' || process.platform === 'linux';
 
 const screenshotOptions = (page: import('@playwright/test').Page) => ({
   animations: 'disabled' as const,
