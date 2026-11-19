@@ -38,7 +38,7 @@ const AssignRow = ({ project, openTasks }: { project: Project; openTasks: number
       <p className="truncate text-xs text-muted"><span data-i18n-skip>{project.clientName}</span> · {openTasks} {t('open tasks')}</p>
     </div>
     <div className="flex flex-wrap items-center gap-2">
-      <select value={managerId} onChange={event => setManagerId(event.target.value)} aria-label={t('Project Manager for {project}', { project: project.projectName })}
+      <select value={managerId} onChange={event => setManagerId(event.target.value)} aria-label={t('ui.pmForProject', { project: project.projectName })}
         className="min-h-11 max-w-[14rem] rounded-control border border-line bg-surface px-3 text-sm text-ink">
         <option value="">{t('Choose a Project Manager')}</option>
         {managers.map(user => <option key={user.id} value={user.id} data-i18n-skip>{user.name}</option>)}

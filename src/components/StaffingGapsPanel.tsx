@@ -34,8 +34,8 @@ const StaffingGapsPanel = ({ users, projects, tasks }: {
     </div>
     {gaps.departmentsWithoutStaff.length > 0 && <GapGroup title={t('Departments with no Staff')} count={gaps.departmentsWithoutStaff.length}>
       {gaps.departmentsWithoutStaff.map(gap => <li key={gap.department} className="flex flex-wrap items-center gap-3 px-5 py-3 text-sm">
-        <Link to={`/approvals?tab=members&department=${encodeURIComponent(gap.department)}`} aria-label={t('Manage {department} team', { department: t(gap.department) })} className="min-w-0 flex-1 font-medium text-ink hover:underline">{t(gap.department)}</Link>
-        <span className="text-muted">{gap.hodNames.length ? t('HOD: {names}', { names: gap.hodNames.join(', ') }) : t('No HOD')}</span>
+        <Link to={`/approvals?tab=members&department=${encodeURIComponent(gap.department)}`} aria-label={t('ui.manageTeam', { department: t(gap.department) })} className="min-w-0 flex-1 font-medium text-ink hover:underline">{t(gap.department)}</Link>
+        <span className="text-muted">{gap.hodNames.length ? t('ui.hodNames', { names: gap.hodNames.join(', ') }) : t('No HOD')}</span>
         {gap.openTasks > 0 && <StatusChip tone="amber">{t(gap.openTasks === 1 ? '{count} open task' : '{count} open tasks', { count: gap.openTasks })}</StatusChip>}
       </li>)}
     </GapGroup>}
@@ -73,7 +73,7 @@ const ProjectGroup = ({ title, note, items }: { title: string; note?: string; it
     </li>)}
     {items.length > VISIBLE_PROJECTS && !expanded && <li className="px-5 py-2">
       <button type="button" className="text-sm font-semibold text-accent hover:underline" onClick={() => setExpanded(true)}>
-        {t('Show {count} more', { count: items.length - VISIBLE_PROJECTS })}
+        {t('ui.showMore', { count: items.length - VISIBLE_PROJECTS })}
       </button>
     </li>}
   </GapGroup>;

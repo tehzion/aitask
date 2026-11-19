@@ -80,8 +80,8 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
       setSelected(new Set());
     }
     setResult(firstError
-      ? { tone: 'error', text: `${t('{saved} of {total} approved.', { saved, total: targets.length })} ${t(firstError)}` }
-      : { tone: 'ok', text: t('{saved} of {total} approved.', { saved, total: targets.length }) });
+      ? { tone: 'error', text: `${t('ui.approvedOf', { saved, total: targets.length })} ${t(firstError)}` }
+      : { tone: 'ok', text: t('ui.approvedOf', { saved, total: targets.length }) });
   };
 
   // Approving several at once only helps with two or more tasks; keep the panel
@@ -118,7 +118,7 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
     </ul>
     {confirming && <ConfirmDialog
       labelledBy={`${titleId}-confirm`}
-      title={t('Approve {count} tasks?', { count: chosen.length })}
+      title={t('ui.approveTasks', { count: chosen.length })}
       description={`${toClient > 0 ? `${t(toClient === 1 ? '1 of these will be sent to the client.' : '{count} of these will be sent to the client.', { count: toClient })} ` : ''}${t('Each task is approved and saved on its own. Tasks that cannot be approved are left as they are.')}`}
       confirmLabel={t('Approve')}
       cancelLabel={t('Cancel')}

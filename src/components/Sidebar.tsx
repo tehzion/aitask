@@ -109,9 +109,9 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
     const label = t(item.label);
     // Shortcut hint on hover (role UX): the same G-then-key shortcuts as the help dialog.
     const navShortcut = NAVIGATION_SHORTCUTS.find(shortcut => shortcut.path === item.path);
-    const shortcutHint = navShortcut ? t('Shortcut: {keys}', { keys: `G ${navShortcut.key.toUpperCase()}` }) : '';
+    const shortcutHint = navShortcut ? t('ui.shortcut', { keys: `G ${navShortcut.key.toUpperCase()}` }) : '';
     const badge = item.path === '/' && hodWaiting.total > 0
-      ? { count: hodWaiting.total, title: t('{assign} to assign · {review} to review', { assign: hodWaiting.toAssign, review: hodWaiting.toReview }) }
+      ? { count: hodWaiting.total, title: t('ui.toAssignToReview', { assign: hodWaiting.toAssign, review: hodWaiting.toReview }) }
       : null;
     const onboardingTarget = item.path === '/' ? 'dashboard' : item.path === '/tasks' ? 'tasks' : item.path === '/projects' ? 'projects' : item.path === '/clients' ? 'clients' : item.path === '/reports' ? 'reports' : item.path === '/approvals' ? 'approvals' : item.path === '/help' ? 'help' : undefined;
     return (
@@ -299,7 +299,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose, isCollapsed, onToggl
                       onClick={() => { setCreateTaskModalOpen(true); onClose(); }}
                       aria-label={isCollapsed ? t('New task') : undefined}
                       aria-keyshortcuts="N"
-                      title={`${isCollapsed ? `${t('New task')} · ` : ''}${t('Shortcut: {keys}', { keys: 'N' })}`}
+                      title={`${isCollapsed ? `${t('New task')} · ` : ''}${t('ui.shortcut', { keys: 'N' })}`}
                       className={clsx('group flex min-h-11 w-full items-center rounded-control px-3 py-2.5 text-accent transition-[background-color,color,box-shadow] duration-160 hover:bg-accent-soft focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface', isCollapsed && 'md:justify-center md:px-2')}
                     >
                       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-control text-accent"><Plus aria-hidden="true" className="h-[18px] w-[18px]" /></span>

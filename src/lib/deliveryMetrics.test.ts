@@ -53,3 +53,29 @@ describe('delivery metrics', () => {
     expect(rows.map(row => [row.userId, row.completed])).toEqual([['y', 2], ['x', 1]]);
   });
 });
+
+describe('weekly trend and rating summary', () => {
+  const wednesday = new Date('2026-11-18T12:00:00');
+  it('buckets finished work into the last eight Monday-based weeks, oldest first', async () => {
+    const { computeWeeklyTrend } = await import('./deliveryMetrics');
+    const trend = computeWeeklyTrend([
+      done('this-week-on-time', { completedAt: '2026-11-17T09:00:00', dueDate: '2026-11-17' }),
+      done('this-week-late', { completedAt: '2026-11-18T09:00:00', dueDate: '2026-11-17' }),
+      done('last-week', { completedAt: '2026-11-10T09:00:00', dueDate: '' }),
+      done('too-old', { completedAt: '2026-08-01T09:00:00' }),
+      done('future', { completedAt: '2026-12-01T09:00:00' }),
+    ], wednesday);
+    expect(trend).toHaveLength(8);
+    expect(trend.at(-1)).toMatchObject({ completed: 2, withDueDate: 2, onTime: 1 });
+    expect(trend.at(-2)).toMatchObject({ completed: 1, withDueDate: 0, onTime: 0 });
+    expect(trend.slice(0, 6).every(point => point.completed === 0)).toBe(true);
+    expect(trend[0].weekStart.getTime()).toBeLessThan(trend[7].weekStart.getTime());
+    expect(trend.at(-1)!.weekStart.getDay()).toBe(1);
+  });
+  it('averages rated deliveries only', async () => {
+    const { summarizeClientRatings } = await import('./deliveryMetrics');
+    const rated = (stars: 1 | 2 | 3 | 4 | 5) => ({ clientRating: { stars, ratedBy: 'pm', ratedAt: '2026-11-11T00:00:00.000Z' } }) as Partial<Task>;
+    expect(summarizeClientRatings([done('a', rated(5)), done('b', rated(4)), done('c', {})])).toEqual({ count: 2, average: 4.5 });
+    expect(summarizeClientRatings([done('c', {})])).toEqual({ count: 0 });
+  });
+});

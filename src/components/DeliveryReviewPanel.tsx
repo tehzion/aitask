@@ -137,7 +137,7 @@ const DeliveryReviewPanel = ({ clientId, includeOpenTasks = false }: { clientId?
     {unlinkTask && <ConfirmDialog
       labelledBy={unlinkTitleId}
       title={t('Remove invalid delivery link')}
-      description={t('Remove the invalid delivery link from "{title}"? The task will remain and require an explicit new link.', { title: unlinkTask.title })}
+      description={t('ui.removeInvalidLink', { title: unlinkTask.title })}
       confirmLabel={t('Remove invalid link')}
       busy={busy}
       onClose={() => { if (!busy) setUnlinkTask(null); }}

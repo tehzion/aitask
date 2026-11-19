@@ -1850,6 +1850,8 @@ const zhCopyFollowups: Record<string, string> = {
   'Member Added': '成员已添加',
   'New Task Assigned': '已分配新任务',
   'Task Assigned To You': '任务已分配给你',
+  'Finished per week': '每周完成数',
+  'Client Brief Updated': '客户需求简报已更新',
   'Task Deadline Approaching': '任务截止日期临近',
   'Task Deleted': '任务已删除',
   'Client Requested Revision': '客户请求修订',

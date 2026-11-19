@@ -494,7 +494,7 @@ const OperationsClientWorkspace = () => {
     const result = store.correctDeliverableName(deliverableId, title);
     const renamed = await saveAndCommit(result, "deliverable.manage");
     if (!renamed || !result.ok) return false;
-    const note = t('Name corrected from "{from}" to "{to}". Reason: {reason}', { from: result.previousTitle || '', to: title, reason });
+    const note = t('ui.nameCorrected', { from: result.previousTitle || '', to: title, reason });
     const noted = await saveAndCommit(useStore.getState().addCycleComment(cycleId, note, 'internal'), "cycle_comment.manage");
     // The name is already saved. If the note is still queued (for example the
     // connection dropped), it is retried automatically; say so instead of

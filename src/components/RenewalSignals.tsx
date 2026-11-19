@@ -22,7 +22,7 @@ const RenewalSignals = ({ plan }: { plan: Pick<ClientServicePlan, 'id' | 'client
   return <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
     <span>{t('On time')} {percent(signals.onTimeRate)}</span>
     <span>{t('Revisions')} {percent(signals.revisionRate)}</span>
-    <span className="basis-full text-[11px]">{t('Last {count} months', { count: signals.cyclesReviewed })}</span>
+    <span className="basis-full text-[11px]">{t('ui.lastMonths', { count: signals.cyclesReviewed })}</span>
   </div>;
 };
 

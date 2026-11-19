@@ -71,8 +71,8 @@ const MonthsToTidyPanel = ({ months, deliverables, todayKey, canManage }: {
       setSelected(new Set());
     }
     setResult(firstError
-      ? { tone: 'error', text: `${t('{count} of {total} months saved.', { count: saved, total: targets.length })} ${t(firstError)}` }
-      : { tone: 'ok', text: t('{count} months saved.', { count: saved }) });
+      ? { tone: 'error', text: `${t('ui.monthsSavedOf', { count: saved, total: targets.length })} ${t(firstError)}` }
+      : { tone: 'ok', text: t('ui.monthsSaved', { count: saved }) });
   };
 
   // Stay visible after the last month is resolved so the result is read.
@@ -110,13 +110,13 @@ const MonthsToTidyPanel = ({ months, deliverables, todayKey, canManage }: {
           <Link to={`/clients/${encodeURIComponent(cycle.clientId)}`} className="min-w-0 flex-1 truncate text-sm font-medium text-ink hover:underline"><span data-i18n-skip>{cycle.clientName}</span> · {label(cycle)}</Link>
           {housekeeping.kind === 'never-published' && <StatusChip tone="amber">{t('Never started')}</StatusChip>}
           {housekeeping.kind === 'ready-to-close' && <StatusChip tone="emerald">{t('Ready to close')}</StatusChip>}
-          {housekeeping.kind === 'overdue' && <StatusChip tone="red">{t('Overdue: {count} not done', { count: housekeeping.notDone })}</StatusChip>}
+          {housekeeping.kind === 'overdue' && <StatusChip tone="red">{t('ui.overdueNotDone', { count: housekeeping.notDone })}</StatusChip>}
         </li>;
       })}
     </ul>
     {confirm && <ConfirmDialog
       labelledBy={`${titleId}-confirm`}
-      title={t('Cancel {count} months?', { count: countFor(confirm) })}
+      title={t('ui.cancelMonths', { count: countFor(confirm) })}
       description={t('Cancelled months stay in history but cannot be reopened.')}
       confirmLabel={t('Cancel months')}
       cancelLabel={t('Keep them')}

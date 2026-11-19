@@ -53,6 +53,8 @@ type ClientSummary = {
   taskCount: number;
   completedTaskCount: number;
   openTaskCount: number;
+  ratingTotal: number;
+  ratingCount: number;
   projectIds: Set<string>;
   projectNames: Set<string>;
   assignedUserIds: Set<string>;
@@ -360,6 +362,8 @@ const Clients: React.FC = () => {
         taskCount: 0,
         completedTaskCount: 0,
         openTaskCount: 0,
+        ratingTotal: 0,
+        ratingCount: 0,
         projectIds: new Set(),
         projectNames: new Set(),
         assignedUserIds: new Set(),
@@ -417,6 +421,7 @@ const Clients: React.FC = () => {
         } else {
           summary.openTaskCount += 1;
         }
+        if (task.clientRating) { summary.ratingTotal += task.clientRating.stars; summary.ratingCount += 1; }
         if (task.serviceType) summary.services.add(task.serviceType);
         if (task.projectId) summary.projectIds.add(task.projectId);
         if (task.projectName) summary.projectNames.add(task.projectName);
@@ -911,6 +916,7 @@ const Clients: React.FC = () => {
                     <td className="px-5 py-6 align-top">
                       <div className="font-semibold text-ink">{client.taskCount} {t('total')}</div>
                       <p className="mt-1 text-xs text-slate-500">{client.openTaskCount} {t('open')}, {client.completedTaskCount} {t('completed')}</p>
+                      {client.ratingCount > 0 && <p className="mt-1 text-xs font-medium text-amber-700" title={t('Client satisfaction')}><span aria-hidden="true">★</span> {(Math.round((client.ratingTotal / client.ratingCount) * 10) / 10).toFixed(1)} / 5 <span className="font-normal text-slate-500">({t('ui.ratedCount', { count: client.ratingCount })})</span></p>}
                       <p className="mt-1 text-xs text-slate-500">{client.projectIds.size} {t(client.projectIds.size === 1 ? 'company record' : 'company records')}</p>
                       {serviceContext?.cycle && <ProgressBar className="mt-3 w-40" label={t('Month progress')} value={serviceContext.delivered} max={Math.max(1, serviceContext.included)} />}
                     </td>
@@ -1011,6 +1017,7 @@ const Clients: React.FC = () => {
                   <div className="min-w-0 space-y-2">
                     {renderContactSummary(client)}
                     <p className="text-xs text-muted">{t('Owner')}: {ownerNameFor(client.profile)}</p>
+                    {client.ratingCount > 0 && <p className="text-xs font-medium text-amber-700" title={t('Client satisfaction')}><span aria-hidden="true">★</span> {(Math.round((client.ratingTotal / client.ratingCount) * 10) / 10).toFixed(1)} / 5 <span className="font-normal text-muted">({t('ui.ratedCount', { count: client.ratingCount })})</span></p>}
                     {assignedByTeam.length > 0 && <p className="text-xs text-muted">{t('Assigned by')}: {assignedByTeam.join(', ')}</p>}
                     {assignedTeam.length > 0 && <p className="text-xs text-muted">{t('Assigned staff')}: {assignedTeam.join(', ')}</p>}
                     {client.projectNames.size > 0 && <p className="text-xs text-muted">{t('Projects')}: {Array.from(client.projectNames).join(', ')}</p>}

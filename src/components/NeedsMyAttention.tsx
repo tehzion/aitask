@@ -67,7 +67,7 @@ const MarkDelivered: React.FC<{ deliverableId: string; title: string }> = ({ del
     }
   };
   return <span className="flex shrink-0 flex-col items-end gap-1">
-    <Button variant="secondary" disabled={busy} onClick={() => void run()} aria-label={t('Mark {title} delivered', { title })}>{busy ? t('Saving…') : t('Mark delivered')}</Button>
+    <Button variant="secondary" disabled={busy} onClick={() => void run()} aria-label={t('ui.markDelivered', { title })}>{busy ? t('Saving…') : t('Mark delivered')}</Button>
     {error && <span role="alert" className="max-w-56 text-right text-xs text-red-700"><SystemMessage message={t(error)} /></span>}
   </span>;
 };

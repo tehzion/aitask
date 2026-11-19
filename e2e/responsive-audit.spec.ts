@@ -88,7 +88,8 @@ test.describe('responsive role and route audit', () => {
   test.describe.configure({ mode: 'serial' });
 
   test('covers every role fixture across the responsive route matrix', async ({ page }) => {
-    test.setTimeout(180_000);
+    // These loops visit every role and route; CI runs them beside another worker and the matrix finished within seconds of the old 180 s limit.
+    test.setTimeout(420_000);
     for (const role of auditRoles) {
       await signInAs(page, role.username);
       for (const viewport of mobileViewports) {
@@ -110,7 +111,8 @@ test.describe('responsive role and route audit', () => {
   });
 
   test('audits representative changed surfaces for accessibility across roles', async ({ page }) => {
-    test.setTimeout(180_000);
+    // These loops visit every role and route; CI runs them beside another worker and the matrix finished within seconds of the old 180 s limit.
+    test.setTimeout(420_000);
     const representativeRoutes = [
       { username: 'Boss Koo', routes: ['/', '/approvals', '/settings'] },
       { username: 'Project Manager Demo', routes: ['/', '/tasks', '/reports'] },

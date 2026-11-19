@@ -25,6 +25,19 @@ describe('client brief', () => {
     useStore.getState().updateTaskBrief('t1', { references: [], mustHave: '  ', avoid: '' });
     expect(useStore.getState().tasks[0].brief).toBeUndefined();
   });
+  it('tells the assignee, not the author, when the brief changes', () => {
+    setup(pm);
+    useStore.setState({ notifications: [] });
+    expect(useStore.getState().updateTaskBrief('t1', { references: [], mustHave: 'Use brand blue' }).ok).toBe(true);
+    const notices = useStore.getState().notifications.filter(notice => notice.title === 'Client Brief Updated');
+    expect(notices.map(notice => notice.targetUserId)).toEqual(['staff']);
+  });
+  it('stays quiet for finished work', () => {
+    setup(pm);
+    useStore.setState({ notifications: [], tasks: [{ ...baseTask, status: 'Completed', isCompleted: true } as Task] });
+    expect(useStore.getState().updateTaskBrief('t1', { references: [], mustHave: 'Late edit' }).ok).toBe(true);
+    expect(useStore.getState().notifications).toEqual([]);
+  });
   it('refuses Staff', () => {
     setup(staff);
     expect(useStore.getState().updateTaskBrief('t1', { references: [], mustHave: 'x' }).ok).toBe(false);

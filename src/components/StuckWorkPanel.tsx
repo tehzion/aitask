@@ -65,17 +65,17 @@ const StuckRow = ({ task, mode }: { task: Task; mode: 'overdue' | 'unassigned' }
   return <li className="space-y-2 px-5 py-4">
     <div className="flex flex-wrap items-baseline justify-between gap-2">
       <Link to={`/tasks?taskId=${encodeURIComponent(task.id)}`} className="min-w-0 truncate text-sm font-semibold text-ink hover:text-accent"><span data-i18n-skip>{task.title}</span></Link>
-      {mode === 'overdue' && due && <span className="shrink-0 text-xs font-semibold text-red-700">{t('{days} days overdue', { days: differenceInCalendarDays(today, due) })}</span>}
+      {mode === 'overdue' && due && <span className="shrink-0 text-xs font-semibold text-red-700">{t('ui.daysOverdue', { days: differenceInCalendarDays(today, due) })}</span>}
     </div>
     <p className="truncate text-xs text-muted"><span data-i18n-skip>{task.clientName}</span> · {due ? formatLocalizedDate(due, locale) : t('No deadline')} · <span data-i18n-skip>{users.find(user => user.id === task.assignedTo)?.name || t('Unassigned')}</span></p>
     {canEdit && <div className="flex flex-wrap items-center gap-2">
       {mode === 'overdue' && <>
-        <input type="date" value={dueDate} min={task.startDate || undefined} onChange={event => setDueDate(event.target.value)} aria-label={t('New due date for {title}', { title: label })}
+        <input type="date" value={dueDate} min={task.startDate || undefined} onChange={event => setDueDate(event.target.value)} aria-label={t('ui.newDueDateFor', { title: label })}
           className="min-h-11 rounded-control border border-line bg-surface px-3 text-sm text-ink" />
         <Button variant="secondary" disabled={!dueDate || saving} onClick={() => void run(() => updateTaskDueDate(task.id, dueDate))}>{t('Re-date')}</Button>
       </>}
       {canAssign && assignees.length > 0 && <>
-        <select value={assignee} onChange={event => setAssignee(event.target.value)} aria-label={t('Assign {title}', { title: label })}
+        <select value={assignee} onChange={event => setAssignee(event.target.value)} aria-label={t('ui.assignTitle', { title: label })}
           className="min-h-11 max-w-[14rem] rounded-control border border-line bg-surface px-3 text-sm text-ink">
           <option value="">{t('Choose a person')}</option>
           {assignees.filter(user => user.id !== task.assignedTo).map(user => <option key={user.id} value={user.id} data-i18n-skip>{formatTaskAssigneeName(user, rolePermissions)}</option>)}

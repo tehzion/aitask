@@ -733,7 +733,7 @@ const CreateTaskModal: React.FC<Props> = ({ isOpen, onClose }) => {
                 </div>
               </div>
               {rememberedNote && <p className="-mt-2 flex flex-wrap items-center gap-x-2 text-xs text-slate-500" data-remembered-defaults>
-                <span>{t('Last used: {choice}', { choice: rememberedNote })}</span>
+                <span>{t('ui.lastUsed', { choice: rememberedNote })}</span>
                 <button type="button" onClick={clearRememberedFill} className="min-h-6 font-medium text-blue-700 underline-offset-2 hover:underline">{t('Clear')}</button>
               </p>}
 

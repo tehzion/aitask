@@ -521,7 +521,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
     if (incompletePredecessors.length > 0 && !['Pending', 'Cancelled'].includes(nextStatus)) {
       setConfirmation({
         title: t('Earlier steps are unfinished'),
-        description: t('Unfinished earlier steps: {count}. Change this task to {status}?', { count: incompletePredecessors.length, status: getLocalizedTaskStatus(nextStatus, locale) }),
+        description: t('ui.earlierStepsConfirm', { count: incompletePredecessors.length, status: getLocalizedTaskStatus(nextStatus, locale) }),
         confirmLabel: t('Continue'),
         tone: 'primary',
         action: async () => {
@@ -734,7 +734,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
               />}
               {workflowKind === 'internal_review' && <section data-onboarding-target="task-review" className="mt-4 border-t border-line pt-4 text-sm" aria-label={t('Internal review')}>
                 <p className="font-semibold text-ink">{t('Internal review')}</p>
-                <p className="mt-1 text-muted">{task.internalReview ? t('Reviewed by {name}', { name: users.find(user => user.id === task.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
+                <p className="mt-1 text-muted">{task.internalReview ? t('ui.reviewedBy', { name: users.find(user => user.id === task.internalReview?.reviewedBy)?.name || t('Team member') }) : t('Waiting for review')}</p>
                 {task.status === 'Waiting Approval' && !isWorkflowTaskSatisfied(task, tasks) && canApproveInternalReview(currentUser, task, rolePermissions, { users, clients, projects }) && <button type="button" disabled={isSubmitting || !canEditTask || Boolean(transitionError('Approved'))} onClick={async () => {
                   if (isSubmitting) return;
                   const result = updateTaskStatus(task.id, 'Approved');
@@ -1112,7 +1112,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      <p role="status" className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{isHodTaskEditor ? t('No eligible Staff available. You can do this task yourself, or ask your project manager for help.') : t('No Staff in {department} yet. You can do this task yourself, or ask your project manager to add Staff to this department.', { department: t(task.department) })}</p>
+                      <p role="status" className="rounded-md border border-line bg-surface px-3 py-2 text-xs font-medium text-muted">{isHodTaskEditor ? t('No eligible Staff available. You can do this task yourself, or ask your project manager for help.') : t('ui.noStaffInDepartment', { department: t(task.department) })}</p>
                       {/* Role UX: with no Staff to hand to, starting it yourself is the next step. */}
                       {canEditTask && guidedAction.kind === 'advance' && guidedAction.targetStatus === 'In Progress' && <Button
                         type="button"

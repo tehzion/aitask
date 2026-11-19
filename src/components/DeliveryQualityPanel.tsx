@@ -6,7 +6,8 @@ import { Surface } from './ui';
 import { useLocalToday } from '../hooks/useLocalToday';
 import { getVisibleTasks } from '../lib/access';
 import type { MessageId } from '../lib/messages';
-import { computeDeliveryMetrics, computePersonDeliveryMetrics, onTimeRate, type DeliveryMetrics } from '../lib/deliveryMetrics';
+import { computeDeliveryMetrics, computePersonDeliveryMetrics, computeWeeklyTrend, onTimeRate, type DeliveryMetrics } from '../lib/deliveryMetrics';
+import { formatLocalizedDate } from '../lib/i18n';
 
 const PERIODS = [30, 90] as const;
 
@@ -30,7 +31,7 @@ const Stat: React.FC<{ label: string; value: string; hint?: string }> = ({ label
  * for coaching, not for ranking.
  */
 const DeliveryQualityPanel: React.FC = () => {
-  const { t } = useI18n();
+  const { locale, t } = useI18n();
   const { tasks: allTasks, currentUser, rolePermissions, clients, projects, users } = useStore(useShallow(state => ({
     tasks: state.tasks, currentUser: state.currentUser, rolePermissions: state.rolePermissions, clients: state.clients, projects: state.projects, users: state.users,
   })));
@@ -46,6 +47,8 @@ const DeliveryQualityPanel: React.FC = () => {
   // Today's midnight only triggers a refresh at day change; the period itself ends right now.
   const overall: DeliveryMetrics = React.useMemo(() => computeDeliveryMetrics(scoped, new Date(Math.max(Date.now(), today.getTime())), days), [days, scoped, today]);
   const people = React.useMemo(() => (isStaff ? [] : computePersonDeliveryMetrics(scoped, new Date(Math.max(Date.now(), today.getTime())), days)), [days, isStaff, scoped, today]);
+  const trend = React.useMemo(() => computeWeeklyTrend(scoped, new Date(Math.max(Date.now(), today.getTime())), 8), [scoped, today]);
+  const peak = Math.max(1, ...trend.map(point => point.completed));
   const rate = onTimeRate(overall);
 
   return (
@@ -76,6 +79,23 @@ const DeliveryQualityPanel: React.FC = () => {
               <Stat label={t('Time to accept')} value={formatHours(overall.medianAcceptanceHours, t)} hint={t('Median')} />
               <Stat label={t('Client rating')} value={overall.averageRating === undefined ? '—' : `${overall.averageRating} / 5`} hint={overall.ratedCount ? t('quality.rated', { count: overall.ratedCount }) : t('Not rated yet')} />
             </dl>
+          </Surface>
+          <Surface className="px-4 py-3">
+            <h3 className="text-xs font-medium text-muted">{t('Finished per week')}</h3>
+            <div role="img" aria-label={`${t('Finished per week')}: ${trend.map(point => `${formatLocalizedDate(point.weekStart, locale)} ${point.completed}`).join(', ')}`} className="mt-3 flex h-24 items-end gap-2">
+              {trend.map(point => {
+                const weekRate = onTimeRate(point);
+                return (
+                  <div key={point.weekStart.getTime()} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1" title={`${formatLocalizedDate(point.weekStart, locale)}: ${point.completed}${weekRate === undefined ? '' : ` · ${weekRate}%`}`}>
+                    <span className="calm-number text-[11px] font-semibold text-ink">{point.completed || ''}</span>
+                    <span aria-hidden="true" className={`w-full rounded-t ${point.completed ? 'bg-accent' : 'bg-line'}`} style={{ height: `${point.completed ? Math.max(6, (point.completed / peak) * 56) : 3}px` }} />
+                  </div>
+                );
+              })}
+            </div>
+            <div aria-hidden="true" className="mt-1 flex gap-2 text-[10px] text-muted">
+              {trend.map(point => <span key={point.weekStart.getTime()} className="min-w-0 flex-1 text-center">{point.weekStart.getDate()}/{point.weekStart.getMonth() + 1}</span>)}
+            </div>
           </Surface>
           {people.length > 0 && (
             <Surface className="overflow-x-auto" tabIndex={0} role="region" aria-label={t('Results by person')}>
