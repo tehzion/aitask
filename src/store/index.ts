@@ -2981,8 +2981,21 @@ export const useStore = create<StoreState>()(
           const now = new Date().toISOString();
           const brief = references.length || mustHave || avoid ? { references, mustHave, avoid, updatedBy: currentUser.id, updatedAt: now } : undefined;
           const newTasks = state.tasks.map(t => t.id === taskId ? { ...t, brief, updatedAt: now } : t);
+          // Tell the people working on it that the requirements changed.
+          const notices: AppNotification[] = [];
+          if (task.status !== 'Completed' && task.status !== 'Cancelled') {
+            for (const targetUserId of new Set([task.assignedTo, task.responsibleHodId].filter((id): id is string => Boolean(id) && id !== currentUser.id))) {
+              appendNotification(notices, {
+                targetUserId,
+                title: 'Client Brief Updated',
+                message: `${currentUser.name} updated the client brief for "${task.title}".`,
+                route: { page: 'tasks', entityId: taskId },
+                iconType: 'task',
+              });
+            }
+          }
           result = { ok: true };
-          return { tasks: newTasks };
+          return { tasks: newTasks, notifications: [...notices, ...(state.notifications || [])] };
         });
         return result;
       },

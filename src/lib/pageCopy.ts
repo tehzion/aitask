@@ -1600,6 +1600,8 @@ registerUiTranslations({
   'Client brief': '客户需求简报',
   'What the client asked for, so the team does not have to guess.': '写下客户的要求，团队就不用猜了。',
   'Has brief': '有需求简报',
+  'Finished per week': '每周完成数',
+  'Client Brief Updated': '客户需求简报已更新',
   'Department delivery': '部门交付情况',
   'See details in Reports': '在报告中查看详情',
   'This will be one more revision than the project includes.': '这会比本项目包含的修订次数多一轮。',

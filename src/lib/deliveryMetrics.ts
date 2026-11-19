@@ -95,3 +95,58 @@ export const computePersonDeliveryMetrics = (tasks: readonly Task[], now = new D
     .map(([userId, list]) => ({ userId, ...computeDeliveryMetrics(list, now, days) }))
     .sort((a, b) => b.completed - a.completed || a.userId.localeCompare(b.userId));
 };
+
+export interface WeeklyDeliveryPoint {
+  /** Monday of the week, local time. */
+  weekStart: Date;
+  completed: number;
+  withDueDate: number;
+  onTime: number;
+}
+
+const startOfWeekMonday = (date: Date) => {
+  const day = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
+  return day;
+};
+
+/**
+ * Finished work per week for the last `weeks` weeks (oldest first, current week
+ * last), with how many of each week's tasks had a due date and met it. Weeks
+ * with nothing finished are kept so the chart shows the gap.
+ */
+export const computeWeeklyTrend = (tasks: readonly Task[], now = new Date(), weeks = 8): WeeklyDeliveryPoint[] => {
+  const current = startOfWeekMonday(now);
+  const points = Array.from({ length: weeks }, (_, index) => {
+    const weekStart = new Date(current);
+    weekStart.setDate(weekStart.getDate() - (weeks - 1 - index) * 7);
+    return { weekStart, completed: 0, withDueDate: 0, onTime: 0 };
+  });
+  for (const task of tasks) {
+    if (!isTaskCompleted(task)) continue;
+    const finished = Date.parse(task.completedAt || '');
+    if (!Number.isFinite(finished) || finished > now.getTime()) continue;
+    const week = startOfWeekMonday(new Date(finished));
+    const point = points.find(item => item.weekStart.getTime() === week.getTime());
+    if (!point) continue;
+    point.completed += 1;
+    const due = task.dueDate ? endOfDueDate(task.dueDate) : undefined;
+    if (due !== undefined) {
+      point.withDueDate += 1;
+      if (finished <= due) point.onTime += 1;
+    }
+  }
+  return points;
+};
+
+export interface ClientRatingSummary {
+  count: number;
+  average?: number;
+}
+
+/** All-time satisfaction across rated deliveries. */
+export const summarizeClientRatings = (tasks: readonly Task[]): ClientRatingSummary => {
+  const stars = tasks.flatMap(task => (task.clientRating ? [task.clientRating.stars] : []));
+  if (!stars.length) return { count: 0 };
+  return { count: stars.length, average: Math.round((stars.reduce((sum, value) => sum + value, 0) / stars.length) * 10) / 10 };
+};
