@@ -738,6 +738,8 @@ const CLIENT_TASK_PROJECTION_KEYS = [
   'isCompleted',
   'completedAt',
   'clientApprovalStatus',
+  // A client's rating travels with their approval; the server validates it and stamps who rated.
+  'clientRating',
   'visibility',
 ] as const;
 

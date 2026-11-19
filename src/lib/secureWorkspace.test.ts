@@ -101,6 +101,24 @@ describe('Client portal command projection', () => {
   });
 });
 
+describe('Client rating in the save projection', () => {
+  it('sends the rating a client gave with their approval, and nothing internal', () => {
+    const projected = serializeClientProjectedTask({
+      id: 'rated-task',
+      clientName: 'Acme',
+      title: 'Logo',
+      status: 'Approved',
+      clientApprovalStatus: 'Approved',
+      clientRating: { stars: 2, comment: 'Not what we asked', ratedBy: 'client-1', ratedAt: '2026-11-19T10:00:00.000Z' },
+      dateChange: { from: '2026-11-01', reason: 'Internal reason', changedBy: 'pm-1', changedAt: '2026-11-02T00:00:00.000Z' },
+      assignedTo: 'staff-1',
+    } as never);
+    expect(projected).toMatchObject({ clientRating: { stars: 2, comment: 'Not what we asked' } });
+    expect(projected).not.toHaveProperty('dateChange');
+    expect(projected).not.toHaveProperty('assignedTo');
+  });
+});
+
 describe('session changes while loading deferred handlers', () => {
   it.each(['departments', 'permissions', 'role', 'notifications'] as const)('blocks %s before issuing an RPC', async action => {
     rpc.mockClear();

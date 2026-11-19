@@ -85,6 +85,8 @@ try {
     await save(`Create ${name}`, { ok: Boolean(id) }, 'project.create'); projectIds.push(id);
   }
   const activated = await save('Activate September cycle', useStore.getState().activateClientPlan(setup.planId), 'client_plan.manage');
+  // A month is only visible to the client once it has been started (Published).
+  await save('Start the September month', useStore.getState().setServiceCycleStatus(activated.cycleId, 'Published'), 'service_cycle.manage');
   check(entity(activated.cycleId).periodEnd === '2026-10-29', 'Inclusive September billing period');
   const deliveryId = useStore.getState().deliverables.find(item => item.cycleId === activated.cycleId).id;
   const taskIds = [];
@@ -194,6 +196,7 @@ try {
   if (browser) await browser.close();
   if (supabase) await supabase.auth.signOut();
   if (server) await server.close();
-  if (accounts.length) sql("delete from public.aitask_entities where workspace_id='aitask-main' and entity_type <> 'custom_role'; delete from public.aitask_members where workspace_id='aitask-main'");
+  // Published months keep their frozen pricing, so clear the disposable data without the guards.
+  if (accounts.length) sql("begin; set local session_replication_role = replica; delete from public.aitask_entities where workspace_id='aitask-main' and entity_type <> 'custom_role'; delete from public.aitask_members where workspace_id='aitask-main'; commit;");
   for (const account of accounts) await admin.auth.admin.deleteUser(account.authId);
 }
