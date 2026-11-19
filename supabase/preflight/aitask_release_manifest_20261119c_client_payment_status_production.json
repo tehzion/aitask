@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-19T05:30:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "CANDIDATE 2026-11-19: migration 20261119150000 is NOT yet applied to production.",
+  "status": "APPLIED 2026-11-19: production records 20261119010631 (owner instructed; applied via the Supabase connector). Repository and production migration versions match (170/170).",
   "validatedMigrationTail": [
     "20261023063344_task_workflow_action_guards",
     "20261023154255_bind_service_command_entity_types",
@@ -54,9 +54,16 @@
     "20261118124404_pm_company_scope",
     "20261118181520_pm_task_company_exact_id",
     "20261118204109_task_client_rating_guard",
-    "20261119150000_client_payment_status"
+    "20261119010631_client_payment_status"
   ],
-  "pendingProductionMigrations": [
-    "20261119150000_client_payment_status"
-  ]
+  "pendingProductionMigrations": [],
+  "productionVerification": {
+    "historyAligned": true,
+    "historyThrough": "20261119010631_client_payment_status",
+    "latestAppliedMigration": "20261119010631_client_payment_status",
+    "historyCount": 170,
+    "beforeHistoryCount": 169,
+    "productionOnlyMigrations": [],
+    "checks": "Live verification on production (rolled-back transaction): a real cycle reads unpaid; after a part payment partial; after the remainder paid. The status function is not callable by signed-in users; the portal projection returns the status only, never amounts."
+  }
 }
