@@ -5,6 +5,9 @@ import { registerUiTranslations } from './i18n';
 // loads with the first page instead of in the startup bundle (300 KiB gzip
 // cap). Shared, store and startup copy stays in i18n.ts.
 registerUiTranslations({
+  "Unread": "未读",
+  "Nothing needs your action": "没有需要您处理的事项",
+  "Reviews, deadlines and requests that need a decision from you will appear here.": "需要您决定的审核、截止日期和请求会显示在这里。",
   "Waiting on the client": "等待客户",
   "As of": "截至",
   "Counts cover every project, task, plan and delivery.": "统计涵盖所有项目、任务、方案和交付。",

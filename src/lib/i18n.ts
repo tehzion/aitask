@@ -695,6 +695,7 @@ const zhCopyAdditions: Record<string, string> = {
   'Task Ready for Approval': '任务已可审批',
   'Task Completed': '任务已完成',
   'Client Approved Task': '客户已批准任务',
+  'Low Client Rating': '客户评分偏低',
   'New Registration': '新注册申请',
   'Revision Requested': '已请求修订',
   'New Comment': '新评论',

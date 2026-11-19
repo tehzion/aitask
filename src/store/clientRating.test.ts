@@ -50,3 +50,26 @@ describe('client rating on approval', () => {
     expect(useStore.getState().tasks[0].clientRating).toBeUndefined();
   });
 });
+
+describe('notices after a client rating', () => {
+  const staff: User = { id: 'staff', name: 'Sam', role: 'Staff', departments: ['Designer'] };
+  const boss: User = { id: 'boss', name: 'Boss', role: 'Project Manager', isSuperAdmin: true, departments: ['Management'] };
+  const pm: User = { id: 'pm', name: 'Owner', role: 'Project Manager', departments: ['Management'] };
+
+  beforeEach(() => {
+    useStore.setState({ users: [client, staff, boss, pm], notifications: [] });
+  });
+
+  it('flags a one or two star rating as an action for everyone accountable', () => {
+    expect(useStore.getState().reviewClientApproval(task.id, 'Approved', '', { stars: 2, comment: 'Meh' }).ok).toBe(true);
+    const low = useStore.getState().notifications.filter(notification => notification.title === 'Low Client Rating');
+    expect(low.map(notification => notification.targetUserId).sort()).toEqual(['boss', 'pm', 'staff']);
+    expect(low.every(notification => notification.importance === 'action' && notification.category === 'feedback')).toBe(true);
+    expect(low[0].message).toContain('rated 2/5');
+  });
+
+  it('adds no low-rating notice for a good rating or a change request', () => {
+    expect(useStore.getState().reviewClientApproval(task.id, 'Approved', '', { stars: 4 }).ok).toBe(true);
+    expect(useStore.getState().notifications.some(notification => notification.title === 'Low Client Rating')).toBe(false);
+  });
+});

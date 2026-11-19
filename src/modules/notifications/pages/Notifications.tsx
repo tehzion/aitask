@@ -28,6 +28,7 @@ import { getVisibleTasks, isNotificationReadByUser } from '../../../lib/access';
 import { isTaskOpen } from '../../../lib/taskReporting';
 import {
   groupNotifications,
+  isActionNotification,
   mergeNotificationPages,
   NOTIFICATION_CATEGORIES,
   sectionNotificationGroups,
@@ -41,7 +42,7 @@ import { useI18n } from '../../../components/I18nProvider';
 import { useStore } from '../../../store';
 import type { AppNotification, NotificationCategory, NotificationCursor } from '../../../types';
 
-type NotificationTab = 'all' | 'unread';
+type NotificationTab = 'all' | 'unread' | 'action';
 
 const categoryIcon = (category: NotificationCategory) => {
   switch (category) {
@@ -140,12 +141,12 @@ const Notifications: React.FC = () => {
 
     void loadNotificationFeedPage(currentUser, previewNotifications, {
       limit: 50,
-      unreadOnly: tab === 'unread',
+      unreadOnly: tab !== 'all',
       category: category || undefined,
       search,
     }).then(page => {
       if (cancelled || generation !== generationRef.current) return;
-      const resetList = queryChanged || tab === 'unread';
+      const resetList = queryChanged || tab !== 'all';
       setItems(current => resetList
         ? page.items
         : mergeNotificationPages(current, page.items));
@@ -164,7 +165,8 @@ const Notifications: React.FC = () => {
 
   if (!currentUser) return null;
 
-  const groups = groupNotifications(openWorkOnly ? items.filter(item => item.route.page === 'tasks' && item.route.entityId && taskMap.has(item.route.entityId) && isTaskOpen(taskMap.get(item.route.entityId)!)) : items, currentUser);
+  const viewItems = tab === 'action' ? items.filter(isActionNotification) : items;
+  const groups = groupNotifications(openWorkOnly ? viewItems.filter(item => item.route.page === 'tasks' && item.route.entityId && taskMap.has(item.route.entityId) && isTaskOpen(taskMap.get(item.route.entityId)!)) : viewItems, currentUser);
   const sections = sectionNotificationGroups(groups);
   const displayedUnreadCount = notificationUnreadCount;
 
@@ -177,7 +179,7 @@ const Notifications: React.FC = () => {
       const page = await loadNotificationFeedPage(currentUser, previewNotifications, {
         limit: 50,
         cursor: nextCursor,
-        unreadOnly: tab === 'unread',
+        unreadOnly: tab !== 'all',
         category: category || undefined,
         search,
       });
@@ -200,7 +202,7 @@ const Notifications: React.FC = () => {
     if (saved && generation === generationRef.current) {
       setItems(current => {
         const updated = updateReadState(current, ids, currentUser.id, isRead);
-        return tab === 'unread' && isRead
+        return tab !== 'all' && isRead
           ? updated.filter(notification => !ids.includes(notification.id))
           : updated;
       });
@@ -212,7 +214,7 @@ const Notifications: React.FC = () => {
     const generation = generationRef.current;
     const saved = await notificationReadActions.markAllRead();
     if (!saved || generation !== generationRef.current) return;
-    setItems(current => tab === 'unread'
+    setItems(current => tab !== 'all'
       ? []
       : updateReadState(current, current.map(item => item.id), currentUser.id, true));
   };
@@ -256,7 +258,7 @@ const Notifications: React.FC = () => {
         <div className="border-b border-slate-200 p-4 sm:p-5">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
             <div className="inline-flex w-full rounded-lg bg-slate-100 p-1 sm:w-auto" aria-label={t('Notification view')}>
-              {(['all', 'unread'] as NotificationTab[]).map(value => (
+              {(['all', 'unread', 'action'] as NotificationTab[]).map(value => (
                 <button
                   key={value}
                   type="button"
@@ -267,7 +269,7 @@ const Notifications: React.FC = () => {
                   )}
                   aria-pressed={tab === value}
                 >
-                  {t(value === 'unread' ? 'Unread' : 'All')}{value === 'unread' && displayedUnreadCount > 0 ? ` (${displayedUnreadCount})` : ''}
+                  {t(value === 'unread' ? 'Unread' : value === 'action' ? 'Needs action' : 'All')}{value === 'unread' && displayedUnreadCount > 0 ? ` (${displayedUnreadCount})` : ''}
                 </button>
               ))}
             </div>
@@ -314,9 +316,11 @@ const Notifications: React.FC = () => {
           </div>
         ) : groups.length === 0 ? (
           <div className="flex min-h-64 flex-col items-center justify-center px-6 text-center">
-            <h2 className="text-base font-semibold text-ink">{tab === 'unread' ? t('No unread notifications') : t('No notifications found')}</h2>
+            <h2 className="text-base font-semibold text-ink">{tab === 'action' ? t('Nothing needs your action') : tab === 'unread' ? t('No unread notifications') : t('No notifications found')}</h2>
             <p className="mt-1 max-w-sm text-sm leading-6 text-muted">
-              {tab === 'unread'
+              {tab === 'action'
+                ? t('Reviews, deadlines and requests that need a decision from you will appear here.')
+                : tab === 'unread'
                 ? t('You are all caught up. New assignments, deadlines, and reviews will appear here.')
                 : t('Try another category or search, or switch back to All.')}
             </p>

@@ -11,6 +11,7 @@ const titles: Record<string, string> = {
   'Client Feedback': '客户反馈', 'Client Approved Task': '客户已批准任务',
   'Client Requested Revision': '客户请求修订', 'Revision Requested': '已请求修订',
   'Task Deadline Approaching': '任务截止日期临近', 'Help Requested': '协助请求',
+  'Task Overdue': '任务已逾期', 'Low Client Rating': '客户评分偏低', 'Task Dates Updated': '任务日期已更新',
   'Member Added': '已添加成员', 'Member Removed': '已移除成员', 'New Registration': '新注册',
 };
 const categories: Record<NotificationCategory, string> = { assignment: '任务分配', deadline: '截止日期', review: '审核', feedback: '反馈', account: '账号', status: '状态更新', system: '系统' };
@@ -22,7 +23,12 @@ const patterns: [RegExp, (...values: string[]) => string][] = [
   [/^"([\s\S]+)" is ready for review\.$/, title => `“${title}”已准备好进行审核。`],
   [/^"([\s\S]+)" is ready for client review\.$/, title => `“${title}”已准备好供客户审阅。`],
   [/^"([\s\S]+)" was moved to (.+) by ([\s\S]+)\.$/, (title, status, name) => `${name}已将“${title}”移至${getLocalizedStatus(status, 'zh')}。`],
+  [/^"([\s\S]+)" was approved by ([\s\S]+) and rated (\d)\/5\.$/, (title, name, stars) => `${name}已批准“${title}”，并评为 ${stars}/5 分。`],
   [/^"([\s\S]+)" was approved by ([\s\S]+)\.$/, (title, name) => `${name}已通过“${title}”的审核。`],
+  [/^([\s\S]+) asked for changes on "([\s\S]+)"\.$/, (name, title) => `${name}请求修改“${title}”。`],
+  [/^"([\s\S]+)" is overdue \(was due ([^)]+)\)\.$/, (title, date) => `“${title}”已逾期（原定 ${date} 到期）。`],
+  [/^"([\s\S]+)" for ([\s\S]+) is overdue \(was due ([^)]+)\)\.$/, (title, client, date) => `“${title}”（${client}）已逾期（原定 ${date} 到期）。`],
+  [/^The start date or due date for "([\s\S]+)" was updated by ([\s\S]+?)\.(?: Reason: ([\s\S]+))?$/, (title, name, reason) => `${name}更新了“${title}”的开始或截止日期。${reason ? `原因：${reason}` : ''}`],
   [/^"([\s\S]+)" has been assigned to you by ([\s\S]+)\.$/, (title, name) => `${name}已将“${title}”分配给您。`],
   [/^You have been assigned a new task: "([\s\S]+)"\.$/, title => `您收到新任务：“${title}”。`],
   [/^([\s\S]+) created a new task: "([\s\S]+)"\.$/, (name, title) => `${name}创建了新任务：“${title}”。`],

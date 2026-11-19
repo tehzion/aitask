@@ -14,7 +14,11 @@ const seed = async (page: Page, locale: 'en' | 'zh' = 'en', finished = true) => 
     enablePasswordResetBypass(staff.id);
     localStorage.setItem(`aitask:release-notice:2026-11-start-wording:${staff.id}`, 'acknowledged');
     const iso = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString();
-    const ymd = (offset: number) => iso(offset).slice(0, 10);
+    // Due dates are calendar days in the app's local time, so build them from local parts.
+    const ymd = (offset: number) => {
+      const day = new Date(Date.now() + offset * 86_400_000);
+      return `${day.getFullYear()}-${String(day.getMonth() + 1).padStart(2, '0')}-${String(day.getDate()).padStart(2, '0')}`;
+    };
     const base = { ...state.tasks[0], clientId: undefined, clientName: 'Record Co', projectId: undefined, projectName: undefined, department: 'Designer',
       createdBy: pm.id, assignedBy: pm.id, assignedTo: staff.id, comments: [], approvalHistory: [], workHistory: [], workState: {}, revisionCount: 0,
       visibility: 'internal', clientApprovalStatus: 'Pending', isCompleted: false, completedAt: undefined, startDate: '2026-01-01' };
