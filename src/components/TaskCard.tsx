@@ -7,6 +7,7 @@ import { getLocalizedPriority, getLocalizedTaskStatus } from '../lib/localeLabel
 import { getLatestRevisionNote, getTaskBlockers, getUnavailableTaskDependencyCount, isTaskWaitingOnEarlierSteps } from '../lib/staffWorkspace';
 import { getTaskWorkflowSteps, type TaskWorkflowStep } from '../lib/taskStage';
 import { isTaskOverdue } from '../lib/taskReporting';
+import { getReviewWaitDays, SLOW_REVIEW_DAYS } from '../lib/reviewAge';
 import { getTaskRisk } from '../lib/taskRisk';
 import { assigneeLabelWithLoad } from '../lib/staffWorkload';
 import { useAssigneeWorkload } from '../hooks/useAssigneeWorkload';
@@ -65,6 +66,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
   // eligible Staff, say so, since starting it yourself is then the only option.
   const awaitingMyAssignment = Boolean(currentUserId) && task.assignedTo === currentUserId && isAwaitingHodAssignment(task);
   const overdue = isTaskOverdue(task, today);
+  const reviewWaitDays = getReviewWaitDays(task, today);
   const assignee = users.find(user => user.id === task.assignedTo)?.name;
   const blockerTasks = getTaskBlockers(task, allTasks);
   const blockers = blockerTasks.length;
@@ -139,6 +141,7 @@ export const TaskCard: React.FC<TaskCardProps> = ({ task, allTasks, users = [], 
       <dl className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
         <div className="flex gap-1"><dt>{t('Assigned to')}</dt><dd data-i18n-skip className="font-medium text-ink">{assignee || t('Unassigned')}</dd></div>
         <div className="flex gap-1"><dt className="sr-only">{t('Due')}</dt><dd className={overdue ? 'font-semibold text-red-700 dark:text-red-300' : undefined}>{getRelativeDueDateString(task.dueDate, task.isCompleted, task.status, locale)}</dd></div>
+        {reviewWaitDays !== undefined && <div><dt className="sr-only">{t('Review wait')}</dt><dd className={reviewWaitDays >= SLOW_REVIEW_DAYS ? 'font-semibold text-amber-700 dark:text-amber-300' : 'font-medium text-ink'}>{reviewWaitDays === 0 ? t('ui.reviewWaitToday') : reviewWaitDays === 1 ? t('ui.reviewWaitDay') : t('ui.reviewWaitDays', { count: reviewWaitDays })}</dd></div>}
         {open && (task.priority === 'Urgent' || task.priority === 'High') && <div><dt className="sr-only">{t('Priority')}</dt><dd className={task.priority === 'Urgent' ? 'font-semibold text-red-700 dark:text-red-300' : 'font-medium text-ink'}>{getLocalizedPriority(task.priority, locale)}</dd></div>}
       </dl>
       {flags.length > 0 && <p className="text-xs font-medium text-amber-700 dark:text-amber-300">{flags.join(' · ')}</p>}

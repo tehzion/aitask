@@ -21,6 +21,7 @@ import TaskDetailsModal from '../components/TaskDetailsModal';
 import UnavailableWork from '../components/UnavailableWork';
 import BulkManageBar from '../components/BulkManageBar';
 import AttentionDigest from '../components/AttentionDigest';
+import BulkApprovePanel from '../components/BulkApprovePanel';
 
 const TAB_LABEL: Record<ManageTabId, string> = {
   active: 'Active',
@@ -189,6 +190,7 @@ const ManageWork: React.FC = () => {
             </div>
           )}
 
+          {tab === 'review' && !query.trim() && !overdueOnly && !riskOnly && !owner && <BulkApprovePanel tasks={work.byTab.review} />}
           {taskId && !selectedTask && <UnavailableWork onDismiss={() => setParam('taskId')} />}
           <Surface as="div" id="manage-work-panel" role="tabpanel" aria-labelledby={`manage-work-tab-${tab}`} tabIndex={0} className="overflow-hidden divide-y divide-line/70 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35">
             {shown.slice(0, 50).map(task => {

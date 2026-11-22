@@ -70,6 +70,11 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   const startValue = startIsRevision && !isRevisionStartBoundary(source, draft.startDate, getBillingToday()) ? firstBoundary : draft.startDate;
   const contractStartDate = getPlanContractStartDate(plan, store.clientPlans);
   const dateLabel = (value: string) => formatLocalizedDate(parseOptionalDate(value)!, locale);
+  const addService = () => {
+    const id = `SI-${crypto.randomUUID()}`;
+    update({ serviceItems: [...draft.serviceItems, { id, name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0 }] });
+    window.setTimeout(() => document.getElementById(`${formId}-service-name-${id}`)?.focus(), 0);
+  };
   const totals = calculatePlanTotalMinor(draft.serviceItems, draft.discountType, draft.discountValue, draft.taxRateBps);
   const currentTotals = calculatePlanTotalMinor(source.serviceItems, source.discountType, source.discountValue, source.taxRateBps);
   useUnsavedChanges(dirty || busy || Boolean(pending.current));
@@ -249,11 +254,12 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
           <label className="text-sm font-medium text-ink">{t('Monthly billing day')}<input required type="number" min={1} max={31} step={1} className={fieldClass} value={draft.billingDay} onChange={event => update({ billingDay: Number(event.target.value) })} /></label>
           <label className="text-sm font-medium text-ink">{t('Contract end date (reminder only)')}<input type="date" min={contractStartDate} aria-describedby={contractHelpId} className={fieldClass} value={draft.contractEndDate} onChange={event => update({ contractEndDate: event.target.value })} /><span id={contractHelpId} className="mt-1 block text-xs font-normal leading-5 text-muted">{t('This is a reminder for the original contract, not a stop date for the monthly plan.')}</span></label>
         </div>
+        <div className="flex items-center justify-between gap-3 px-5 pt-5"><p className="text-sm font-semibold text-ink">{t('Services')} ({draft.serviceItems.length})</p><Button variant="secondary" onClick={addService}>{t('Add service')}</Button></div>
         <div className="divide-y divide-line">{draft.serviceItems.map((item, index) => <fieldset key={item.id} className="p-5">
           <legend className="sr-only">{t('Service item')} {index + 1}</legend>
           <div className="mb-4 flex items-center justify-between gap-3"><p className="text-sm font-semibold text-ink">{t('Service item')} {index + 1}</p><Button variant="secondary" onClick={() => update({ serviceItems: draft.serviceItems.filter(value => value.id !== item.id) })} aria-label={`${t('Remove service')}: ${item.name || index + 1}`}>{t('Remove')}</Button></div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <label className="text-sm font-medium text-ink">{t('Service name')}<input required maxLength={160} data-i18n-skip className={fieldClass} value={item.name} onChange={event => updateItem(item.id, { name: event.target.value })} /></label>
+            <label className="text-sm font-medium text-ink">{t('Service name')}<input id={`${formId}-service-name-${item.id}`} required maxLength={160} data-i18n-skip className={fieldClass} value={item.name} onChange={event => updateItem(item.id, { name: event.target.value })} /></label>
             <label className="text-sm font-medium text-ink">{t('Platforms')}<input data-i18n-skip className={fieldClass} value={item.platforms.join(', ')} onChange={event => updateItem(item.id, { platforms: event.target.value.split(',').map(value => value.trim()).filter(Boolean) })} /><span className="mt-1 block text-xs font-normal text-muted">{t('Separate platforms with commas.')}</span></label>
             <label className="text-sm font-medium text-ink">{t('Unit')}<input required maxLength={80} data-i18n-skip className={fieldClass} value={item.unit} onChange={event => updateItem(item.id, { unit: event.target.value })} /></label>
             <label className="text-sm font-medium text-ink">{t('Quantity')}<input id={`${formId}-quantity-${index}`} required type="number" min={1} max={400} step={1} inputMode="numeric" className={fieldClass} value={item.quantity || ''} onChange={event => updateItem(item.id, { quantity: Number(event.target.value) })} /></label>
@@ -261,7 +267,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
             <label className="text-sm font-medium text-ink">{t('Task workflow')}<select className={fieldClass} value={item.workflow?.templateId || ''} onChange={event => { const template = store.serviceWorkflowTemplates.find(value => value.id === event.target.value); updateItem(item.id, { workflow: template ? snapshotWorkflow(template) : undefined }); }}><option value="">{t('No task workflow')}</option>{item.workflow && !store.serviceWorkflowTemplates.some(value => value.id === item.workflow!.templateId && value.isActive) && <option value={item.workflow.templateId} data-i18n-skip>{item.workflow.name}</option>}{store.serviceWorkflowTemplates.filter(value => value.isActive).map(template => <option key={template.id} value={template.id} data-i18n-skip>{template.name} · {t('rev')} {template.revision}</option>)}</select></label>
           </div>
         </fieldset>)}</div>
-        <div className="px-5 pb-5"><Button variant="secondary" onClick={() => update({ serviceItems: [...draft.serviceItems, { id: `SI-${crypto.randomUUID()}`, name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0 }] })}>{t('Add service')}</Button></div>
+        <div className="px-5 pb-5"><Button variant="secondary" onClick={addService}>{t('Add service')}</Button></div>
         {canSeePrices && <div className="grid gap-4 border-t border-line bg-inset p-5 md:grid-cols-3">
           <label className="text-sm font-medium text-ink">{t('Discount type')}<select className={fieldClass} value={draft.discountType} onChange={event => update({ discountType: event.target.value as ClientServicePlan['discountType'], discountValue: 0 })}><option value="none">{t('None')}</option><option value="percent">{t('Percent')}</option><option value="fixed">{t('Fixed MYR')}</option></select></label>
           <label className="text-sm font-medium text-ink">{t('Discount value')}<input type="number" min="0" max={draft.discountType === 'percent' ? 100 : undefined} step="0.01" disabled={draft.discountType === 'none'} className={fieldClass} value={draft.discountValue / 100} onChange={event => update({ discountValue: Math.round(Number(event.target.value) * 100) })} /></label>

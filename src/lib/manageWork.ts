@@ -7,6 +7,7 @@ import { isTaskOverdue, isTaskOpen } from './taskReporting';
 import { computeDeliveryMetrics, onTimeRate } from './deliveryMetrics';
 import { isTaskAtRisk } from './taskRisk';
 import { parseOptionalDate } from './utils';
+import { compareByReviewAge } from './reviewAge';
 
 /**
  * Fiverr-style "Manage orders" for a PM or HOD: one place with the work split
@@ -61,7 +62,9 @@ export const buildManageWork = (tasks: readonly Task[], context: ManageContext):
   };
   for (const id of MANAGE_TAB_ORDER) {
     // Finished work reads newest first; everything else by urgency.
-    byTab[id] = id === 'completed' || id === 'cancelled'
+    byTab[id] = id === 'review' || id === 'waiting'
+      ? [...byTab[id]].sort((a, b) => compareByReviewAge(a, b) || sort(a, b))
+      : id === 'completed' || id === 'cancelled'
       ? [...byTab[id]].sort((a, b) => Date.parse(b.completedAt || b.updatedAt || '') - Date.parse(a.completedAt || a.updatedAt || '') || a.title.localeCompare(b.title))
       : [...byTab[id]].sort(sort);
   }

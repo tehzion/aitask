@@ -1,4 +1,4 @@
-import { AppNotification, ClientProfile, CustomRole, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
+import { AppNotification, ClientProfile, CustomRole, CycleComment, Project, Role, RolePermissionKey, RolePermissions, Task, User } from '../types';
 import { isAwaitingClientReview } from './clientPortal';
 import { getMemberDepartments, isMemberInDepartment, normalizeDepartment } from './departments';
 import { isClosedProject } from './projectManagement';
@@ -473,6 +473,15 @@ export const canManageServiceCatalog = (user: User | null | undefined, customRol
 export const canManageTaskTemplates = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageTaskTemplates', customRoles);
 export const canManageClientPlans = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageClientPlans', customRoles);
 export const canManageServiceCycles = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'manageServiceCycles', customRoles);
+/**
+ * Who may change an activity's text. Managers (for example the PM) may edit any
+ * entry in their scope; an author may edit their own unless they are plain Staff,
+ * whom the database restricts to adding files on their own entries.
+ */
+export const canEditCycleComment = (user: User | null | undefined, comment: Pick<CycleComment, 'userId'>, customRoles: CustomRole[] = []) => Boolean(
+  user && user.role !== 'Client'
+  && (canManageServiceCycles(user, customRoles) || (user.role !== 'Staff' && comment.userId === user.id)),
+);
 export const canViewServicePrices = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'viewServicePrices', customRoles);
 export const canViewProductionReports = (user: User | null | undefined, customRoles: CustomRole[] = []) => hasPermission(user, 'viewProductionReports', customRoles);
 export const canOpenServiceClient = (

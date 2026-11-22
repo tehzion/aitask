@@ -21,6 +21,7 @@ import {
   Link2,
   ListChecks,
   MessageSquareText,
+  Pencil,
   Pause,
   Play,
   Plus,
@@ -63,6 +64,7 @@ import { isTaskOpen } from "../lib/taskReporting";
 import {
   canCreateManualTasks,
   canEditTask,
+  canEditCycleComment,
   canLinkTaskDelivery,
   canManageClientPlans,
   canManageServiceCycles,
@@ -154,6 +156,8 @@ const OperationsClientWorkspace = () => {
   const [activityFeedback, setActivityFeedback] = React.useState<ActivityFeedback | null>(null);
   const [generatingAll, setGeneratingAll] = React.useState(false);
   const [activitySheetOpen, setActivitySheetOpen] = React.useState(false);
+  const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null);
+  const [editingText, setEditingText] = React.useState("");
   const { busy: serviceSaving, run: runServiceAction } = useSaveAction(clientId);
   const [activitySaving, setActivitySaving] = React.useState(false);
   const [carryPending, setCarryPending] = React.useState<string | null>(null);
@@ -330,6 +334,11 @@ const OperationsClientWorkspace = () => {
       "client_plan.manage",
     );
     if (saved) setPlanAction(null);
+  };
+  const saveCommentEdit = async () => {
+    if (!editingCommentId || serviceSaving) return;
+    const saved = await saveAndCommit(store.updateCycleComment(editingCommentId, editingText), "cycle_comment.manage");
+    if (saved) { setEditingCommentId(null); setEditingText(""); }
   };
   const submitComment = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -1073,10 +1082,39 @@ const OperationsClientWorkspace = () => {
                       ?.name || t("Team member")}
                   </p>
                   {!isClient && <Badge tone="slate">{item.visibility}</Badge>}
+                  {!isClient && editingCommentId !== item.id && canEditCycleComment(store.currentUser, item, store.rolePermissions) && (
+                    <button
+                      type="button"
+                      onClick={() => { setEditingCommentId(item.id); setEditingText(item.text); }}
+                      disabled={serviceSaving}
+                      className="ml-auto inline-flex h-9 items-center gap-1.5 rounded-control px-2.5 text-xs font-semibold text-accent transition-colors hover:bg-inset focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/35 disabled:opacity-50"
+                      aria-label={t("Edit activity")}
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />{t("Edit")}
+                    </button>
+                  )}
                 </div>
-                <p data-i18n-skip className="mt-3 whitespace-pre-wrap text-sm text-muted">
-                  {item.text}
-                </p>
+                {editingCommentId === item.id ? (
+                  <div className="mt-3 space-y-2">
+                    <textarea
+                      data-i18n-skip
+                      aria-label={t("Edit activity")}
+                      className={cn(inputBase, "min-h-32 px-3 py-2.5")}
+                      value={editingText}
+                      maxLength={10000}
+                      autoFocus
+                      onChange={(event) => setEditingText(event.target.value)}
+                    />
+                    <div className="flex justify-end gap-2">
+                      <Button variant="secondary" onClick={() => { setEditingCommentId(null); setEditingText(""); }} disabled={serviceSaving}>{t("Cancel")}</Button>
+                      <Button onClick={() => void saveCommentEdit()} disabled={serviceSaving || !editingText.trim()} aria-busy={serviceSaving}>{t("Save")}</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <p data-i18n-skip className="mt-3 whitespace-pre-wrap text-sm text-muted">
+                    {item.text}
+                  </p>
+                )}
                 {item.attachments.map((attachment) => (
                   <button
                     key={attachment.id}

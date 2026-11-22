@@ -87,6 +87,7 @@ import {
   canManageClientPlans,
   canManageServiceCatalog,
   canManageServiceCycles,
+  canEditCycleComment,
   canManageTaskTemplates,
   canViewServicePrices,
   canViewAllClients,
@@ -452,6 +453,7 @@ export interface StoreState {
   carryForwardTaskToCycle: (taskId: string, targetCycleId: string, targetDeliverableId?: string) => { ok: boolean; taskId?: string; error?: string };
   addCycleComment: (cycleId: string, text: string, visibility: CommentVisibility) => { ok: boolean; id?: string; error?: string };
   addCycleCommentAttachment: (commentId: string, attachment: AttachmentRef) => { ok: boolean; error?: string };
+  updateCycleComment: (commentId: string, text: string) => { ok: boolean; error?: string };
   addComment: (taskId: string, text: string) => { ok: boolean; id?: string; error?: string };
   markNotificationRead: (id: string) => void;
   markNotificationUnread: (id: string) => void;
@@ -5449,6 +5451,21 @@ export const useStore = create<StoreState>()(
         const item: CycleComment = { id: nowId('CC'), clientId: cycle.clientId, clientName: cycle.clientName, cycleId, userId: actor.id, text: clean, visibility, attachments: [], createdAt: now, updatedAt: now };
         set(current => ({ cycleComments: [...current.cycleComments, item] }));
         return { ok: true, id: item.id };
+      },
+
+      updateCycleComment: (commentId, text) => {
+        const state = get();
+        if (isWorkspaceMutationLocked(state)) return { ok: false, error: pendingMutationMessage };
+        const actor = state.currentUser;
+        const comment = state.cycleComments.find(item => item.id === commentId);
+        if (!comment || !actor || actor.role === 'Client') return { ok: false, error: 'You cannot edit this activity.' };
+        if (!isServiceClientInScope(state, comment.clientId)) return { ok: false, error: serviceClientScopeError };
+        if (!canEditCycleComment(actor, comment, state.rolePermissions)) return { ok: false, error: 'Only the author or a service manager can edit this activity.' };
+        const clean = text.trim().slice(0, 10_000);
+        if (!clean) return { ok: false, error: 'Comment cannot be empty.' };
+        if (clean === comment.text) return { ok: true };
+        set(current => ({ cycleComments: current.cycleComments.map(item => item.id === commentId ? { ...item, text: clean, updatedAt: new Date().toISOString() } : item) }));
+        return { ok: true };
       },
 
       addCycleCommentAttachment: (commentId, attachment) => {
