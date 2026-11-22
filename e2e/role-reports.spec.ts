@@ -2,6 +2,9 @@ import { expect, test } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
 test('Account reports include assigned work and exclude other departments', async ({ page }) => {
+  // Reports group due work Monday to Saturday, so pin the clock to a Wednesday;
+  // a "due today" task would fall outside the report when the suite runs on a Sunday.
+  await page.clock.install({ time: new Date('2026-11-18T04:00:00Z') });
   await page.goto('/login');
   await page.getByLabel('Email or username').fill('Account Demo');
   await page.getByLabel('Password').fill('password123');

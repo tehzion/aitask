@@ -632,6 +632,7 @@ registerUiTranslations({
   'Add activity': '添加动态',
   'Edit activity': '编辑动态',
   'Review wait': '审核等待时间',
+  'Add another service': '再添加一项服务',
   'Add from catalog': '从目录添加',
   'Complete several at once': '一次完成多个',
   'Approved work you can finish now. To return work with a note, open the task.': '您现在可以完成的已批准工作。如需附说明退回，请打开该任务。',
