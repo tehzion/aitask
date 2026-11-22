@@ -75,6 +75,15 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
     update({ serviceItems: [...draft.serviceItems, { id, name: '', platforms: [], unit: 'item', quantity: 1, unitPriceMinor: 0 }] });
     window.setTimeout(() => document.getElementById(`${formId}-service-name-${id}`)?.focus(), 0);
   };
+  // Services from the active catalog packages, offered as one-click additions.
+  const catalogServices = store.servicePackages.filter(pkg => pkg.isActive).flatMap(pkg => pkg.serviceItems.map(item => ({ key: `${pkg.id}:${item.id}`, label: `${item.name} · ${pkg.name}`, item })));
+  const addCatalogService = (key: string) => {
+    const picked = catalogServices.find(entry => entry.key === key)?.item;
+    if (!picked) return;
+    const id = `SI-${crypto.randomUUID()}`;
+    update({ serviceItems: [...draft.serviceItems, { ...structuredClone(picked), id }] });
+    window.setTimeout(() => document.getElementById(`${formId}-service-name-${id}`)?.focus(), 0);
+  };
   const totals = calculatePlanTotalMinor(draft.serviceItems, draft.discountType, draft.discountValue, draft.taxRateBps);
   const currentTotals = calculatePlanTotalMinor(source.serviceItems, source.discountType, source.discountValue, source.taxRateBps);
   useUnsavedChanges(dirty || busy || Boolean(pending.current));
@@ -254,7 +263,9 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
           <label className="text-sm font-medium text-ink">{t('Monthly billing day')}<input required type="number" min={1} max={31} step={1} className={fieldClass} value={draft.billingDay} onChange={event => update({ billingDay: Number(event.target.value) })} /></label>
           <label className="text-sm font-medium text-ink">{t('Contract end date (reminder only)')}<input type="date" min={contractStartDate} aria-describedby={contractHelpId} className={fieldClass} value={draft.contractEndDate} onChange={event => update({ contractEndDate: event.target.value })} /><span id={contractHelpId} className="mt-1 block text-xs font-normal leading-5 text-muted">{t('This is a reminder for the original contract, not a stop date for the monthly plan.')}</span></label>
         </div>
-        <div className="flex items-center justify-between gap-3 px-5 pt-5"><p className="text-sm font-semibold text-ink">{t('Services')} ({draft.serviceItems.length})</p><Button variant="secondary" onClick={addService}>{t('Add service')}</Button></div>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5"><p className="text-sm font-semibold text-ink">{t('Services')} ({draft.serviceItems.length})</p><div className="flex flex-wrap items-center gap-2">
+          {catalogServices.length > 0 && <select aria-label={t('Add from catalog')} value="" onChange={event => addCatalogService(event.target.value)} className={cn(inputBase, 'min-h-10 w-auto max-w-[16rem] px-3 py-2 text-sm')}><option value="">{t('Add from catalog')}</option>{catalogServices.map(entry => <option key={entry.key} value={entry.key} data-i18n-skip>{entry.label}</option>)}</select>}
+          <Button variant="secondary" onClick={addService}>{t('Add service')}</Button></div></div>
         <div className="divide-y divide-line">{draft.serviceItems.map((item, index) => <fieldset key={item.id} className="p-5">
           <legend className="sr-only">{t('Service item')} {index + 1}</legend>
           <div className="mb-4 flex items-center justify-between gap-3"><p className="text-sm font-semibold text-ink">{t('Service item')} {index + 1}</p><Button variant="secondary" onClick={() => update({ serviceItems: draft.serviceItems.filter(value => value.id !== item.id) })} aria-label={`${t('Remove service')}: ${item.name || index + 1}`}>{t('Remove')}</Button></div>

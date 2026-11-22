@@ -13,7 +13,8 @@ import { useI18n } from './I18nProvider';
  * with one click is offered; Return always needs a note, so it stays in the
  * task. Each approval is its own save, so one refusal does not undo the others.
  */
-const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
+const BulkApprovePanel = ({ tasks, target = 'Approved' }: { tasks: readonly Task[]; target?: 'Approved' | 'Completed' }) => {
+  const completing = target === 'Completed';
   const { t } = useI18n();
   const state = useStore(useShallow(store => ({
     currentUser: store.currentUser,
@@ -34,8 +35,8 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
   const titleId = React.useId();
 
   const approvable = React.useMemo(
-    () => tasks.filter(task => resolveQuickTaskAction(task, state, { ignoreSaveLocks: true })?.target === 'Approved'),
-    [state, tasks],
+    () => tasks.filter(task => resolveQuickTaskAction(task, state, { ignoreSaveLocks: true })?.target === target),
+    [state, tasks, target],
   );
   const chosen = approvable.filter(task => selected.has(task.id));
   // Approving a client-approval step shows it to the client, so say so first (gap audit).
@@ -68,9 +69,9 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
         const stillApprovable = fresh && resolveQuickTaskAction(fresh, {
           currentUser: latest.currentUser, taskStatuses: latest.taskStatuses, rolePermissions: latest.rolePermissions, users: latest.users,
           clients: latest.clients, projects: latest.projects, tasks: latest.tasks, serviceCycles: latest.serviceCycles, deliverables: latest.deliverables, backend: latest.backend,
-        }, { ignoreSaveLocks: true })?.target === 'Approved';
+        }, { ignoreSaveLocks: true })?.target === target;
         if (!stillApprovable) { skipped += 1; continue; }
-        const local = useStore.getState().updateTaskStatus(task.id, 'Approved');
+        const local = useStore.getState().updateTaskStatus(task.id, target);
         if (!local.ok) { firstError ||= t(local.error || 'Unable to update the task status.'); continue; }
         const committed = await useStore.getState().commitPendingMutation('task.update');
         if (committed.ok) { saved += 1; continue; }
@@ -91,8 +92,8 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
     }
     const skippedNote = skipped > 0 ? ` ${t(skipped === 1 ? 'ui.approvalSkippedOne' : 'ui.approvalSkipped', { count: skipped })}` : '';
     setResult(firstError
-      ? { tone: 'error', text: `${t('ui.approvedOf', { saved, total: targets.length })}${skippedNote} ${t(firstError)}` }
-      : { tone: 'ok', text: `${t('ui.approvedOf', { saved, total: targets.length })}${skippedNote}` });
+      ? { tone: 'error', text: `${t(completing ? 'ui.completedOf' : 'ui.approvedOf', { saved, total: targets.length })}${skippedNote} ${t(firstError)}` }
+      : { tone: 'ok', text: `${t(completing ? 'ui.completedOf' : 'ui.approvedOf', { saved, total: targets.length })}${skippedNote}` });
   };
 
   // Approving several at once only helps with two or more tasks; keep the panel
@@ -102,8 +103,8 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
   return <Surface className="overflow-hidden">
     <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line/70 px-5 py-4">
       <div>
-        <h3 id={titleId} className="font-semibold text-ink">{t('Approve several at once')}</h3>
-        <p className="mt-1 text-sm text-muted">{t('Submitted work you can approve now. To return work with a note, open the task.')}</p>
+        <h3 id={titleId} className="font-semibold text-ink">{t(completing ? 'Complete several at once' : 'Approve several at once')}</h3>
+        <p className="mt-1 text-sm text-muted">{t(completing ? 'Approved work you can finish now. To return work with a note, open the task.' : 'Submitted work you can approve now. To return work with a note, open the task.')}</p>
       </div>
       <CountLabel>{approvable.length}</CountLabel>
     </div>
@@ -113,7 +114,7 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
         {t('Select all')}
       </label>
       <Button className="min-h-9 px-3 py-1.5" disabled={busy || locked || chosen.length === 0} onClick={() => setConfirming(true)}>
-        {t('Approve selected')}{chosen.length > 0 ? ` (${chosen.length})` : ''}
+        {t(completing ? 'Complete selected' : 'Approve selected')}{chosen.length > 0 ? ` (${chosen.length})` : ''}
       </Button>
     </div>}
     {result && <p role={result.tone === 'error' ? 'alert' : 'status'} className={`px-5 pt-3 text-sm ${result.tone === 'error' ? 'text-red-700 dark:text-red-300' : 'text-muted'}`}>{result.text}</p>}
@@ -129,9 +130,9 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
     </ul>
     {confirming && <ConfirmDialog
       labelledBy={`${titleId}-confirm`}
-      title={t('ui.approveTasks', { count: chosen.length })}
-      description={`${toClient > 0 ? `${t(toClient === 1 ? '1 of these will be sent to the client.' : '{count} of these will be sent to the client.', { count: toClient })} ` : ''}${t('Each task is approved and saved on its own. Tasks that cannot be approved are left as they are.')}`}
-      confirmLabel={t('Approve')}
+      title={t(completing ? 'ui.completeTasks' : 'ui.approveTasks', { count: chosen.length })}
+      description={`${toClient > 0 ? `${t(toClient === 1 ? '1 of these will be sent to the client.' : '{count} of these will be sent to the client.', { count: toClient })} ` : ''}${t(completing ? 'Each task is completed and saved on its own. Tasks that cannot be completed are left as they are.' : 'Each task is approved and saved on its own. Tasks that cannot be approved are left as they are.')}`}
+      confirmLabel={t(completing ? 'Complete' : 'Approve')}
       cancelLabel={t('Cancel')}
       tone="primary"
       busy={busy}

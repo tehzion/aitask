@@ -1,4 +1,5 @@
 import { addDays } from 'date-fns/addDays';
+import { compareByReviewAge } from './reviewAge';
 import { isBefore } from 'date-fns/isBefore';
 import { isWithinInterval } from 'date-fns/isWithinInterval';
 import { startOfDay } from 'date-fns/startOfDay';
@@ -29,13 +30,14 @@ export const getPersonalReviewQueues = (
   context: { user: User | null | undefined; users: readonly User[]; roles?: CustomRole[]; scope?: VisibilityScope },
 ) => {
   const { user, users, roles = [], scope = {} } = context;
-  const mine = tasks.filter(task => isAwaitingMyInternalReview(user, task, users, roles, scope));
+  // Longest-waiting submissions first, so the oldest review is never buried.
+  const mine = tasks.filter(task => isAwaitingMyInternalReview(user, task, users, roles, scope)).sort(compareByReviewAge);
   const mineIds = new Set(mine.map(task => task.id));
   const completion = tasks.filter(task => isReadyForMyCompletion(user, task, roles, scope));
   const completionIds = new Set(completion.map(task => task.id));
   const department = tasks.filter(task => isAwaitingInternalReview(task) && !task.isCompleted
     && !mineIds.has(task.id) && !completionIds.has(task.id)
-    && getInternalReviewLane(task, users, roles, scope) !== 'none');
+    && getInternalReviewLane(task, users, roles, scope) !== 'none').sort(compareByReviewAge);
   const client = tasks.filter(isAwaitingClientReview);
   return { mine, completion, department, client, actionableCount: new Set([...mineIds, ...completionIds]).size };
 };

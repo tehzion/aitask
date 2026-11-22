@@ -321,6 +321,7 @@ const ServiceRoleDashboard = () => {
         <h2 id="pm-day-title" className="text-lg font-semibold text-ink">{t('My day')}</h2>
         {myDayQueues.map(queue => <TaskQueue key={queue.key} title={queue.title} tasks={queue.tasks} empty="" />)}
         <BulkApprovePanel tasks={personal.mine} />
+        <BulkApprovePanel tasks={personal.completion} target="Completed" />
         {myDayQueues.length === 0 && <p className="calm-surface px-5 py-6 text-center text-sm text-muted">{t('Nothing needs your action right now.')}</p>}
         {emptyMyDayTitles.length > 0 && myDayQueues.length > 0 && <p className="px-1 text-sm text-muted">{t('Nothing waiting in')}: {emptyMyDayTitles.join(' · ')}</p>}
         <Surface className="overflow-hidden"><div className="flex items-center justify-between border-b border-line/70 px-5 py-4"><h3 className="font-semibold text-ink">{t('Months to start')}</h3></div>

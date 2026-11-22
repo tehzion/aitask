@@ -1,0 +1,83 @@
+name: Update Linux visual baselines
+
+# Add the "update-visual-baselines" label to a pull request to recapture the
+# Linux screenshot references on the same runner image CI compares them on, and
+# commit them back to the pull request branch. macOS references are captured
+# locally; these Linux ones can only be captured here.
+#
+# Commits pushed with the workflow token do not start new runs, so re-run the
+# "Quality and Security" checks (or push an empty commit) after this finishes.
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: visual-baselines-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  update:
+    # Same-repository branches only: forks never receive a write token, and the
+    # default branch is never updated by this workflow.
+    if: >-
+      github.event.label.name == 'update-visual-baselines'
+      && github.event.pull_request.head.repo.full_name == github.repository
+      && github.event.pull_request.head.ref != github.event.repository.default_branch
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout pull request branch
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Recapture Linux references
+        run: pnpm exec playwright test e2e/calm-ui.spec.ts e2e/staff-workspace-v2.spec.ts --update-snapshots
+
+      - name: Commit changed references
+        id: commit
+        env:
+          BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          git add e2e/*-snapshots/*-linux.png
+          if git diff --cached --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "Linux references already match."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Update Linux visual baselines"
+          git push origin "HEAD:${BRANCH}"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Remove the label so it can be applied again
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$PR" --remove-label update-visual-baselines --repo "$GITHUB_REPOSITORY" || true
