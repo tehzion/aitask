@@ -57,9 +57,19 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
     setBusy(true);
     setResult(null);
     let saved = 0;
+    let skipped = 0;
     let firstError = '';
     try {
       for (const task of targets) {
+        // An earlier approval in this batch may have moved this task on. Check
+        // it against the latest data and leave it alone, rather than report a refusal.
+        const latest = useStore.getState();
+        const fresh = latest.tasks.find(item => item.id === task.id);
+        const stillApprovable = fresh && resolveQuickTaskAction(fresh, {
+          currentUser: latest.currentUser, taskStatuses: latest.taskStatuses, rolePermissions: latest.rolePermissions, users: latest.users,
+          clients: latest.clients, projects: latest.projects, tasks: latest.tasks, serviceCycles: latest.serviceCycles, deliverables: latest.deliverables, backend: latest.backend,
+        }, { ignoreSaveLocks: true })?.target === 'Approved';
+        if (!stillApprovable) { skipped += 1; continue; }
         const local = useStore.getState().updateTaskStatus(task.id, 'Approved');
         if (!local.ok) { firstError ||= t(local.error || 'Unable to update the task status.'); continue; }
         const committed = await useStore.getState().commitPendingMutation('task.update');
@@ -79,9 +89,10 @@ const BulkApprovePanel = ({ tasks }: { tasks: readonly Task[] }) => {
       setConfirming(false);
       setSelected(new Set());
     }
+    const skippedNote = skipped > 0 ? ` ${t(skipped === 1 ? 'ui.approvalSkippedOne' : 'ui.approvalSkipped', { count: skipped })}` : '';
     setResult(firstError
-      ? { tone: 'error', text: `${t('ui.approvedOf', { saved, total: targets.length })} ${t(firstError)}` }
-      : { tone: 'ok', text: t('ui.approvedOf', { saved, total: targets.length }) });
+      ? { tone: 'error', text: `${t('ui.approvedOf', { saved, total: targets.length })}${skippedNote} ${t(firstError)}` }
+      : { tone: 'ok', text: `${t('ui.approvedOf', { saved, total: targets.length })}${skippedNote}` });
   };
 
   // Approving several at once only helps with two or more tasks; keep the panel

@@ -421,6 +421,18 @@ export const createLocalServiceDemoFixture = (
       workflowStepOrder: step.order,
       workflowStepRequired: step.required,
       predecessorTaskIds: index === 0 ? [] : [taskIds[index - 1]],
+      workflowStepKind: step.kind,
+      workflowOutputVersion: 1,
+      // A finished internal review carries the reviewer record real approvals
+      // stamp. Without it, the workflow check treats the step as unreviewed and
+      // reopens it, with every step after it, on the next unrelated change.
+      ...(completed && step.kind === 'internal_review' ? {
+        internalReview: {
+          reviewedBy: 'u-admin',
+          reviewedAt: `${dateWithinCycle(addDays(workflowStart, step.order), currentEnd)}T10:00:00.000Z`,
+          inputVersions: index === 0 ? [] : [{ taskId: taskIds[index - 1], outputVersion: 1 }],
+        },
+      } : {}),
       generatedFromDeliverable: true,
       clientName: urbanPlan.clientName,
       customerDetails: 'UrbanEats monthly social content service.',
