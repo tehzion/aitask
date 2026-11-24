@@ -61,3 +61,22 @@ describe('contract reminders across plan revisions', () => {
     expect(useStore.getState().updateActivePlanDates(revisionId, { contractEndDate: '2026-09-29' }).ok).toBe(false);
   });
 });
+
+describe('start date of a draft that restarts an ended plan', () => {
+  it('can be changed, and activation starts from the chosen date', () => {
+    const { originalId, revisionId } = createRevision();
+    useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === originalId ? { ...plan, status: 'Ended' } : plan) }));
+    expect(useStore.getState().updateDraftClientPlan(revisionId, { startDate: '2026-12-15' })).toEqual({ ok: true });
+    expect(useStore.getState().clientPlans.find(plan => plan.id === revisionId)?.startDate).toBe('2026-12-15');
+    expect(useStore.getState().activateClientPlan(revisionId).ok).toBe(true);
+    expect(useStore.getState().serviceCycles.some(cycle => cycle.planId === revisionId && cycle.periodStart === '2026-12-15')).toBe(true);
+  });
+
+  it('refuses a start date more than a year away without changing the draft', () => {
+    const { originalId, revisionId } = createRevision();
+    useStore.setState(state => ({ clientPlans: state.clientPlans.map(plan => plan.id === originalId ? { ...plan, status: 'Ended' } : plan) }));
+    const before = useStore.getState().clientPlans.find(plan => plan.id === revisionId)?.startDate;
+    expect(useStore.getState().updateDraftClientPlan(revisionId, { startDate: '2099-01-01' }).ok).toBe(false);
+    expect(useStore.getState().clientPlans.find(plan => plan.id === revisionId)?.startDate).toBe(before);
+  });
+});

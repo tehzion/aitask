@@ -4997,6 +4997,10 @@ export const useStore = create<StoreState>()(
           if (revisionSource?.status === 'Active' && !isRevisionStartBoundary(revisionSource, nextStartDate, getBillingToday())) {
             return { ok: false, error: 'Start date must be one of this plan’s billing dates, within the next 12 months.' };
           }
+          if (revisionSource?.status === 'Ended') {
+            const limit = new Date(`${getBillingToday()}T00:00:00`); limit.setMonth(limit.getMonth() + 12);
+            if (new Date(`${nextStartDate}T00:00:00`) > limit) return { ok: false, error: 'Start date must be within the next 12 months.' };
+          }
         }
         const nextBillingDay = data.billingDay !== undefined
           ? Math.min(31, Math.max(1, Math.trunc(data.billingDay)))

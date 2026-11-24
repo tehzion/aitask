@@ -55,15 +55,17 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
   const canRetry = !store.backend.upgradeRequired && store.backend.status !== 'upgrade_required'
     && !store.backend.isRestoring && canRetrySave(store.backend);
   const canSeePrices = canViewServicePrices(store.currentUser, store.rolePermissions);
-  // An ended plan is reactivated from the draft's own boundary; any other
+  // An ended plan is reactivated from the draft's own start date; any other
   // revision is scheduled for the source plan's upcoming boundary, which moves
   // on after each generated cycle while the draft's saved date does not.
   const effectiveDate = source.status === 'Ended'
-    ? plan.effectiveFromCycleStart || source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay)
+    ? (/^\d{4}-\d{2}-\d{2}$/.test(plan.startDate) ? plan.startDate : plan.effectiveFromCycleStart || source.nextCycleStart || nextBillingDate(getBillingToday(), source.billingDay))
     : resolveRevisionStart(source, plan.startDate, getBillingToday());
   // A revision of an active plan may start on any later billing date of that plan.
-  // An ended plan is reactivated from the draft's own boundary, so its date stays fixed.
-  const startLocked = Boolean(plan.supersedesPlanId) && source.status !== 'Active';
+  // An ended plan is reactivated on whatever start date the draft carries, so that date is free to choose.
+  const startLocked = false;
+  const startIsReactivation = Boolean(plan.supersedesPlanId) && source.status === 'Ended';
+  const latestReactivation = (() => { const d = parseOptionalDate(getBillingToday()) || new Date(); d.setMonth(d.getMonth() + 12); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
   const startIsRevision = Boolean(plan.supersedesPlanId) && source.status === 'Active';
   const firstBoundary = nextRevisionBoundary(source, getBillingToday());
   const startHelpId = React.useId();
@@ -259,7 +261,7 @@ const DraftServicePlanEditor = ({ plan, source }: { plan: ClientServicePlan; sou
         <legend className="sr-only">{t('Next month’s plan')}</legend>
         <div className="grid gap-4 border-b border-line p-5 md:grid-cols-2">
           <label className="text-sm font-medium text-ink">{t('Plan name')}<input required maxLength={160} data-i18n-skip className={fieldClass} value={draft.name} onChange={event => update({ name: event.target.value })} /></label>
-          <label className="text-sm font-medium text-ink">{t('Start date')}<input required type="date" disabled={startLocked} min={startIsRevision ? firstBoundary : undefined} aria-describedby={startIsRevision ? startHelpId : undefined} className={fieldClass} value={startValue} onChange={event => update({ startDate: event.target.value })} />{startIsRevision && <span id={startHelpId} className="mt-1 block text-xs font-normal text-muted">{t('ui.pickBillingDate', { date: dateLabel(firstBoundary) })}</span>}</label>
+          <label className="text-sm font-medium text-ink">{t('Start date')}<input required type="date" disabled={startLocked} min={startIsRevision ? firstBoundary : undefined} max={startIsReactivation ? latestReactivation : undefined} aria-describedby={startIsRevision ? startHelpId : undefined} className={fieldClass} value={startValue} onChange={event => update({ startDate: event.target.value })} />{startIsRevision && <span id={startHelpId} className="mt-1 block text-xs font-normal text-muted">{t('ui.pickBillingDate', { date: dateLabel(firstBoundary) })}</span>}</label>
           <label className="text-sm font-medium text-ink">{t('Monthly billing day')}<input required type="number" min={1} max={31} step={1} className={fieldClass} value={draft.billingDay} onChange={event => update({ billingDay: Number(event.target.value) })} /></label>
           <label className="text-sm font-medium text-ink">{t('Contract end date (reminder only)')}<input type="date" min={contractStartDate} aria-describedby={contractHelpId} className={fieldClass} value={draft.contractEndDate} onChange={event => update({ contractEndDate: event.target.value })} /><span id={contractHelpId} className="mt-1 block text-xs font-normal leading-5 text-muted">{t('This is a reminder for the original contract, not a stop date for the monthly plan.')}</span></label>
         </div>
