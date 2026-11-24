@@ -28,6 +28,10 @@ import { safeHttpsUrl } from '../lib/security';
 import { resolveClientAddedDate } from '../lib/clientDates';
 import { cn } from '../lib/utils';
 import { isPendingMutationResolution, useStore } from '../store';
+import UnpaidMonthsPanel from '../components/UnpaidMonthsPanel';
+import { getUnpaidMonths } from '../lib/unpaidMonths';
+import { canViewServicePrices } from '../lib/access';
+import { getBillingToday } from '../lib/monthlyRecords';
 import { useToastStore } from '../store/useToastStore';
 import { msg } from '../lib/messages';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
@@ -811,6 +815,15 @@ const Clients: React.FC = () => {
     );
   };
 
+  const pricingSnapshots = useStore(state => state.servicePricingSnapshots);
+  const cyclePayments = useStore(state => state.serviceCyclePayments);
+  // Only people who may see prices see what is owed, and only for companies they can open.
+  const unpaidMonths = React.useMemo(() => {
+    if (isClientUser || !canViewServicePrices(currentUser, rolePermissions)) return [];
+    const visibleIds = new Set(clients.map(client => client.profile?.id).filter((id): id is string => Boolean(id)));
+    return getUnpaidMonths(serviceCycles.filter(cycle => visibleIds.has(cycle.clientId)), pricingSnapshots, cyclePayments || [], getBillingToday());
+  }, [clients, currentUser, cyclePayments, isClientUser, pricingSnapshots, rolePermissions, serviceCycles]);
+
   return (
     <div className={pageShell}>
       <PageHeader
@@ -831,6 +844,8 @@ const Clients: React.FC = () => {
           : [[t('Companies'), clients.length], [t('Saved profiles'), savedProfiles], [t('Open tasks'), openTasks], [t('Client accounts'), linkedAccounts]]
         ).map(([label, value]) => <span key={String(label)} className="inline-flex items-baseline gap-1.5"><strong className="calm-number text-base text-ink">{value}</strong><span className="text-muted">{label}</span></span>)}
       </div>
+
+      <UnpaidMonthsPanel rows={unpaidMonths} />
 
       <div className={tableShell}>
         <div className="flex flex-col gap-3 border-b border-line bg-inset/70 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
