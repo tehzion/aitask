@@ -3,6 +3,7 @@ import { reportAssigneeName, createCsvBlob } from '../lib/csv';
 import React, { useMemo } from 'react';
 import { AlertCircle, CheckCircle2, Clock, Download, Users } from 'lucide-react';
 import { useStore } from '../store';
+import { getReviewWaitDays, SLOW_REVIEW_DAYS } from '../lib/reviewAge';
 import { Button, ChartEmptyState, MetricCard, PageHeader } from '../components/ui';
 import { useI18n } from '../components/I18nProvider';
 import { cardBase, pageShell } from '../components/uiTokens';
@@ -89,6 +90,12 @@ const Reports: React.FC = () => {
       assigneesInPeriod: new Set(dueTasks.map(task => task.assignedTo).filter(Boolean)).size,
     };
   }, [dueTasks, performance]);
+
+  // Reviews waiting right now (not limited to the report period): how many, how long the oldest has waited, and how many are slow.
+  const reviewWait = useMemo(() => {
+    const days = tasks.map(task => getReviewWaitDays(task)).filter((value): value is number => value !== undefined);
+    return { waiting: tasks.filter(task => task.status === 'Waiting Approval').length, longest: days.length ? Math.max(...days) : undefined, slow: days.filter(value => value >= SLOW_REVIEW_DAYS).length };
+  }, [tasks]);
 
   // Department totals derive from the same cohort outcomes so they always reconcile.
   const departmentStats = useMemo(() => getDueWorkDepartmentPerformance(performance), [performance]);
@@ -197,6 +204,7 @@ const Reports: React.FC = () => {
         <MetricCard title={t('Open today')} value={overview.open} icon={Clock} tone="amber" />
         <MetricCard title={t('On-time completion rate')} value={rateText(overview.completionRate, overview.tracked)} icon={CheckCircle2} tone="emerald" footer={`${overview.tracked} ${t('Tracked').toLowerCase()}`} />
         {!isClientUser && <MetricCard title={t('Assignees in period')} value={overview.assigneesInPeriod} icon={Users} tone="indigo" />}
+        {!isClientUser && <MetricCard title={t('Waiting for review')} value={reviewWait.waiting} icon={Clock} tone={reviewWait.slow ? 'amber' : 'indigo'} footer={reviewWait.longest === undefined ? t('Nothing waiting') : `${t('Oldest')}: ${reviewWait.longest} ${t('days')} · ${reviewWait.slow} ${t('slow')}`} />}
       </div>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

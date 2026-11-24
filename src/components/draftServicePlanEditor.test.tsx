@@ -52,7 +52,9 @@ describe('DraftServicePlanEditor', () => {
     expect(startInput(renderEditor(draft, source))).toContain('value="2026-11-16"');
   });
 
-  it('keeps the start date fixed when the plan being revised has ended', () => {
-    expect(startInput(renderEditor(draft, { ...source, status: 'Ended' } as ClientServicePlan))).toMatch(/\sdisabled=""/);
+  it('lets the start date be chosen when the plan being revised has ended', () => {
+    const input = startInput(renderEditor(draft, { ...source, status: 'Ended' } as ClientServicePlan));
+    expect(input).not.toMatch(/\sdisabled=""/);
+    expect(input).toMatch(/max="/);
   });
 });
