@@ -35,7 +35,6 @@ export const resolveQuickTaskAction = (task: Task, state: QuickActionState, opti
   // Same relevance rule as the row's "Next" line: decisions, or your own work.
   const isDecision = target === 'Approved' || (target === 'Completed' && task.status !== 'In Progress');
   if (!isDecision && task.assignedTo !== currentUser.id) return null;
-  if (target === 'In Progress' && !task.assignedTo?.trim()) return null;
   if (!getTaskAccess(currentUser, task, rolePermissions, scope).canEdit) return null;
   const visibleTasks = getVisibleTasks(currentUser, tasks, rolePermissions, scope);
   // Earlier steps still open, or hidden and not confirmed done: start from the task, where the warning shows.

@@ -632,6 +632,7 @@ registerUiTranslations({
   'Add activity': '添加动态',
   'Edit activity': '编辑动态',
   'Review wait': '审核等待时间',
+  'Assign someone to continue.': '请指派负责人后继续。',
   'Add another service': '再添加一项服务',
   'Add from catalog': '从目录添加',
   'Complete several at once': '一次完成多个',

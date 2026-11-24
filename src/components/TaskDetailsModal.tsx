@@ -288,6 +288,11 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
   const guidedActionError = guidedAction.targetStatus
     ? statusOptions.find(option => option.status === guidedAction.targetStatus)?.disabledReason
     : undefined;
+  // Work can start with nobody assigned, but only the assignee (or the responsible
+  // PM / Boss) can send it for review, so say why the next step is missing.
+  const unassignedSubmitHint = canEditTask && task.status === 'In Progress' && !task.assignedTo?.trim()
+    ? taskTransitionError(currentUser, task, { ...task, status: 'Waiting Approval', isCompleted: false }, rolePermissions, { users, clients, projects })
+    : undefined;
   // Reassignment is frozen once work is submitted. HODs can edit execution
   // fields and route work to eligible Staff, but project/company/service and
   // department ownership stay outside their form authority.
@@ -722,6 +727,7 @@ const InternalTaskDetailsModal: React.FC<Props> = ({ isOpen: requestedOpen, onCl
                 </div>
               </div>
               {canEditTask && guidedActionError && <p id={completionHintId} className="text-sm text-muted">{t(guidedActionError)}</p>}
+              {unassignedSubmitHint && <p role="status" className="text-sm text-muted">{t(unassignedSubmitHint)} {t('Assign someone to continue.')}</p>}
               {assignmentUnavailableReason && <ActionAvailabilityNotice
                 title={t('Assignment is unavailable')}
                 description={t(assignmentUnavailableReason)}

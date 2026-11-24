@@ -87,12 +87,9 @@ describe('role-controlled task milestones', () => {
 });
 
 describe('role readiness at alternate entry points', () => {
-  it('requires a responsible assignee before starting work or requesting a revision', () => {
-    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress')).toEqual({
-      ok: false,
-      error: 'Assign a responsible person before starting work.',
-    });
-    expect(current().status).toBe('Pending');
+  it('starts unassigned work, but still needs a responsible assignee to request a revision', () => {
+    expect(useStore.getState().updateTaskStatus(task.id, 'In Progress')).toEqual({ ok: true });
+    expect(current().status).toBe('In Progress');
 
     useStore.setState({ tasks: [{ ...task, status: 'Completed', isCompleted: true, assignedTo: '' }] });
     expect(useStore.getState().requestRevision(task.id, 'Rework this output')).toEqual({
@@ -102,12 +99,13 @@ describe('role readiness at alternate entry points', () => {
     expect(current()).toMatchObject({ status: 'Completed', isCompleted: true, revisionCount: 0 });
   });
 
-  it('does not create an In Progress task without a responsible assignee', () => {
+  it('creates an In Progress task without a responsible assignee', () => {
     useStore.setState({ users: [pm], tasks: [], projects: [] });
     const { id, ...draft } = task;
     expect(id).toBe(task.id);
-    expect(useStore.getState().addTask({ ...draft, status: 'In Progress', assignedTo: '' })).toBe('');
-    expect(useStore.getState().tasks).toEqual([]);
+    const createdId = useStore.getState().addTask({ ...draft, status: 'In Progress', assignedTo: '' });
+    expect(createdId).not.toBe('');
+    expect(useStore.getState().tasks.map(item => item.status)).toEqual(['In Progress']);
   });
 
   it('refuses an orphan review and saves it after a department HOD is configured', () => {

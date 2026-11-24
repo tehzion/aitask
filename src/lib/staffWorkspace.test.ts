@@ -83,9 +83,9 @@ describe('staff guided task actions', () => {
       .toMatchObject({ label: 'Complete task', targetStatus: 'Completed', disabled: false });
   });
 
-  it('shows the next action as disabled when a pending task has no assignee', () => {
+  it('offers Start work even when a pending task has no assignee', () => {
     const pm = { id: 'pm', name: 'PM', role: 'Project Manager', departments: ['Management'] } as User;
-    expect(getStaffGuidedAction(task({ status: 'Pending', assignedTo: '' }), statuses, pm)).toMatchObject({ kind: 'advance', label: 'Start work', targetStatus: 'In Progress', disabled: true });
+    expect(getStaffGuidedAction(task({ status: 'Pending', assignedTo: '' }), statuses, pm)).toMatchObject({ kind: 'advance', label: 'Start work', targetStatus: 'In Progress', disabled: false });
   });
 
   it('falls back to the status picker for custom or incomplete workflows', () => {
