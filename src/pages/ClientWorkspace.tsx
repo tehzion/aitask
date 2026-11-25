@@ -88,6 +88,7 @@ import {
 } from "../lib/serviceFiles";
 import DraftServicePlanEditor from "../components/DraftServicePlanEditor";
 import ClientSpecialNotes from "../components/ClientSpecialNotes";
+import ClientContactDetails from "../components/ClientContactDetails";
 import SideSheet from "../components/SideSheet";
 import ClientServiceWorkspace from "../components/ClientServiceWorkspace";
 import CreateClientPlanModal from "../components/CreateClientPlanModal";
@@ -651,7 +652,7 @@ const OperationsClientWorkspace = () => {
               draft={!isClient && allCycles.some(item => item.status === 'Draft' && parseOptionalDate(item.periodStart) && parseOptionalDate(item.periodEnd) && parseOptionalDate(item.periodStart)! <= today && today <= parseOptionalDate(item.periodEnd)!)} />
             {!isClient && <div id="delivery-review" className="scroll-mt-36"><React.Suspense fallback={null}><DeliveryReviewPanel clientId={client.id} includeOpenTasks /></React.Suspense></div>}
           </Surface>
-            {!isClient && <ClientSpecialNotes client={client} />}
+            {!isClient && <div className="space-y-5"><ClientContactDetails client={client} /><ClientSpecialNotes client={client} /></div>}
           </div>
           {activePlan && <MonthlyPlanSchedule plan={activePlan} cycles={cycles} deliverables={store.deliverables} today={today} canManagePlans={canManagePlans} canManageCycles={!isClient && canManageCycles} busy={serviceSaving} onSetCycleStatus={(id, status) => void setMonthStatus(id, status)} onEditDetails={() => void editDetails()} upcomingPlan={scheduledRevision} onCreateNextPlan={() => void createRevision()} onViewNextPlan={viewNextPlan} onViewCycle={id => selectMonth(id)} onViewHistory={() => selectMonth(null)} />}
           {(selectedCycle ? [selectedCycle] : []).map((cycle) => {
