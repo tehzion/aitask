@@ -47,6 +47,7 @@ import ProjectManagementPanel from '../components/ProjectManagementPanel';
 import { useI18n } from '../components/I18nProvider';
 import { formatLocalizedDate, type AppLocale } from '../lib/i18n';
 import { formatLocalizedDistanceToNow } from '../lib/relativeTime';
+import { getCompanyOwnerNames } from '../lib/companyOwners';
 
 type ClientSource = 'Profile' | 'Task' | 'Company' | 'Account';
 
@@ -315,8 +316,8 @@ const Clients: React.FC = () => {
   const canSeeAllClients = canViewAllClients(currentUser, rolePermissions);
   const isClientUser = currentUser?.role === 'Client';
   const ownerNameFor = (profile?: ClientProfile) => (
-    profile?.createdBy
-      ? (users.find(user => user.id === profile.createdBy)?.name || t('Unassigned'))
+    profile
+      ? (getCompanyOwnerNames(profile, allProjects, users).join(', ') || t('Unassigned'))
       : t('Unassigned')
   );
   const visibleClientKeys = React.useMemo(() => new Set(
