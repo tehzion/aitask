@@ -1078,6 +1078,7 @@ registerUiTranslations({
   'No task workflow': '没有任务工作流',
   'No companies found': '未找到公司',
   'No contact details saved yet.': '尚未保存联系人资料。',
+  'Contact details': '联系资料',
   'Company profile': '公司档案',
   'Review your company details, services, contacts, and linked work.': '查看您的公司资料、服务、联系人和关联工作。',
   'Saved profile': '已保存档案',
