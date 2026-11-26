@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defaultRolePermissions } from '../lib/access';
-import type { Task, User } from '../types';
+import type { Project, Task, User } from '../types';
 import { useStore } from './index';
 
 const initialState = useStore.getState();
@@ -145,6 +145,58 @@ describe('client profile store authorization', () => {
     expect(useStore.getState().clients[0]?.createdBy).toBe(next.id);
     // Once handed over, the previous owner can no longer change it.
     expect(useStore.getState().assignClientOwner('CL-handover', owner.id).ok).toBe(false);
+  });
+
+  it('moves the previous owner’s project seat to the new owner on handover', () => {
+    const owner: User = { id: 'pm-ting', name: 'Ting Ting', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    const next: User = { id: 'pm-jing', name: 'Jing Yi', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    const third: User = { id: 'pm-third', name: 'Third PM', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    const project = (id: string, clientId: string | undefined, ids: string[]) => ({
+      id, clientId, clientName: 'Handover Co', projectName: id, createdBy: owner.id, projectManagerIds: ids, services: [], startDate: '2026-11-01', deadline: '',
+    }) as unknown as Project;
+    useStore.setState({
+      ...initialState,
+      currentUser: owner,
+      users: [owner, next, third],
+      clients: [{ id: 'CL-seat', clientName: 'Handover Co', createdBy: owner.id, createdAt: '', updatedAt: '' }],
+      tasks: [],
+      projects: [
+        project('P-own', 'CL-seat', [owner.id]),
+        project('P-shared', 'CL-seat', [owner.id, third.id]),
+        project('P-legacy', undefined, [owner.id]),
+        project('P-other-company', 'CL-other', [owner.id]),
+        project('P-not-mine', 'CL-seat', [third.id]),
+      ],
+      rolePermissions: [],
+    }, true);
+
+    expect(useStore.getState().assignClientOwner('CL-seat', next.id)).toEqual({ ok: true });
+    const byId = Object.fromEntries(useStore.getState().projects.map(item => [item.id, item.projectManagerIds]));
+    expect(byId['P-own']).toEqual([next.id]);
+    expect(byId['P-shared']).toEqual([next.id, third.id]);
+    expect(byId['P-legacy']).toEqual([next.id]);
+    expect(byId['P-other-company']).toEqual([owner.id]);
+    expect(byId['P-not-mine']).toEqual([third.id]);
+  });
+
+  it('leaves the projects alone when the new owner is an HOD or the owner is cleared', () => {
+    const boss: User = { id: 'boss-seat', name: 'Boss Koo', role: 'Project Manager', isSuperAdmin: true, departments: ['Management'], department: 'Management' };
+    const owner: User = { id: 'pm-ting', name: 'Ting Ting', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    const hod: User = { id: 'hod-seat', name: 'HOD One', role: 'HOD', departments: ['Designer'], department: 'Designer' };
+    useStore.setState({
+      ...initialState,
+      currentUser: boss,
+      users: [boss, owner, hod],
+      clients: [{ id: 'CL-seat2', clientName: 'Seat Co', createdBy: owner.id, createdAt: '', updatedAt: '' }],
+      tasks: [],
+      projects: [{ id: 'P-1', clientId: 'CL-seat2', clientName: 'Seat Co', projectName: 'P', createdBy: owner.id, projectManagerIds: [owner.id], services: [], startDate: '2026-11-01', deadline: '' } as unknown as Project],
+      rolePermissions: [],
+    }, true);
+
+    expect(useStore.getState().assignClientOwner('CL-seat2', hod.id).ok).toBe(true);
+    expect(useStore.getState().projects[0]?.projectManagerIds).toEqual([owner.id]);
+    expect(useStore.getState().assignClientOwner('CL-seat2').ok).toBe(true);
+    expect(useStore.getState().projects[0]?.projectManagerIds).toEqual([owner.id]);
   });
 
   it('treats a legacy Staff + built-in HOD member as an eligible company owner', () => {
