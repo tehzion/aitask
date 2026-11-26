@@ -5,7 +5,7 @@
   "immutable": false,
   "capturedAt": "2026-11-26T04:00:00Z",
   "projectRef": "ohjhwyiffgzyatcmmdql",
-  "status": "PENDING 2026-11-26: 20261126090000_pm_handover_moves_project_seat is in the repository but not yet applied to production (latest applied is 20261119172555). Apply it with owner approval, then replace this manifest with an applied one.",
+  "status": "APPLIED 2026-11-27: production records 20261126090000 (owner instructed; applied via the Supabase connector). Repository and production migration versions match (176/176).",
   "validatedMigrationTail": [
     "20261023063344_task_workflow_action_guards",
     "20261023154255_bind_service_command_entity_types",
@@ -62,15 +62,14 @@
     "20261119172555_client_approval_keeps_completion",
     "20261126090000_pm_handover_moves_project_seat"
   ],
-  "pendingProductionMigrations": [
-    "20261126090000_pm_handover_moves_project_seat"
-  ],
+  "pendingProductionMigrations": [],
   "productionVerification": {
-    "historyAligned": false,
-    "historyThrough": "20261119172555_client_approval_keeps_completion",
-    "latestAppliedMigration": "20261119172555_client_approval_keeps_completion",
-    "historyCount": 175,
+    "historyAligned": true,
+    "historyThrough": "20261126090000_pm_handover_moves_project_seat",
+    "latestAppliedMigration": "20261126090000_pm_handover_moves_project_seat",
+    "historyCount": 176,
+    "beforeHistoryCount": 175,
     "productionOnlyMigrations": [],
-    "checks": "Not yet applied. The migration adds private.aitask_can_hand_over_project_seat and patches private.aitask_guard_project_membership_scope in place; supabase/tests/database/pm_handover_moves_project_seat.test.sql covers the handover and the rejected variants."
+    "checks": "Read-only verification after applying: the migration is recorded as 20261126090000; private.aitask_can_hand_over_project_seat exists as SECURITY DEFINER and is not executable by authenticated; private.aitask_guard_project_membership_scope references it exactly once. The pgTAP test supabase/tests/database/pm_handover_moves_project_seat.test.sql passed in CI on a disposable stack."
   }
 }
