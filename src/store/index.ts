@@ -4542,10 +4542,26 @@ export const useStore = create<StoreState>()(
         }
         if ((client.createdBy || undefined) === nextOwner) return { ok: true };
         const now = new Date().toISOString();
+        const previousOwner = client.createdBy;
+        // A company's projects follow its owner: the previous owner's seat as Project
+        // Manager passes to the new owner, so the new owner sees the projects too.
+        // Other Project Managers on the project keep their seats.
+        // Only another Project Manager can hold the seat; an HOD owner leaves the projects as they are.
+        const seatReceiver = nextOwner ? state.users.find(user => user.id === nextOwner) : undefined;
+        const handsSeat = (project: Project) => Boolean(seatReceiver && isClientHandoverTarget(seatReceiver, previousOwner) && previousOwner)
+          && (project.clientId ? project.clientId === clientId : normalizeClientKey(project.clientName) === normalizeClientKey(client.clientName))
+          && Boolean(project.projectManagerIds?.includes(previousOwner as string));
         set(current => ({
           clients: current.clients.map(item => item.id === clientId
             ? { ...item, createdBy: nextOwner, updatedAt: now }
             : item),
+          projects: current.projects.map(project => handsSeat(project)
+            ? {
+              ...project,
+              projectManagerIds: Array.from(new Set((project.projectManagerIds || []).map(id => id === previousOwner ? nextOwner as string : id))),
+              updatedAt: now,
+            }
+            : project),
         }));
         return { ok: true };
       },
