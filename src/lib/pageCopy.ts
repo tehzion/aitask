@@ -1584,6 +1584,8 @@ registerUiTranslations({
   'shown from': '显示范围：',
   'visible companies': '可见公司',
   'visible company': '可见公司',
+  'deliverable not started': '个交付项未开始',
+  'deliverables not started': '个交付项未开始',
   'Save draft': '保存草稿',
   'Edit scheduled plan': '编辑已排定方案',
   'Proposed start': '建议开始',

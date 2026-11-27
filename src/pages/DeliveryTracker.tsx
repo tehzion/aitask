@@ -182,7 +182,7 @@ const DeliveryTracker: React.FC = () => {
         ...summary.deliverables.map(item => item.title),
       ].join(' ').toLowerCase().includes(query);
       const matchesStatus = statusFilter === 'all'
-        || (statusFilter === 'open' && summary.open > 0)
+        || (statusFilter === 'open' && (summary.open > 0 || summary.notStarted > 0))
         || (statusFilter === 'overdue' && summary.overdue > 0)
         || (statusFilter === 'completed' && (summary.completed > 0 || summary.delivered > 0));
       return matchesClient && matchesSearch && matchesStatus;
@@ -305,7 +305,7 @@ const DeliveryTracker: React.FC = () => {
                     <div className="flex items-center gap-3"><span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-control bg-accent-soft text-xs font-semibold text-accent">{summary.clientName.slice(0, 2).toUpperCase()}</span><div className="min-w-0"><h3 data-i18n-skip className="truncate font-semibold text-ink">{summary.clientName}</h3><p className="mt-0.5 text-xs text-muted">{summary.cycle ? formatLocalizedDateRange(summary.cycle.periodStart, summary.cycle.periodEnd, locale) : t('No month in this period')}</p></div></div>
                   </div>
                   <div>
-                    <div className="flex flex-wrap gap-1.5"><StatusChip tone={summary.overdue ? 'red' : 'blue'}>{summary.open} {t('open')}</StatusChip>{summary.overdue > 0 && <StatusChip tone="red">{summary.overdue} {t('overdue')}</StatusChip>}<StatusChip tone="emerald">{summary.completed} {t('completed')}</StatusChip></div>
+                    <div className="flex flex-wrap gap-1.5"><StatusChip tone={summary.overdue ? 'red' : 'blue'}>{summary.open} {t('open')}</StatusChip>{summary.overdue > 0 && <StatusChip tone="red">{summary.overdue} {t('overdue')}</StatusChip>}{summary.notStarted > 0 && <StatusChip tone="amber">{summary.notStarted} {t(summary.notStarted === 1 ? 'deliverable not started' : 'deliverables not started')}</StatusChip>}<StatusChip tone="emerald">{summary.completed} {t('completed')}</StatusChip></div>
                     <p className="mt-2 text-xs text-muted">{summary.inProgress} {t('in progress')} · {summary.review} {t('in review')}</p>
                   </div>
                   <div>
