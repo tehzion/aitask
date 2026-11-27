@@ -9,7 +9,7 @@ import { recordDiagnostic } from '../lib/diagnostics';
 import { getTaskProgress } from '../lib/taskProgress';
 import { canRequestTaskRevision, eligibleHodDelegationStaff, eligibleTaskHods, eligibleTaskStaff, getDepartmentReviewers, resolveTaskAssignmentState, TASK_HOD_REQUIRED, taskAssignmentStageError, taskTransitionError } from '../lib/taskWorkflowAccess';
 import { clearRecoveredDrafts } from '../lib/draftRecovery';
-import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent } from '../lib/workspaceSession';
+import { captureWorkspaceSession, invalidateWorkspaceSession, isWorkspaceSessionCurrent, onWorkspaceSessionInvalidated } from '../lib/workspaceSession';
 import { create } from 'zustand';
 import { createJSONStorage, persist, type StateStorage } from 'zustand/middleware';
 import { useToastStore } from './useToastStore';
@@ -118,6 +118,7 @@ import {
   getRetainedSecureMemberMutation,
   getRetainedSecureCommand,
   getLastAttemptedEntityTypes,
+  findUnsavedRows,
   isWorkspaceConflict,
   loadSecureBackendCapabilities,
   loadSecureWorkspace,
@@ -483,6 +484,28 @@ export const pendingMutationMessage = 'Changes are temporarily unavailable while
 const isTerminalMutationError = (code?: MutationErrorCode) => (
   code === 'VALIDATION' || code === 'FORBIDDEN' || code === 'NOT_FOUND'
 );
+
+// Companies and projects the user changed on purpose and that are not confirmed
+// yet. The save leaves out rows the user may not write (so a collateral change
+// cannot block the whole save); when one of these is left out, the save still
+// succeeds and must not report "Saved." for a change the server never received.
+type IntendedRowChange = { entityType: 'client' | 'project'; entityId: string; label: string };
+const intendedRowChanges = new Map<string, IntendedRowChange>();
+const markIntendedChange = (entityType: IntendedRowChange['entityType'], entityId: string, label: string) => {
+  intendedRowChanges.set(`${entityType}:${entityId}`, { entityType, entityId, label });
+};
+onWorkspaceSessionInvalidated(() => intendedRowChanges.clear());
+// Called once a save is confirmed with nothing newer waiting: returns the intended
+// changes the server copy still does not match, and forgets the rest.
+const takeUnsavedIntendedChanges = (saved: PersistedWorkspaceState) => {
+  const intended = [...intendedRowChanges.values()];
+  intendedRowChanges.clear();
+  return findUnsavedRows(saved, intended);
+};
+export const unsavedChangeMessage = (unsaved: { label: string }[]) => {
+  const names = [...new Set(unsaved.map(item => item.label).filter(Boolean))];
+  return `Not saved: you don't have permission to change ${names.length ? names.join(', ') : 'this record'}. Refresh to see the saved version.`;
+};
 export const isPendingMutationResolution = (backend: {
   status: SyncStatus;
   upgradeRequired?: boolean;
@@ -1535,6 +1558,30 @@ export const useStore = create<StoreState>()(
             resetAutomaticRecovery();
             const syncedAt = new Date().toISOString();
             const hasChangesAfterSave = !workspaceStatesEqual(savedWorkspace, selectPersistedWorkspaceState(get()));
+            const unsaved = hasChangesAfterSave ? [] : takeUnsavedIntendedChanges(savedWorkspace);
+            if (unsaved.length > 0) {
+              const error = unsavedChangeMessage(unsaved);
+              if (stateToSave.currentUser) void recordClientEvent(stateToSave.currentUser, { type: 'save_failure', code: 'FORBIDDEN', entityTypes: [...new Set(unsaved.map(item => item.entityType))].sort() });
+              apply((state) => ({
+                backend: {
+                  ...state.backend,
+                  status: 'refresh_required',
+                  isSaving: false,
+                  lastSyncedAt: syncedAt,
+                  lastSavedAt: syncedAt,
+                  workspaceVersion: Math.max(state.backend.workspaceVersion || 0, result.workspaceVersion),
+                  remoteVersion: Math.max(state.backend.remoteVersion || 0, result.workspaceVersion),
+                  hasRemoteUpdate: false,
+                  hasLocalChanges: true,
+                  pendingMutations: 1,
+                  conflict: undefined,
+                  error,
+                  errorCode: 'FORBIDDEN',
+                  message: error,
+                },
+              }));
+              return;
+            }
             apply((state) => ({
               backend: {
                 ...state.backend,
@@ -2072,6 +2119,30 @@ export const useStore = create<StoreState>()(
         resetAutomaticRecovery();
         const savedAt = new Date().toISOString();
         const hasNewerChanges = editedDuringRecovery || !workspaceStatesEqual(workspaceBeforeRetry, selectPersistedWorkspaceState(get()));
+        const unsaved = hasNewerChanges ? [] : takeUnsavedIntendedChanges(workspaceBeforeRetry);
+        if (unsaved.length > 0) {
+          const error = unsavedChangeMessage(unsaved);
+          apply((state) => ({
+            backend: {
+              ...state.backend,
+              status: 'refresh_required',
+              isSaving: false,
+              upgradeRequired: false,
+              workspaceVersion: Math.max(state.backend.workspaceVersion || 0, result.workspaceVersion),
+              remoteVersion: Math.max(state.backend.remoteVersion || 0, result.workspaceVersion),
+              lastSavedAt: savedAt,
+              lastSyncedAt: savedAt,
+              conflict: undefined,
+              hasRemoteUpdate: false,
+              hasLocalChanges: true,
+              pendingMutations: 1,
+              error,
+              errorCode: 'FORBIDDEN',
+              message: error,
+            },
+          }));
+          return { ok: false, code: 'FORBIDDEN', error };
+        }
         apply((state) => ({
           backend: {
             ...state.backend,
@@ -4093,6 +4164,7 @@ export const useStore = create<StoreState>()(
           id: nowId('P'),
           updatedAt: new Date().toISOString(),
         };
+        markIntendedChange('project', newProject.id, projectName);
         set((state) => ({ projects: [...state.projects, newProject] }));
         useToastStore.getState().addToast(msg('project.created', { name: projectName }), 'success');
         return newProject.id;
@@ -4211,6 +4283,7 @@ export const useStore = create<StoreState>()(
 
         const now = new Date().toISOString();
 
+        markIntendedChange('project', projectId, updatedProject.projectName);
         set(current => ({
           projects: current.projects.map(item => item.id === projectId ? updatedProject : item),
           tasks: identityChanged
@@ -4328,6 +4401,7 @@ export const useStore = create<StoreState>()(
         const blocker = projectDeletionBlocker(currentUser, project, state.tasks, isHodUser(currentUser, state.rolePermissions));
         if (blocker) return { ok: false, error: blocker };
 
+        markIntendedChange('project', projectId, project.projectName);
         set(current => ({
           projects: current.projects.filter(item => item.id !== projectId),
           tasks: current.tasks.map(task => task.projectId === projectId
@@ -4423,6 +4497,7 @@ export const useStore = create<StoreState>()(
           updatedAt: now,
         };
 
+        markIntendedChange('client', profile.id, profile.clientName);
         set((current) => ({
           clients: existing
             ? current.clients.map(client => client.id === existing.id ? profile : client)
@@ -4474,6 +4549,7 @@ export const useStore = create<StoreState>()(
             .map(project => project.id)
         );
 
+        state.clients.filter(client => normalizeClientKey(client.clientName) === oldKey).forEach(client => markIntendedChange('client', client.id, client.clientName));
         set((current) => ({
           clients: current.clients.map(client => (
             normalizeClientKey(client.clientName) === oldKey
@@ -4555,6 +4631,8 @@ export const useStore = create<StoreState>()(
         const handsSeat = (project: Project) => Boolean(seatReceiver && isClientHandoverTarget(seatReceiver, previousOwner) && previousOwner)
           && (project.clientId ? project.clientId === clientId : normalizeClientKey(project.clientName) === normalizeClientKey(client.clientName))
           && Boolean(project.projectManagerIds?.includes(previousOwner as string));
+        markIntendedChange('client', clientId, client.clientName);
+        state.projects.filter(handsSeat).forEach(project => markIntendedChange('project', project.id, project.projectName));
         set(current => ({
           clients: current.clients.map(item => item.id === clientId
             ? { ...item, createdBy: nextOwner, updatedAt: now }
@@ -4596,6 +4674,7 @@ export const useStore = create<StoreState>()(
           state.users.filter(user => user.role === 'Client' && normalizeClientKey(user.companyName) === clientKey).map(user => user.id)
         );
 
+        markIntendedChange('client', clientId, client.clientName);
         set(current => ({
           clients: current.clients.filter(c => c.id !== clientId),
           deletedClientIds: Array.from(new Set([...(current.deletedClientIds || []), clientId])),
@@ -4811,6 +4890,7 @@ export const useStore = create<StoreState>()(
           id: nowId('PRICE'), clientId, parentType: 'client_plan', parentId: planId, items: serviceItems,
           discountType: plan.discountType, discountValue: plan.discountValue, taxRateBps: plan.taxRateBps, now,
         });
+        markIntendedChange('client', client.id, client.clientName);
         set(current => ({
           clients: [...current.clients, client],
           clientPlans: [...current.clientPlans, plan],

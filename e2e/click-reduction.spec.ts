@@ -122,6 +122,14 @@ test('Staff start their work from the list without opening the task', async ({ p
   await page.goto('/tasks');
   const start = page.getByRole('button', { name: `Start work: ${title}` });
   await expect(start).toBeVisible();
+  // A "New notifications" popup (such as a deadline reminder) can land over the
+  // list's buttons. It is not what this test checks, so close any that appear.
+  const popups = page.getByRole('complementary', { name: 'New notifications' });
+  await expect(popups).toHaveAttribute('data-popup-ready', 'true');
+  await expect(async () => {
+    for (const dismiss of await popups.getByRole('button', { name: /^Dismiss/ }).all()) await dismiss.click();
+    await start.click({ trial: true, timeout: 1_000 });
+  }).toPass({ timeout: 10_000 });
   await start.click();
   await expect(start).toHaveCount(0);
   await expect(page.getByRole('dialog')).toHaveCount(0);

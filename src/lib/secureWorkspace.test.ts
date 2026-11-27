@@ -21,6 +21,7 @@ import {
   acknowledgeSecureReleaseNotice,
   discardSecureWorkspaceCommand,
   discardRetainedSecureMemberMutation,
+  findUnsavedRows,
   getRetainedSecureMemberMutation,
   getRetainedSecureCommand,
   getSecureReleaseNoticeAcknowledgement,
@@ -1907,5 +1908,37 @@ describe('service command grouping by entity owner', () => {
   it('leaves a deliverable status change with its cycle on the deliverable command', () => {
     const groups = partitionOperationsForRpc([op('deliverable', 'update'), op('service_cycle', 'update')]);
     expect(groups.map(group => group.type)).toEqual(['deliverable.manage']);
+  });
+});
+
+describe('findUnsavedRows', () => {
+  beforeEach(() => {
+    rpc.mockReset();
+    refreshSession.mockReset();
+    from.mockReset();
+    discardSecureWorkspaceCommand();
+  });
+
+  it('reports a change the save skipped, and not the one it sent', async () => {
+    const state: PersistedWorkspaceState = {
+      ...stateWithUser('pm-unsaved'),
+      clients: [
+        { id: 'CL-mine', clientName: 'Mine Co', createdBy: 'pm-unsaved', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-27T00:00:00.000Z' },
+        { id: 'CL-theirs', clientName: 'Theirs Co', createdBy: 'pm-other', createdAt: '2026-11-01T00:00:00.000Z', updatedAt: '2026-11-27T00:00:00.000Z' },
+      ],
+    };
+    rpc.mockResolvedValue({ data: { ok: true, workspaceVersion: 2, changed: [] }, error: null });
+
+    const result = await saveSecureWorkspace(state, undefined, 1, {
+      skipRow: row => row.entityType === 'client' && row.data.createdBy !== 'pm-unsaved',
+    });
+
+    expect(result.ok).toBe(true);
+    const refs = [
+      { entityType: 'client', entityId: 'CL-mine', label: 'Mine Co' },
+      { entityType: 'client', entityId: 'CL-theirs', label: 'Theirs Co' },
+    ];
+    expect(findUnsavedRows(state, refs).map(ref => ref.entityId)).toEqual(['CL-theirs']);
+    expect(findUnsavedRows(state, [])).toEqual([]);
   });
 });
