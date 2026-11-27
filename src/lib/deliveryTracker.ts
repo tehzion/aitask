@@ -42,6 +42,8 @@ export interface ClientDeliverySummary {
   included: number;
   delivered: number;
   remaining: number;
+  /** Deliverables still to do that have no task yet: open work the task counts miss. */
+  notStarted: number;
   progress: number;
   nextDeadline?: string;
   assigneeIds: string[];
@@ -236,6 +238,8 @@ export const buildClientDeliverySummaries = ({
       if (required.length) return Math.min(90, averageTaskProgress(required, users, clientView));
       return item.status === 'In Progress' ? 30 : 0;
     });
+    const notStarted = countedDeliverables.filter(item => !isDeliverableWorkDone(item) && !clientTasks.some(task => task.deliverableId === item.id
+      || (item.taskIds || []).includes(task.id) || item.primaryTaskId === task.id)).length;
     const independent = clientTasks.filter(task => !linkedIds.has(task.id) && !isTaskCancelled(task));
     independent.forEach(task => unitProgress.push(averageTaskProgress([task], users, clientView)));
     const progress = unitProgress.length ? Math.round(unitProgress.reduce((sum, value) => sum + value, 0) / unitProgress.length) : 0;
@@ -258,6 +262,7 @@ export const buildClientDeliverySummaries = ({
       included,
       delivered,
       remaining: Math.max(0, included - delivered),
+      notStarted,
       progress: unitProgress.every(value => value === 100) ? progress : Math.min(99, progress),
       nextDeadline,
       assigneeIds: Array.from(new Set(clientTasks.map(task => task.assignedTo).filter(id => userIds.has(id)))),

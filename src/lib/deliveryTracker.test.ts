@@ -115,6 +115,27 @@ describe('delivery tracker periods', () => {
     expect(summaries[0].assigneeIds).toEqual(['staff-1']);
   });
 
+  it('counts deliverables with no task yet as not started, so the month is not "0 open"', () => {
+    const range = getDeliveryPeriodRange('month', new Date(2026, 8, 10, 12));
+    const summaries = buildClientDeliverySummaries({
+      clientNames: ['Acme'],
+      tasks: [task({ id: 'linked', clientName: 'Acme', deliverableId: 'started', dueDate: '2026-09-12' })],
+      deliverables: [
+        deliverable({ id: 'started', status: 'In Progress', taskIds: ['linked'] }),
+        deliverable({ id: 'planned-a', sequence: 2 }),
+        deliverable({ id: 'planned-b', sequence: 3 }),
+        deliverable({ id: 'ready', sequence: 4, status: 'Ready' }),
+      ],
+      cycles: [cycle],
+      users,
+      period: 'month',
+      range,
+      today: new Date(2026, 8, 10),
+    });
+
+    expect(summaries[0]).toMatchObject({ open: 1, included: 4, notStarted: 2 });
+  });
+
   it('keeps uncoupled monthly deliverables and ignores malformed legacy fields', () => {
     const range = getDeliveryPeriodRange('month', new Date(2026, 8, 10, 12));
     const summaries = buildClientDeliverySummaries({

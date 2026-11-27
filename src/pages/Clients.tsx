@@ -831,7 +831,7 @@ const Clients: React.FC = () => {
         title={isClientUser ? t('Company profile') : t('Companies')}
         description={isClientUser ? t('Review your company details, services, contacts, and linked work.') : canSeeAllClients ? t('The complete client database for company details, contacts, accounts, services, and linked work.') : t('Companies in your portfolio.')}
         onboardingTarget="projects-overview"
-        meta={<><span>{clients.length} {t('visible companies')}</span><span aria-hidden="true">·</span><span>{totalTasks} {t('linked tasks')}</span></>}
+        meta={<><span>{clients.length} {t(clients.length === 1 ? 'visible company' : 'visible companies')}</span><span aria-hidden="true">·</span><span>{totalTasks} {t(totalTasks === 1 ? 'linked task' : 'linked tasks')}</span></>}
         action={<div className="flex flex-wrap gap-2">
           {canAddProjects && <ContextualTutorialLink tutorialId="create-project" label={t('Need help creating a project?')} />}
           {canCreateClientProfiles(currentUser, rolePermissions) && <Button data-onboarding-target="create-company" onClick={() => { clearSearch(); setIsCreateClientOpen(true); }} disabled={upgradeRequired}><Building2 className="h-4 w-4" />{t('New client')}</Button>}

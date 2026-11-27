@@ -289,6 +289,7 @@ const Approvals: React.FC = () => {
     rolePermissions,
     clients,
     projects,
+    tasks,
     addCustomRole,
     updateCustomRole,
     deleteCustomRole,
@@ -310,6 +311,7 @@ const Approvals: React.FC = () => {
     rolePermissions: state.rolePermissions,
     clients: state.clients,
     projects: state.projects,
+    tasks: state.tasks,
     addCustomRole: state.addCustomRole,
     updateCustomRole: state.updateCustomRole,
     deleteCustomRole: state.deleteCustomRole,
@@ -446,7 +448,16 @@ const Approvals: React.FC = () => {
   }, [pendingRegs, registrationSearchInput.value]);
   const agedRegistrationCount = pendingRegs.filter(registration => pendingDays(registration) >= 7).length;
   const managedMemberIds = new Set(managedProjects.flatMap(project => [...(project.hodMemberIds || []), ...(project.staffMemberIds || [])]));
-  const scopedUsers = projectManager ? users.filter(user => managedMemberIds.has(user.id)) : users;
+  // People working on a task in one of the manager's projects without being listed on
+  // that project still belong on this list: they do the manager's work.
+  const managedProjectIds = new Set(managedProjects.map(project => project.id));
+  const taskAssigneeIds = new Set(tasks
+    .filter(task => task.projectId && managedProjectIds.has(task.projectId) && task.assignedTo && !managedMemberIds.has(task.assignedTo))
+    .map(task => task.assignedTo as string));
+  const scopedUsers = projectManager
+    ? users.filter(user => managedMemberIds.has(user.id) || (taskAssigneeIds.has(user.id) && ['HOD', 'Staff'].includes(user.role)))
+    : users;
+  const isTaskOnlyMember = (user: User) => projectManager && !managedMemberIds.has(user.id) && taskAssigneeIds.has(user.id);
   const activeMemberCount = scopedUsers.length;
   const memberPermissionsUser = memberPermissionsId
     ? users.find(user => user.id === memberPermissionsId)
@@ -1826,6 +1837,7 @@ const Approvals: React.FC = () => {
                   <div className="flex flex-wrap items-center gap-2">
                     <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>
                     {isBossKoo(u) && <Badge tone="purple"><span data-i18n-skip>Boss Koo</span></Badge>}
+                    {isTaskOnlyMember(u) && <Badge tone="slate">{t('Assigned a task, not on the project')}</Badge>}
                   </div>
                   <p data-i18n-skip className="mt-1 truncate text-xs text-slate-500">{u.email || t('No email on file')}</p>
                 </div>
@@ -1884,7 +1896,7 @@ const Approvals: React.FC = () => {
               )}
               {!isBossKoo(u) && u.permissions && Object.keys(u.permissions).length > 0 && <Badge tone="indigo">{t('Custom access')}</Badge>}
               <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
-                {projectManager && ['HOD', 'Staff'].includes(u.role) && (
+                {projectManager && ['HOD', 'Staff'].includes(u.role) && !isTaskOnlyMember(u) && (
                   <Button type="button" variant="secondary" onClick={() => void handleRequestDeactivation(u)} disabled={isActionSaving}>{t('Request deactivation')}</Button>
                 )}
                 {superAdmin && u.role !== 'Client' && !isBossKoo(u) && (
@@ -1923,6 +1935,7 @@ const Approvals: React.FC = () => {
                         <div className="flex flex-wrap items-center gap-2">
                           <span data-i18n-skip className="font-semibold text-slate-800">{u.name}</span>
                           {isBossKoo(u) && <Badge tone="purple"><span data-i18n-skip>Boss Koo</span></Badge>}
+                    {isTaskOnlyMember(u) && <Badge tone="slate">{t('Assigned a task, not on the project')}</Badge>}
                         </div>
                         {u.email && <div data-i18n-skip className="text-xs text-slate-500 mt-0.5">{u.email}</div>}
                       </div>
@@ -2014,7 +2027,7 @@ const Approvals: React.FC = () => {
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-1">
-                      {projectManager && ['HOD', 'Staff'].includes(u.role) && (
+                      {projectManager && ['HOD', 'Staff'].includes(u.role) && !isTaskOnlyMember(u) && (
                         <Button type="button" variant="secondary" onClick={() => void handleRequestDeactivation(u)} disabled={isActionSaving}>{t('Request deactivation')}</Button>
                       )}
                       {superAdmin && u.role !== 'Client' && !isBossKoo(u) && (
