@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { defaultRolePermissions } from '../lib/access';
 import type { Project, Task, User } from '../types';
-import { useStore } from './index';
+import { unwritableRows, useStore } from './index';
 
 const initialState = useStore.getState();
 
@@ -197,6 +197,21 @@ describe('client profile store authorization', () => {
     expect(useStore.getState().projects[0]?.projectManagerIds).toEqual([owner.id]);
     expect(useStore.getState().assignClientOwner('CL-seat2').ok).toBe(true);
     expect(useStore.getState().projects[0]?.projectManagerIds).toEqual([owner.id]);
+  });
+
+  it('sends a company the Project Manager owned even after it names someone else', () => {
+    const owner: User = { id: 'pm-ting', name: 'Ting Ting', role: 'Project Manager', departments: ['Management'], department: 'Management' };
+    const state = { tasks: [], rolePermissions: [], clients: [{ id: 'CL-1', clientName: 'Handover Co', createdBy: 'pm-jing', createdAt: '', updatedAt: '' }] };
+    const skip = unwritableRows(owner, state)!;
+    const handedOver = { entityType: 'client', entityId: 'CL-1', data: { clientName: 'Handover Co', createdBy: 'pm-jing' } };
+
+    // The handover is the owner's change to send: the server row still named them.
+    expect(skip(handedOver, { data: { createdBy: owner.id } })).toBe(false);
+    // Someone else's company, locally normalised, is still never sent.
+    expect(skip(handedOver, { data: { createdBy: 'pm-other' } })).toBe(true);
+    expect(skip(handedOver)).toBe(true);
+    // Their own company is sent as before.
+    expect(skip({ ...handedOver, data: { ...handedOver.data, createdBy: owner.id } }, { data: { createdBy: owner.id } })).toBe(false);
   });
 
   it('treats a legacy Staff + built-in HOD member as an eligible company owner', () => {

@@ -969,7 +969,9 @@ export type BuildOperationsOptions = {
   // only because the app normalised it on load; sending that as an update would
   // be refused and, because a command is all-or-nothing, would block every
   // other change in the same save.
-  skipRow?: (row: Pick<BaselineRow, 'kind' | 'entityType' | 'entityId' | 'data'>) => boolean;
+  // `previous` is the server copy the row is being changed from, so a row can be
+  // judged by who owned it before this change (a company handed to someone else).
+  skipRow?: (row: Pick<BaselineRow, 'kind' | 'entityType' | 'entityId' | 'data'>, previous?: Pick<BaselineRow, 'data'>) => boolean;
 };
 
 export const buildOperations = (
@@ -988,9 +990,9 @@ export const buildOperations = (
   // A non-super-admin can only ever change their own member row. Never emit
   // another member's update, otherwise the whole command is classified as the
   // Boss-only `member.manage` and rejected with "Super Admin permission required."
-  const skipsRow = (row: BaselineRow) => (
+  const skipsRow = (row: BaselineRow, previous?: BaselineRow) => (
     excludedEntityTypes.has(row.entityType)
-    || options.skipRow?.(row) === true
+    || options.skipRow?.(row, previous) === true
     || (
       options.excludeSuperAdminEntities === true
       && Boolean(options.actorMemberId)
@@ -1001,9 +1003,9 @@ export const buildOperations = (
   const operations: WorkspaceOperation[] = [];
 
   nextRows.forEach(row => {
-    if (skipsRow(row)) return;
     const key = entityKey(row.entityType, row.entityId);
     const previous = baseline.get(key);
+    if (skipsRow(row, previous)) return;
     if (!previous) {
       operations.push({
         kind: row.kind,
@@ -2167,7 +2169,10 @@ export const retrySecureWorkspaceCommand = async (
     command.operations = command.operations.filter(operation => !superAdminOnlyEntityTypes.has(operation.entityType));
     if (options.skipRow) {
       command.operations = command.operations.filter(operation => operation.action === 'delete'
-        || !options.skipRow!({ kind: operation.kind, entityType: operation.entityType, entityId: operation.entityId, data: operation.data || {} }));
+        || !options.skipRow!(
+          { kind: operation.kind, entityType: operation.entityType, entityId: operation.entityId, data: operation.data || {} },
+          baseline.get(entityKey(operation.entityType, operation.entityId)),
+        ));
     }
     if (options.actorMemberId) {
       command.operations = command.operations.filter(operation => (

@@ -1102,14 +1102,18 @@ const excludedServiceMetadataEntityTypes = (user: User | null | undefined, roleP
 // look "changed" locally; sending that update is refused by the server and, as
 // a command is all-or-nothing, blocks every other change in the same save
 // (assign, accept and submit all fail together).
-const unwritableRows = (user: User | null | undefined, state: Pick<StoreState, 'tasks' | 'rolePermissions' | 'clients'>) => {
+export const unwritableRows = (user: User | null | undefined, state: Pick<StoreState, 'tasks' | 'rolePermissions' | 'clients'>) => {
   if (!user || isBossKoo(user) || user.role === 'Client') return undefined;
   const isStaffOnly = user.role !== 'Project Manager' && !isHodUser(user, state.rolePermissions);
-  return (row: { entityType: string; entityId: string; data: Record<string, unknown> }) => (
+  return (row: { entityType: string; entityId: string; data: Record<string, unknown> }, previous?: { data: Record<string, unknown> }) => (
     (row.entityType === 'project' && isStaffOnly)
     || (
       row.entityType === 'client'
       && row.data.createdBy !== user.id
+      // A company the user owned on the server may be handed to another owner: the row no
+      // longer names them, but the change is theirs to send. Skipping it would drop the
+      // handover silently, so it looked saved and came back unchanged after a refresh.
+      && previous?.data.createdBy !== user.id
       && !canEditClientProfile(user, String(row.data.clientName || ''), state.tasks, state.rolePermissions, state.clients, row.entityId)
     )
   );
