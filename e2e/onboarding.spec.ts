@@ -15,9 +15,18 @@ for (const width of [320, 375, 390, 414, 768, 1024]) {
       await expect(page.getByRole('heading', { name: 'Welcome to AiTask' })).toBeVisible();
     }
     await page.getByRole('button', { name: 'Start tutorial' }).click();
-    await page.getByRole('button', { name: 'Next', exact: true }).focus();
-    await page.keyboard.press('Enter');
-    await expect(page.getByText('Step 2 of 6', { exact: true })).toBeVisible();
+    await expect(page.getByText('Step 1 of 6', { exact: true })).toBeVisible();
+    // The tour moves focus to Next on its own once it opens, so a focus set too early
+    // can be lost. Press Enter on Next again only while the tour is still on step 1.
+    const next = page.getByRole('button', { name: 'Next', exact: true });
+    const stepTwo = page.getByText('Step 2 of 6', { exact: true });
+    await expect(async () => {
+      if (!(await stepTwo.isVisible())) {
+        await next.focus();
+        await page.keyboard.press('Enter');
+      }
+      await expect(stepTwo).toBeVisible({ timeout: 1_000 });
+    }).toPass({ timeout: 10_000 });
     await page.keyboard.press('Escape');
     await expect(page.locator('.onboarding-tour-card')).toHaveCount(0);
   });
