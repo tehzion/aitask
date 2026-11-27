@@ -239,7 +239,7 @@ const DeliveryTracker: React.FC = () => {
         title={t(isClientView ? 'Deliveries' : 'Delivery tracker')}
         description={t(isClientView ? 'Your deliverables, their progress, and what needs your review.' : 'Track tasks, deliverables, deadlines, and completion by client.')}
         onboardingTarget="clients-overview"
-        meta={<><span>{range.label}</span><span aria-hidden="true">·</span><span>{filteredSummaries.length} {t('clients shown')}</span></>}
+        meta={<><span>{range.label}</span><span aria-hidden="true">·</span><span>{filteredSummaries.length} {t(filteredSummaries.length === 1 ? 'client shown' : 'clients shown')}</span></>}
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2">
             <ContextualTutorialLink tutorialId="track-delivery-progress" label={t('How do I track delivery progress?')} />

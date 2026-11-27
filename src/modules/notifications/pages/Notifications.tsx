@@ -292,7 +292,7 @@ const Notifications: React.FC = () => {
         <p className="border-b border-line px-4 py-3 text-sm text-muted">{t('Read marks an update as seen. It does not complete the linked task.')}{openWorkOnly && <> {t('Showing open tasks from loaded updates. Load more to check older work.')}</>}</p>
 
         <div aria-live="polite" className="sr-only">
-          {isLoading ? t('Loading notifications.') : t('ui.notificationGroupsLoaded', { count: groups.length })}
+          {isLoading ? t('Loading notifications.') : t(groups.length === 1 ? 'ui.notificationGroupLoaded' : 'ui.notificationGroupsLoaded', { count: groups.length })}
         </div>
 
         {notificationReadActions.error && <p className="m-4 rounded-control bg-red-50 p-4 text-sm text-red-800" role="alert"><SystemMessage message={notificationReadActions.error} /></p>}
