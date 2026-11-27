@@ -1053,6 +1053,30 @@ export const buildOperations = (
     - Number(right.entityType === 'service_cycle' && right.action === 'update'));
 };
 
+export type RowRef = { entityType: string; entityId: string };
+
+// After a confirmed save, the rows of `saved` (the state that was sent) that no
+// command sent since the last check and that the server copy does not match. A
+// row the save skipped (one the actor may not write) is left out of the command,
+// so the save succeeds while that change never reaches the server; this finds it
+// so the app does not report "Saved." A row the server did confirm counts as
+// saved even when a conflict retry merged it with newer server fields.
+export const findUnsavedRows = <T extends RowRef>(saved: PersistedWorkspaceState, refs: T[]): T[] => {
+  const confirmed = confirmedRowKeys;
+  confirmedRowKeys = new Set();
+  // No server copy loaded yet: there is nothing to compare against.
+  if (refs.length === 0 || baseline.size === 0) return [];
+  const rows = new Map(stateToRows(saved).map(row => [entityKey(row.entityType, row.entityId), row]));
+  return refs.filter(ref => {
+    const key = entityKey(ref.entityType, ref.entityId);
+    if (confirmed.has(key)) return false;
+    const row = rows.get(key);
+    const previous = baseline.get(key);
+    if (!row) return Boolean(previous);
+    return !previous || previous.serialized !== row.serialized;
+  });
+};
+
 const changedFieldsForConflict = (operation: WorkspaceOperation, current?: Record<string, unknown>) => {
   if (!operation.data) return [];
   const keys = new Set([...Object.keys(operation.data), ...Object.keys(current || {})]);
@@ -1242,7 +1266,11 @@ export const partitionOperationsWithExplicitType = (
   return groups;
 };
 
+// Rows the server confirmed since the last findUnsavedRows check.
+let confirmedRowKeys = new Set<string>();
+
 const applyCommandVersions = (command: SecureCommand, response: CommandResponse) => {
+  command.operations.forEach(operation => confirmedRowKeys.add(entityKey(operation.entityType, operation.entityId)));
   const versions = new Map((response.changed || []).map(item => [entityKey(item.entityType, item.entityId), item]));
   (response.deleted || []).forEach(item => baseline.delete(entityKey(item.entityType, item.entityId)));
   command.operations.forEach(operation => {
@@ -2276,6 +2304,7 @@ export const getLastAttemptedEntityTypes = (): string[] => lastAttemptedEntityTy
 
 onWorkspaceSessionInvalidated(() => {
   baseline = new Map();
+  confirmedRowKeys = new Set();
   retryableCommand = null;
   retryableBatch = null;
   retryableMemberDepartments = null;
